@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/nateh/AppData/Local/Temp/**)",
+      "Read(//c/Users/nateh/.cache/**)",
+      "Bash(npm --version)",
+      "Read(//c/Users/ebaul/.cache/**)",
+      "Bash(mkdir -p js)",
+      "Bash(sed -n '437,592p' index.html)",
+      "Bash(sed -n '593,594p' index.html)",
+      "Bash(sed -n '595,1491p' index.html)",
+      "Bash(sed -n '1492,2250p' index.html)",
+      "Bash(sed -n '1,435p' index.html)",
+      "Bash(sed -n '4558,4559p' index.html)",
+      "Read(//tmp/**)",
+      "Bash(cat /tmp/gm_head.txt \"js/scripttags.txt\" /tmp/gm_tail.txt)",
+      "Bash(rm js/scripttags.txt)",
+      "Bash(cp index.html index_backup_monolith.html)",
+      "Bash(mv index_new.html index.html)",
+      "Bash(rm /tmp/gm_head.txt /tmp/gm_tail.txt /tmp/gm_reconstructed.html)",
+      "Bash(php --version)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File serve.ps1)",
+      "Bash(curl -s -o /dev/null -w \"index.html: %{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"js/utils.js: %{http_code}\\\\n\" http://localhost:3000/js/utils.js)",
+      "Bash(curl -s -o /dev/null -w \"js/fonts.js: %{http_code}\\\\n\" http://localhost:3000/js/fonts.js)",
+      "Bash(curl -s http://localhost:3000/js/utils.js)",
+      "Bash(awk 'NR==432{print length\\($0\\)}' index.html)",
+      "Bash(magick -version)",
+      "Bash(rsvg-convert --version)",
+      "Bash(inkscape --version)",
+      "Bash(tasklist)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000 --max-time 3)",
+      "Bash(jobs -l)",
+      "PowerShell(Set-Location \"d:\\\\Eba Asus Yedek 09.02.2025\\\\Şirketler Web Siteleri\\\\green_med\"; Start-Process -FilePath \"node\" -ArgumentList \"serve.mjs\" -WindowStyle Hidden -RedirectStandardOutput \"serve_out.log\" -RedirectStandardError \"serve_err.log\"; Start-Sleep -Seconds 2; try { \\(Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -TimeoutSec 3\\).StatusCode } catch { \"failed: $_\" })",
+      "PowerShell(Get-Command git -ErrorAction SilentlyContinue)",
+      "Bash(gh repo *)"
+    ]
+  }
+}

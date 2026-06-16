@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Green Med Ltd — Brand Guidelines v1.0</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gm-primary: #608425;
+    --gm-dark: #1a2a0a;
+    --gm-deep: #3B6D11;
+    --gm-light: #a8c070;
+    --gm-pale: #eaf3de;
+    --gm-blue: #3b8fc8;
+    --gm-navy: #1a3d5c;
+    --gm-text: #1a1a1a;
+    --gm-muted: #555;
+    --gm-subtle: #888;
+    --gm-border: #dde8cc;
+    --gm-bg: #f8faf4;
+    --font: 'Helvetica Neue', Arial, sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    color: var(--gm-text);
+    background: #fff;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── COVER PAGE ── */
+  .cover {
+    width: 210mm;
+    min-height: 297mm;
+    background: var(--gm-dark);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 60px 56px;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .cover::before {
+    content: '';
+    position: absolute;
+    right: -80px; bottom: -80px;
+    width: 400px; height: 400px;
+    border: 60px solid rgba(96,132,37,0.15);
+    border-radius: 50%;
+  }
+  .cover::after {
+    content: '';
+    position: absolute;
+    right: 20px; bottom: 20px;
+    width: 260px; height: 260px;
+    border: 40px solid rgba(96,132,37,0.08);
+    border-radius: 50%;
+  }
+  .cover-top { position: relative; z-index: 1; }
+  .cover-logo { display: flex; align-items: center; gap: 14px; margin-bottom: 80px; }
+  .cover-logo svg { width: 56px; height: 70px; }
+  .cover-logo-text { font-size: 22px; font-weight: 700; color: #a8c070; letter-spacing: 1px; }
+  .cover-eyebrow { font-size: 11px; font-weight: 600; color: #608425; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 20px; }
+  .cover-title { font-size: 52px; font-weight: 800; color: #fff; line-height: 1.05; letter-spacing: -1px; margin-bottom: 24px; }
+  .cover-title span { color: #a8c070; }
+  .cover-sub { font-size: 15px; color: rgba(255,255,255,0.55); max-width: 380px; line-height: 1.7; }
+  .cover-bottom { position: relative; z-index: 1; }
+  .cover-tagline { font-size: 13px; color: rgba(255,255,255,0.35); font-style: italic; margin-bottom: 24px; border-left: 2px solid #608425; padding-left: 14px; }
+  .cover-meta { display: flex; gap: 32px; }
+  .cover-meta-item { }
+  .cover-meta-label { font-size: 10px; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 1.5px; }
+  .cover-meta-value { font-size: 13px; color: rgba(255,255,255,0.7); font-weight: 500; margin-top: 2px; }
+
+  /* ── MAIN CONTENT ── */
+  .content {
+    width: 210mm;
+    margin: 0 auto;
+    padding: 56px;
+  }
+
+  /* ── SECTION ── */
+  .section { margin-bottom: 56px; page-break-inside: avoid; }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 14px;
+    border-bottom: 0.5px solid var(--gm-border);
+  }
+  .section-num {
+    width: 36px; height: 36px;
+    background: var(--gm-primary);
+    color: #fff;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .section-title { font-size: 20px; font-weight: 700; color: var(--gm-dark); letter-spacing: -0.3px; }
+  .section-desc { font-size: 12px; color: var(--gm-subtle); margin-top: 1px; }
+
+  /* ── COLOR PALETTE ── */
+  .color-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .color-chip { border-radius: 10px; overflow: hidden; border: 0.5px solid var(--gm-border); }
+  .color-swatch { height: 72px; }
+  .color-info { padding: 10px 12px; background: #fff; }
+  .color-name { font-size: 12px; font-weight: 600; color: var(--gm-text); }
+  .color-hex { font-size: 11px; color: var(--gm-subtle); font-family: monospace; margin-top: 2px; }
+  .color-role { font-size: 10px; color: var(--gm-muted); margin-top: 2px; }
+
+  .combo-row { display: flex; gap: 10px; margin-top: 20px; }
+  .combo-chip {
+    flex: 1; height: 44px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+  }
+
+  /* ── TYPOGRAPHY ── */
+  .type-table { width: 100%; border-collapse: collapse; }
+  .type-table tr { border-bottom: 0.5px solid var(--gm-border); }
+  .type-table tr:last-child { border-bottom: none; }
+  .type-table td { padding: 14px 0; vertical-align: middle; }
+  .type-sample-col { width: 60%; }
+  .type-meta-col { text-align: right; font-size: 11px; color: var(--gm-subtle); line-height: 1.5; }
+
+  /* ── LOGO ── */
+  .logo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .logo-box {
+    border-radius: 12px; padding: 32px 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    border: 0.5px solid var(--gm-border);
+  }
+  .logo-label { font-size: 11px; color: var(--gm-subtle); }
+
+  .logo-rules { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  .logo-rule-box { background: var(--gm-bg); border-radius: 10px; padding: 16px; }
+  .logo-rule-title { font-size: 11px; font-weight: 700; color: var(--gm-deep); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .logo-rule-text { font-size: 12px; color: var(--gm-muted); line-height: 1.6; }
+
+  /* ── DO / DON'T ── */
+  .dd-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .dd-box { border-radius: 10px; padding: 20px; border: 0.5px solid var(--gm-border); }
+  .dd-do { border-left: 3px solid var(--gm-primary); }
+  .dd-dont { border-left: 3px solid #c0392b; }
+  .dd-tag { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 12px; }
+  .dd-tag.do { color: var(--gm-primary); }
+  .dd-tag.dont { color: #c0392b; }
+  .dd-list { list-style: none; }
+  .dd-list li { font-size: 12px; color: var(--gm-muted); padding: 4px 0; padding-left: 16px; position: relative; line-height: 1.5; }
+  .dd-list li::before { content: '—'; position: absolute; left: 0; color: var(--gm-border); }
+  .dd-do .dd-list li::before { content: '✓'; color: var(--gm-primary); font-weight: 700; }
+  .dd-dont .dd-list li::before { content: '✗'; color: #c0392b; font-weight: 700; }
+
+  /* ── COMPONENTS ── */
+  .comp-section { margin-bottom: 24px; }
+  .comp-label { font-size: 11px; font-weight: 600; color: var(--gm-subtle); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 12px; }
+  .comp-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--gm-primary); color: #fff; border: none;
+    padding: 9px 22px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    font-family: var(--font); cursor: pointer;
+  }
+  .btn-secondary {
+    background: transparent; color: var(--gm-primary);
+    border: 1.5px solid var(--gm-primary);
+    padding: 8px 22px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    font-family: var(--font); cursor: pointer;
+  }
+  .btn-ghost {
+    background: transparent; color: var(--gm-muted);
+    border: 0.5px solid #ccc;
+    padding: 8px 22px; border-radius: 8px; font-size: 13px;
+    font-family: var(--font); cursor: pointer;
+  }
+  .badge {
+    display: inline-block; padding: 4px 12px; border-radius: 100px; font-size: 11px; font-weight: 600;
+  }
+  .badge-green { background: var(--gm-pale); color: var(--gm-deep); }
+  .badge-dark { background: var(--gm-dark); color: var(--gm-light); }
+  .badge-gray { background: #f0f0f0; color: var(--gm-muted); }
+  .badge-blue { background: #e3f2fd; color: var(--gm-navy); }
+
+  .alert-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .alert {
+    border-radius: 8px; padding: 12px 14px;
+  }
+  .alert-success { background: #eaf3de; border-left: 3px solid var(--gm-primary); }
+  .alert-warning { background: #fff8e1; border-left: 3px solid #e67e22; }
+  .alert-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+  .alert-success .alert-tag { color: var(--gm-deep); }
+  .alert-warning .alert-tag { color: #b05a10; }
+  .alert-text { font-size: 12px; }
+  .alert-success .alert-text { color: var(--gm-deep); }
+  .alert-warning .alert-text { color: #b05a10; }
+
+  /* ── VOICE & TONE ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .tone-box { background: var(--gm-bg); border-radius: 10px; padding: 18px 20px; }
+  .tone-title { font-size: 13px; font-weight: 700; color: var(--gm-dark); margin-bottom: 10px; }
+  .tone-list { list-style: none; }
+  .tone-list li { font-size: 12px; color: var(--gm-muted); padding: 4px 0; padding-left: 14px; position: relative; }
+  .tone-list li::before { content: '›'; position: absolute; left: 0; color: var(--gm-primary); font-weight: 700; }
+
+  .tagline-banner {
+    background: var(--gm-dark);
+    border-radius: 12px; padding: 28px 32px; margin-top: 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  }
+  .tagline-text { font-size: 14px; color: #c8e090; font-style: italic; line-height: 1.7; }
+  .tagline-mark { font-size: 36px; font-weight: 800; color: var(--gm-primary); opacity: 0.6; }
+
+  /* ── CERTS ── */
+  .iso-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .iso-chip {
+    border: 1px solid var(--gm-primary); color: var(--gm-primary);
+    border-radius: 6px; padding: 5px 12px;
+    font-size: 11px; font-weight: 700; font-family: monospace;
+    letter-spacing: 0.3px;
+  }
+  .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .contact-card {
+    border: 0.5px solid var(--gm-border); border-radius: 10px; padding: 18px 20px;
+  }
+  .contact-title { font-size: 13px; font-weight: 700; color: var(--gm-dark); margin-bottom: 10px; }
+  .contact-text { font-size: 12px; color: var(--gm-muted); line-height: 1.8; }
+  .contact-text strong { color: var(--gm-text); }
+
+  /* ── SPACING ── */
+  .spacing-row { display: flex; align-items: flex-end; gap: 20px; padding: 20px; background: var(--gm-bg); border-radius: 10px; }
+  .spacing-item { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .spacing-bar { background: var(--gm-primary); border-radius: 3px; width: 28px; }
+  .spacing-val { font-size: 11px; font-weight: 700; color: var(--gm-text); }
+  .spacing-name { font-size: 10px; color: var(--gm-subtle); }
+
+  /* ── PRINT ── */
+  @page { margin: 0; size: A4; }
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .cover { page-break-after: always; }
+    .section { page-break-inside: avoid; }
+  }
+
+  .page-break { page-break-before: always; padding-top: 56px; }
+  hr.divider { border: none; border-top: 0.5px solid var(--gm-border); margin: 36px 0; }
+
+  /* ── FOOTER ── */
+  .doc-footer {
+    background: var(--gm-dark); color: rgba(255,255,255,0.4);
+    padding: 20px 56px; font-size: 11px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .doc-footer a { color: #a8c070; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ COVER ═══════════════ -->
+<div class="cover">
+  <div class="cover-top">
+    <div class="cover-logo">
+      <svg viewBox="0 0 253.75 318.2" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#a8c070" fill-rule="evenodd" d="M38.84,0s9.75,16.5-6.75,95.25c0,0-13.5,70.5,14.25,100.5,0,0,5.25-37.5,51-69,0,0-9.75-52.5-26.25-84.75,0,0,30.75,33.75,34.5,76.5,0,0,13.5-8.25,36-12.75,0,0-5.25-57-102.75-105.75"/>
+        <path fill="#a8c070" fill-rule="evenodd" d="M51.13,252.75S25.63,82.5,243.88,116.25c0,0-24,18.75-46.5,71.25s-79.5,101.25-138,75c0,0,50-97.5,132.75-129.75,0,0-78,2.25-141,120"/>
+      </svg>
+      <div class="cover-logo-text">GREEN MED LTD</div>
+    </div>
+    <div class="cover-eyebrow">Kurumsal Kimlik Rehberi</div>
+    <div class="cover-title">Brand<br><span>Guide</span><br>lines</div>
+    <div class="cover-sub">Tıbbi cihazlar, laboratuvar ekipmanları ve sağlık altyapı projelerinde global entegre çözümler sunan Green Med Ltd'nin görsel kimlik ve iletişim standartları.</div>
+  </div>
+  <div class="cover-bottom">
+    <div class="cover-tagline">"Anahtar teslim medikal altyapı, tanı sistemleri ve çok markalı entegrasyonda güvenilir çözüm ortağınız"</div>
+    <div class="cover-meta">
+      <div class="cover-meta-item">
+        <div class="cover-meta-label">Versiyon</div>
+        <div class="cover-meta-value">v1.0 — 2025</div>
+      </div>
+      <div class="cover-meta-item">
+        <div class="cover-meta-label">Merkez</div>
+        <div class="cover-meta-value">London, UK</div>
+      </div>
+      <div class="cover-meta-item">
+        <div class="cover-meta-label">İştirak</div>
+        <div class="cover-meta-value">Egefe Bilişim Sağlık A.Ş.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ CONTENT ═══════════════ -->
+<div class="content">
+
+  <!-- 01 RENK PALETİ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">01</div>
+      <div>
+        <div class="section-title">Renk Paleti</div>
+        <div class="section-desc">Tüm iletişim materyallerinde kullanılacak resmi renk değerleri</div>
+      </div>
+    </div>
+
+    <div class="color-grid">
+      <div class="color-chip">
+        <div class="color-swatch" style="background:#608425;"></div>
+        <div class="color-info">
+          <div class="color-name">Green Med Primary</div>
+          <div class="color-hex">#608425</div>
+          <div class="color-role">Ana marka rengi</div>
+        </div>
+      </div>
+      <div class="color-chip">
+        <div class="color-swatch" style="background:#3B6D11;"></div>
+        <div class="color-info">
+          <div class="color-name">Forest Deep</div>
+          <div class="color-hex">#3B6D11</div>
+          <div class="color-role">Koyu vurgu / başlıklar</div>
+        </div>
+      </div>
+      <div class="color-chip">
+        <div class="color-swatch" style="background:#1a2a0a;"></div>
+        <div class="color-info">
+          <div class="color-name">Dark Green</div>
+          <div class="color-hex">#1a2a0a</div>
+          <div class="color-role">Arka plan / premium</div>
+        </div>
+      </div>
+      <div class="color-chip">
+        <div class="color-swatch" style="background:#a8c070;"></div>
+        <div class="color-info">
+          <div class="color-name">Sage Light</div>
+          <div class="color-hex">#a8c070</div>
+          <div class="color-role">İkincil vurgu</div>
+        </div>
+      </div>
+      <div class="color-chip">
+        <div class="color-swatch" style="background:#eaf3de;"></div>
+        <div class="color-info">
+          <div class="color-name">Mint Pale</div>
+          <div class="color-hex">#eaf3de</div>
+          <div class="color-role">Arka plan / badge</div>
+        </div>
+      </div>
+      <div class="color-chip">
+        <div class="color-swatch" style="background:#3b8fc8;"></div>
+        <div class="color-info">
+          <div class="color-name">Catalog Blue</div>
+          <div class="color-hex">#3b8fc8</div>
+          <div class="color-role">Yardımcı renk (katalog)</div>
+        </div>
+      </div>
+      <div class="color-chip">
+        <div class="color-swatch" style="background:#1a3d5c;"></div>
+        <div class="color-info">
+          <div class="color-name">Navy Dark</div>
+          <div class="color-hex">#1a3d5c</div>
+          <div class="color-role">Başlık / koyu metin</div>
+        </div>
+      </div>
+      <div class="color-chip">
+        <div class="color-swatch" style="background:#f8faf4; border:0.5px solid #dde8cc;"></div>
+        <div class="color-info">
+          <div class="color-name">Neutral White</div>
+          <div class="color-hex">#f8faf4</div>
+          <div class="color-role">Sayfa arka planı</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;">
+      <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;">Onaylı Renk Kombinasyonları</div>
+      <div class="combo-row">
+        <div class="combo-chip" style="background:#608425;color:#fff;">Primary</div>
+        <div class="combo-chip" style="background:#1a2a0a;color:#a8c070;">Dark bg</div>
+        <div class="combo-chip" style="background:#eaf3de;color:#3B6D11;">Light bg</div>
+        <div class="combo-chip" style="background:#3b8fc8;color:#fff;">Blue accent</div>
+        <div class="combo-chip" style="background:#fff;color:#608425;border:1.5px solid #608425;">Outline</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 02 TİPOGRAFİ -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">02</div>
+      <div>
+        <div class="section-title">Tipografi</div>
+        <div class="section-desc">Font hiyerarşisi ve boyut skalası</div>
+      </div>
+    </div>
+
+    <table class="type-table">
+      <tr>
+        <td class="type-sample-col"><div style="font-size:30px;font-weight:800;color:#1a2a0a;letter-spacing:-0.5px;line-height:1.1;">Anahtar Teslim Çözümler</div></td>
+        <td class="type-meta-col">H1 · 30px · Black 800<br>Ana başlık / kapak sayfası</td>
+      </tr>
+      <tr>
+        <td class="type-sample-col"><div style="font-size:22px;font-weight:700;color:#1a3d5c;letter-spacing:-0.3px;">Global Tıbbi Sistem Entegrasyonu</div></td>
+        <td class="type-meta-col">H2 · 22px · Bold 700<br>Bölüm başlığı</td>
+      </tr>
+      <tr>
+        <td class="type-sample-col"><div style="font-size:16px;font-weight:600;color:#608425;">Hizmetlerimiz</div></td>
+        <td class="type-meta-col">H3 · 16px · SemiBold 600<br>Alt bölüm / kart başlığı</td>
+      </tr>
+      <tr>
+        <td class="type-sample-col"><div style="font-size:11px;font-weight:700;color:#608425;text-transform:uppercase;letter-spacing:2px;">Projelerimiz</div></td>
+        <td class="type-meta-col">Label · 11px · Bold + Caps<br>Bölüm etiketi</td>
+      </tr>
+      <tr>
+        <td class="type-sample-col"><div style="font-size:14px;font-weight:400;line-height:1.7;color:#555;">20 yılı aşkın sektör deneyimiyle tıbbi cihazlar, laboratuvar ekipmanları ve sağlık altyapı projelerinde global ölçekte entegre çözümler sunmaktayız.</div></td>
+        <td class="type-meta-col">Body · 14px · Regular 400<br>Paragraf / açıklama metni</td>
+      </tr>
+      <tr>
+        <td class="type-sample-col"><div style="font-size:12px;color:#888;">ISO 9001:2015 · ISO 13485:2016 · ISO 27001:2022</div></td>
+        <td class="type-meta-col">Caption · 12px · Regular<br>Alt bilgi / sertifika / tarih</td>
+      </tr>
+    </table>
+
+    <div style="background:#f8faf4;border-radius:10px;padding:16px 20px;margin-top:16px;border-left:3px solid #608425;">
+      <div style="font-size:11px;font-weight:700;color:#3B6D11;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Font Ailesi</div>
+      <div style="font-size:13px;color:#555;">Birincil: <strong style="color:#1a1a1a;">Helvetica Neue</strong> · Yedek: Arial, sans-serif · Belgelerde: Calibri veya Arial</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 03 LOGO -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">03</div>
+      <div>
+        <div class="section-title">Logo Kullanımı</div>
+        <div class="section-desc">Varyantlar, boyut kuralları ve güvenli alan</div>
+      </div>
+    </div>
+
+    <div class="logo-grid">
+      <div class="logo-box" style="background:#f8faf4;">
+        <svg viewBox="0 0 253.75 318.2" width="52" height="66" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#608425" fill-rule="evenodd" d="M38.84,0s9.75,16.5-6.75,95.25c0,0-13.5,70.5,14.25,100.5,0,0,5.25-37.5,51-69,0,0-9.75-52.5-26.25-84.75,0,0,30.75,33.75,34.5,76.5,0,0,13.5-8.25,36-12.75,0,0-5.25-57-102.75-105.75"/>
+          <path fill="#608425" fill-rule="evenodd" d="M51.13,252.75S25.63,82.5,243.88,116.25c0,0-24,18.75-46.5,71.25s-79.5,101.25-138,75c0,0,50-97.5,132.75-129.75,0,0-78,2.25-141,120"/>
+          <text fill="#608425" font-size="27" font-family="Arial Narrow, Arial, sans-serif" font-weight="700" transform="translate(0 300.82)">GREEN MED LTD</text>
+        </svg>
+        <div class="logo-label">Açık arka plan</div>
+      </div>
+      <div class="logo-box" style="background:#1a2a0a;">
+        <svg viewBox="0 0 253.75 318.2" width="52" height="66" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#a8c070" fill-rule="evenodd" d="M38.84,0s9.75,16.5-6.75,95.25c0,0-13.5,70.5,14.25,100.5,0,0,5.25-37.5,51-69,0,0-9.75-52.5-26.25-84.75,0,0,30.75,33.75,34.5,76.5,0,0,13.5-8.25,36-12.75,0,0-5.25-57-102.75-105.75"/>
+          <path fill="#a8c070" fill-rule="evenodd" d="M51.13,252.75S25.63,82.5,243.88,116.25c0,0-24,18.75-46.5,71.25s-79.5,101.25-138,75c0,0,50-97.5,132.75-129.75,0,0-78,2.25-141,120"/>
+          <text fill="#a8c070" font-size="27" font-family="Arial Narrow, Arial, sans-serif" font-weight="700" transform="translate(0 300.82)">GREEN MED LTD</text>
+        </svg>
+        <div class="logo-label" style="color:#6a9a40;">Koyu arka plan</div>
+      </div>
+      <div class="logo-box" style="background:#fff;">
+        <svg viewBox="0 0 253.75 260" width="80" height="65" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#608425" fill-rule="evenodd" d="M38.84,0s9.75,16.5-6.75,95.25c0,0-13.5,70.5,14.25,100.5,0,0,5.25-37.5,51-69,0,0-9.75-52.5-26.25-84.75,0,0,30.75,33.75,34.5,76.5,0,0,13.5-8.25,36-12.75,0,0-5.25-57-102.75-105.75"/>
+          <path fill="#608425" fill-rule="evenodd" d="M51.13,252.75S25.63,82.5,243.88,116.25c0,0-24,18.75-46.5,71.25s-79.5,101.25-138,75c0,0,50-97.5,132.75-129.75,0,0-78,2.25-141,120"/>
+        </svg>
+        <div class="logo-label">Sadece simge (favicon)</div>
+      </div>
+    </div>
+
+    <div class="logo-rules">
+      <div class="logo-rule-box">
+        <div class="logo-rule-title">Minimum Boyut</div>
+        <div class="logo-rule-text">
+          Yatay logo: min. <strong>120px</strong> genişlik<br>
+          Simge (sadece yaprak): min. <strong>24px</strong><br>
+          Baskıda: min. <strong>30mm</strong> genişlik
+        </div>
+      </div>
+      <div class="logo-rule-box">
+        <div class="logo-rule-title">Güvenli Alan (Clear Space)</div>
+        <div class="logo-rule-text">
+          Logo yüksekliğinin <strong>¼'ü</strong> kadar her yönde boşluk bırakılmalıdır. Hiçbir öge bu alana girmemelidir.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 04 DO / DON'T -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">04</div>
+      <div>
+        <div class="section-title">Doğru / Yanlış Kullanım</div>
+        <div class="section-desc">Logo ve marka ögeleri için temel kurallar</div>
+      </div>
+    </div>
+    <div class="dd-grid">
+      <div class="dd-box dd-do">
+        <div class="dd-tag do">✓ Yapılacaklar</div>
+        <ul class="dd-list">
+          <li>Logo rengini daima #608425 kullan</li>
+          <li>Koyu arka planlarda #a8c070 açık varyantını kullan</li>
+          <li>Logo etrafında yeterli güvenli alan bırak</li>
+          <li>Yalnızca onaylı font kombinasyonlarını kullan</li>
+          <li>Resmi iletişimlerde ISO sertifikalarına atıf yap</li>
+          <li>Egefe ile birlikte kullanımda "EGEFE & Green Med" formatını tercih et</li>
+        </ul>
+      </div>
+      <div class="dd-box dd-dont">
+        <div class="dd-tag dont">✗ Yapılmayacaklar</div>
+        <ul class="dd-list">
+          <li>Logoyu yeniden boyama veya şeffaflık ekleme</li>
+          <li>Logoyu eğme, döndürme veya deforme etme</li>
+          <li>Onaylanmamış renk kombinasyonları kullanma</li>
+          <li>Renkli/karmaşık arka planlara logo yerleştirme</li>
+          <li>Logonun çözünürlüğünü düşürme</li>
+          <li>Marka renklerini gölge veya gradyanla kullanma</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- 05 BILEŞENLER -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">05</div>
+      <div>
+        <div class="section-title">UI Bileşenleri</div>
+        <div class="section-desc">Dijital ve basılı materyallerde kullanılacak standart öge kütüphanesi</div>
+      </div>
+    </div>
+
+    <div class="comp-section">
+      <div class="comp-label">Butonlar</div>
+      <div class="comp-row">
+        <button class="btn-primary">Teklif Alın</button>
+        <button class="btn-secondary">Daha Fazla Bilgi</button>
+        <button class="btn-ghost">İletişim</button>
+      </div>
+    </div>
+
+    <div class="comp-section">
+      <div class="comp-label">Etiketler (Badge)</div>
+      <div class="comp-row">
+        <span class="badge badge-green">Aktif Proje</span>
+        <span class="badge badge-dark">ISO Sertifikalı</span>
+        <span class="badge badge-gray">Tamamlandı</span>
+        <span class="badge badge-blue">Devam Eden</span>
+      </div>
+    </div>
+
+    <div class="comp-section">
+      <div class="comp-label">Durum Bildirimleri</div>
+      <div class="alert-row">
+        <div class="alert alert-success">
+          <div class="alert-tag">Başarılı</div>
+          <div class="alert-text">Kurulum başarıyla tamamlandı</div>
+        </div>
+        <div class="alert alert-warning">
+          <div class="alert-tag">Uyarı</div>
+          <div class="alert-text">Kalibrasyon tarihi yaklaşıyor</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 06 SES & TON -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">06</div>
+      <div>
+        <div class="section-title">Marka Sesi & İletişim Tonu</div>
+        <div class="section-desc">Tüm yazışma ve iletişim materyallerinde uygulanacak ton rehberi</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="tone-box">
+        <div class="tone-title">İletişim Tonu</div>
+        <ul class="tone-list">
+          <li>Profesyonel ve güven veren</li>
+          <li>Çözüm odaklı, sonuç öncelikli</li>
+          <li>Teknik yetkinliği sade dille aktaran</li>
+          <li>Küresel ölçeği vurgulayan</li>
+          <li>Uzun vadeli ortaklık odaklı</li>
+          <li>Net, ölçülebilir başarıları öne çıkaran</li>
+        </ul>
+      </div>
+      <div class="tone-box">
+        <div class="tone-title">Kaçınılacaklar</div>
+        <ul class="tone-list">
+          <li>Aşırı teknik jargon kullanımı</li>
+          <li>Muğlak veya belirsiz ifadeler</li>
+          <li>Ağır pazarlama / satış dili</li>
+          <li>Kanıtlanmamış garanti ifadeleri</li>
+          <li>Rakipler hakkında negatif atıflar</li>
+          <li>Gereksiz uzun girişler</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="tagline-banner">
+      <div class="tagline-text">
+        "Anahtar teslim medikal altyapı, tanı sistemleri ve<br>
+        çok markalı entegrasyonda güvenilir çözüm ortağınız"
+      </div>
+      <div class="tagline-mark">GM</div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 07 SERTİFİKALAR -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">07</div>
+      <div>
+        <div class="section-title">Sertifikalar & Kurumsal Kimlik</div>
+        <div class="section-desc">Resmi kimlik bilgileri ve akreditasyonlar</div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:10px;">ISO Sertifikalar</div>
+    <div class="iso-wrap">
+      <span class="iso-chip">ISO 9001:2015</span>
+      <span class="iso-chip">ISO 14001:2015</span>
+      <span class="iso-chip">ISO 45001:2018</span>
+      <span class="iso-chip">ISO 13485:2016</span>
+      <span class="iso-chip">ISO 10002:2018</span>
+      <span class="iso-chip">ISO 27001:2022</span>
+    </div>
+
+    <div class="contact-grid">
+      <div class="contact-card">
+        <div class="contact-title">Green Med Ltd — Merkez Ofis</div>
+        <div class="contact-text">
+          60 Millmead Business Centre<br>
+          Mill Mead Road, N17 9QU<br>
+          <strong>London, United Kingdom</strong><br><br>
+          📞 +44 750 751 6818<br>
+          ✉️ info@greenmed.uk<br>
+          🌐 www.greenmed.uk
+        </div>
+      </div>
+      <div class="contact-card">
+        <div class="contact-title">Egefe Bilişim Sağlık A.Ş. — İştirak</div>
+        <div class="contact-text">
+          Harbiye Mah. Hürriyet Cad. No: 7/12<br>
+          <strong>Çankaya / Ankara, Türkiye</strong><br><br>
+          📞 +90 (312) 482 54 51<br>
+          ✉️ info@ege-fe.com<br><br>
+          <span style="font-size:11px;color:#888;">Ortak kullanımda: <strong style="color:#555;">"EGEFE & Green Med"</strong> formatı</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- 08 SPACING -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">08</div>
+      <div>
+        <div class="section-title">Boşluk Sistemi</div>
+        <div class="section-desc">Tutarlı layout için 8px tabanlı spacing skalası</div>
+      </div>
+    </div>
+    <div class="spacing-row">
+      <div class="spacing-item"><div class="spacing-bar" style="height:4px;"></div><div class="spacing-val">4px</div><div class="spacing-name">XS</div></div>
+      <div class="spacing-item"><div class="spacing-bar" style="height:8px;"></div><div class="spacing-val">8px</div><div class="spacing-name">S</div></div>
+      <div class="spacing-item"><div class="spacing-bar" style="height:12px;"></div><div class="spacing-val">12px</div><div class="spacing-name">SM</div></div>
+      <div class="spacing-item"><div class="spacing-bar" style="height:16px;"></div><div class="spacing-val">16px</div><div class="spacing-name">M</div></div>
+      <div class="spacing-item"><div class="spacing-bar" style="height:24px;"></div><div class="spacing-val">24px</div><div class="spacing-name">L</div></div>
+      <div class="spacing-item"><div class="spacing-bar" style="height:32px;"></div><div class="spacing-val">32px</div><div class="spacing-name">XL</div></div>
+      <div class="spacing-item"><div class="spacing-bar" style="height:48px;"></div><div class="spacing-val">48px</div><div class="spacing-name">2XL</div></div>
+      <div class="spacing-item"><div class="spacing-bar" style="height:64px;"></div><div class="spacing-val">64px</div><div class="spacing-name">3XL</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<div class="doc-footer">
+  <span>Green Med Ltd · Brand Guidelines v1.0 · 2025 · Tüm hakları saklıdır.</span>
+  <span>EGEFE & Green Med · <a href="http://www.greenmed.uk">www.greenmed.uk</a></span>
+</div>
+
+</body>
+</html>
