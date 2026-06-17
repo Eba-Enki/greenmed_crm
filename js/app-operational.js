@@ -16,7 +16,7 @@ function AppOperational({account,onSwitchAccount}){
   const[purchaseQuotes,setPurchaseQuotes]=useState([]);
   const[purchaseOrders,setPurchaseOrders]=useState([]);
   const[receivedInvoices,setReceivedInvoices]=useState([]);
-  const[productPool,setProductPool]=useState([]);
+  const[purchasePrices,setPurchasePrices]=useState({});
   const[expenses,setExpenses]=useState([]);
   const[expCats,setExpCats]=useState([]);
   const[documents,setDocuments]=useState([]);
@@ -42,7 +42,7 @@ function AppOperational({account,onSwitchAccount}){
     if(pq&&migratedPQ.some((q,i)=>q!==pq[i]))LS.set(ns+'pq',migratedPQ);
     if(po&&migratedPO.some((p,i)=>p!==po[i]))LS.set(ns+'po',migratedPO);
     if(ri&&migratedRI.some((r,i)=>r!==ri[i]))LS.set(ns+'ri',migratedRI);
-    const pp=load('pp');if(pp)setProductPool(pp);
+    const pp=load('pp');if(pp&&!Array.isArray(pp))setPurchasePrices(pp);
     const ex=load('exp');if(ex)setExpenses(ex);
     const ec=load('expcat');if(ec)setExpCats(ec);else setExpCats(EXP_CATS_DEF.map(n=>({id:uid(),name:n})));
     const docs=load('docs');if(docs)setDocuments(docs);
@@ -65,7 +65,8 @@ function AppOperational({account,onSwitchAccount}){
   const sPQ=d=>save('pq',setPurchaseQuotes,d);
   const sPO=d=>save('po',setPurchaseOrders,d);
   const sRI=d=>save('ri',setReceivedInvoices,d);
-  const sPP=d=>save('pp',setProductPool,d);
+  const sPP=(id,price)=>{const next={...purchasePrices,[id]:price};setPurchasePrices(next);LS.set(ns+'pp',next);};
+  const poolItems=salesQuotes.filter(q=>q.status==='sent').flatMap(q=>(q.items||[]).filter(it=>it.desc).map(it=>({id:q.id+'_'+(it.id||''),projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',qty:it.qty,unit:it.unit||'',price:it.price,purchasePrice:purchasePrices[q.id+'_'+(it.id||'')]||'',quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''})));
   const sExp=d=>save('exp',setExpenses,d);
   const sExpCats=d=>save('expcat',setExpCats,d);
   const sProj=d=>save('proj',setProjects,d);
@@ -117,32 +118,6 @@ function AppOperational({account,onSwitchAccount}){
     const numbered=fresh?assignQuoteNumber(q):q;
     const saved={...numbered,id:numbered.id||uid()};
     sSQ(fresh?[...salesQuotes,saved]:salesQuotes.map(x=>x.id===saved.id?saved:x));
-    // Add items to product pool
-    if(q.project){
-      const newPoolItems=[];
-      (q.items||[]).forEach(it=>{
-        if(!it.desc)return;
-        // Duplicate check: ONLY by description (name field)
-        const exists=productPool.find(p=>p.projectId===q.project&&p.name===it.desc);
-        if(!exists)newPoolItems.push({
-          id:uid(),
-          projectId:q.project,
-          projectNum:q.project,
-          code:it.item,
-          name:it.desc,
-          brand:it.brand||'',
-          model:it.model||'',
-          category:it.category||'',
-          qty:it.qty,
-          unit:it.unit||'',
-          price:it.price,
-          quoteId:q.id,
-          quoteNum:q.number,
-          date:q.date
-        });
-      });
-      if(newPoolItems.length)sPP([...productPool,...newPoolItems]);
-    }
     showToast('Saved ✓');go('sales_quotes');
   };
 
@@ -458,16 +433,26 @@ function AppOperational({account,onSwitchAccount}){
     const _isDirty=()=>JSON.stringify({...q,items})!==_initStr.current;
     const _handleCancel=()=>{if(!isLocked&&_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     
-    // Check Product Pool for price history
+    // Check Product Pool for price history (fuzzy: normalization + token overlap)
+    const _norm=s=>s.toLowerCase().replace(/[\-\(\)\[\],\.\/\\:;'"]/g,' ').replace(/\s+/g,' ').trim();
     const checkPriceHistory=(itemId,description)=>{
       if(!description||description.trim()===''){
         setPriceWarnings(prev=>{const n={...prev};delete n[itemId];return n;});
         return;
       }
-      const desc=description.toLowerCase().trim();
-      const matches=productPool.filter(p=>p.name&&p.name.toLowerCase().trim()===desc).slice(0,3);
+      const descNorm=_norm(description);
+      const matches=poolItems.filter(p=>{
+        if(!p.name||p.quoteId===q.id)return false;
+        const pNorm=_norm(p.name);
+        if(pNorm===descNorm)return true;
+        const t1=descNorm.split(' ').filter(Boolean);
+        const t2=pNorm.split(' ').filter(Boolean);
+        const shorter=t1.length<=t2.length?t1:t2;
+        const longer=t1.length>t2.length?t1:t2;
+        return shorter.length>0&&shorter.filter(t=>longer.includes(t)).length/shorter.length>=0.6;
+      }).slice(0,3);
       if(matches.length>0){
-        setPriceWarnings(prev=>({...prev,[itemId]:matches.map(m=>({price:m.price,quoteNum:m.quoteNum,date:m.date}))}));
+        setPriceWarnings(prev=>({...prev,[itemId]:matches.map(m=>({price:m.price,quoteNum:m.quoteNum,date:m.date,customer:m.customer}))}));
       }else{
         setPriceWarnings(prev=>{const n={...prev};delete n[itemId];return n;});
       }
@@ -740,7 +725,7 @@ function AppOperational({account,onSwitchAccount}){
                 <td className="lt">{CURR[q.currency]||'£'}{fmt(lt(it))}</td>
                 {!isLocked&&<td style={{textAlign:'center'}}>{items.length>1&&<button className="dlb" onClick={()=>rmL(it.id)}>×</button>}</td>}
               </tr>
-              {warnings.length>0&&<tr><td colSpan={columnSettings.brand||columnSettings.model||columnSettings.category?10:7} style={{padding:0,border:'none'}}><div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:6,padding:'8px 12px',margin:'4px 0 8px 0',fontSize:12}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,color:'#d97706',fontWeight:600}}><svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>This item was previously used:</div>{warnings.map((w,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:8,marginTop:4,paddingLeft:20}}><span style={{color:'#78716c'}}>•</span><span style={{fontWeight:600,color:'#0f172a'}}>£{fmt(+(w.price||0))}</span><span style={{color:'#78716c'}}>→</span><span style={{fontFamily:'monospace',fontSize:11,color:'#c8902a'}}>{w.quoteNum||'—'}</span><span style={{color:'#78716c',fontSize:11}}>({w.date||'—'})</span>{!isLocked&&<button onClick={()=>applyPrice(it.id,w.price)} style={{marginLeft:8,background:'#fbbf24',border:'1px solid #f59e0b',color:'#78350f',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer'}}>Use £{fmt(+(w.price||0))}</button>}</div>)}</div></td></tr>}
+              {warnings.length>0&&<tr><td colSpan={columnSettings.brand||columnSettings.model||columnSettings.category?10:7} style={{padding:0,border:'none'}}><div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:6,padding:'8px 12px',margin:'4px 0 8px 0',fontSize:12}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,color:'#d97706',fontWeight:600}}><svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>This item was previously used:</div>{warnings.map((w,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:8,marginTop:4,paddingLeft:20}}><span style={{color:'#78716c'}}>•</span><span style={{fontWeight:600,color:'#0f172a'}}>£{fmt(+(w.price||0))}</span><span style={{color:'#78716c'}}>→</span><span style={{fontFamily:'monospace',fontSize:11,color:'#c8902a'}}>{w.quoteNum||'—'}</span>{w.customer&&<span style={{fontSize:11,color:'#3B6D11',fontWeight:600}}>({w.customer})</span>}<span style={{color:'#78716c',fontSize:11}}>{w.date||'—'}</span>{!isLocked&&<button onClick={()=>applyPrice(it.id,w.price)} style={{marginLeft:8,background:'#fbbf24',border:'1px solid #f59e0b',color:'#78350f',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer'}}>Use £{fmt(+(w.price||0))}</button>}</div>)}</div></td></tr>}
               </React.Fragment>);
             })}</tbody>
           </table>
@@ -1269,34 +1254,17 @@ function AppOperational({account,onSwitchAccount}){
     const[dateTo,setDateTo]=useState('');
     const[editingItem,setEditingItem]=useState(null);
     const[tempPrice,setTempPrice]=useState('');
-    const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
-    
-    const handleSort=(key)=>{
-      setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
-    };
-    
-    const openPriceModal=(item)=>{
-      setEditingItem(item);
-      setTempPrice(item.purchasePrice||'');
-    };
-    
+    const[sortConfig,setSortConfig]=useState({key:'date',dir:'desc'});
+
+    const handleSort=(key)=>setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
+    const openPriceModal=(item)=>{setEditingItem(item);setTempPrice(item.purchasePrice||'');};
+    const closeModal=()=>{setEditingItem(null);setTempPrice('');};
     const savePurchasePrice=()=>{
-      if(editingItem){
-        const updated=productPool.map(x=>x.id===editingItem.id?{...x,purchasePrice:tempPrice}:x);
-        sPP(updated);
-        setEditingItem(null);
-        setTempPrice('');
-        showToast('Purchase price saved ✓');
-      }
+      if(editingItem){sPP(editingItem.id,tempPrice);setEditingItem(null);setTempPrice('');showToast('Purchase price saved ✓');}
     };
-    
-    const closeModal=()=>{
-      setEditingItem(null);
-      setTempPrice('');
-    };
-    
-    const filtered=productPool.filter(p=>{
-      if(q&&![p.name,p.code,p.projectId].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
+
+    const filtered=poolItems.filter(p=>{
+      if(q&&![p.name,p.code,p.projectId,p.customer].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
       if(dateFrom&&p.date<dateFrom)return false;
       if(dateTo&&p.date>dateTo)return false;
       return true;
@@ -1304,11 +1272,11 @@ function AppOperational({account,onSwitchAccount}){
     const sorted=[...filtered].sort((a,b)=>{
       if(!sortConfig.key)return 0;
       let aVal,bVal;
-      if(sortConfig.key==='project')aVal=a.projectId||'',bVal=b.projectId||'';
+      if(sortConfig.key==='customer')aVal=a.customer||'',bVal=b.customer||'';
+      else if(sortConfig.key==='project')aVal=a.projectId||'',bVal=b.projectId||'';
       else if(sortConfig.key==='code')aVal=a.code||'',bVal=b.code||'';
       else if(sortConfig.key==='name')aVal=a.name||'',bVal=b.name||'';
       else if(sortConfig.key==='qty')aVal=+(a.qty||0),bVal=+(b.qty||0);
-      else if(sortConfig.key==='unit')aVal=a.unit||'',bVal=b.unit||'';
       else if(sortConfig.key==='price')aVal=+(a.price||0),bVal=+(b.price||0);
       else if(sortConfig.key==='purchasePrice')aVal=+(a.purchasePrice||0),bVal=+(b.purchasePrice||0);
       else if(sortConfig.key==='quoteNum')aVal=a.quoteNum||'',bVal=b.quoteNum||'';
@@ -1317,134 +1285,69 @@ function AppOperational({account,onSwitchAccount}){
       if(typeof aVal==='string')return sortConfig.dir==='asc'?aVal.localeCompare(bVal):bVal.localeCompare(aVal);
       return sortConfig.dir==='asc'?aVal-bVal:bVal-aVal;
     });
+    const sh=(k)=>`${sortConfig.key===k?(sortConfig.dir==='asc'?' ▲':' ▼'):''}`;
     return(<div className="content">
       <div className="sec-hdr"><h2>Product Pool</h2>
-        <Btn v="bgh bsm" onClick={()=>exportExcel([['Project','Code','Name','Qty','Unit','Price','Purchase Price','Quote No','Date'],...filtered.map(p=>[p.projectId||'',p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||''])],'product-pool')}><Ico n="export"/>Export Excel</Btn>
+        <Btn v="bgh bsm" onClick={()=>exportExcel([['Customer','Project','Code','Name','Qty','Unit','Sale Price','Purchase Price','Quote No','Date'],...filtered.map(p=>[p.customer||'',p.projectId||'',p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||''])],'product-pool')}><Ico n="export"/>Export Excel</Btn>
       </div>
       <div style={{background:'var(--bluel)',border:'1px solid #bfdbfe',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:12.5,color:'var(--blue)'}}>
-        <Ico n="pool"/> All items from sales quotations are automatically added here. Items in red indicate a repeat within the same project.
+        <Ico n="pool"/> All items from <strong>Sent</strong> quotations appear here automatically. Amber rows = same item quoted to same customer more than once.
       </div>
       <div className="fbar">
-        <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search item, project..."/></div>
-        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
+        <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search item, customer, project..."/></div>
+        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
+        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
         <span style={{fontSize:12,color:'var(--g500)'}}>{filtered.length} items</span>
       </div>
-      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">Pool is empty</div><div className="empty-s">Create sales quotations to populate the pool</div></div></div>:(
+      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">Pool is empty</div><div className="empty-s">Mark quotations as Sent to populate the pool</div></div></div>:(
         <div className="tcard"><table className="dt">
           <thead><tr>
-            <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project {sortConfig.key==='project'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('code')} style={{cursor:'pointer',userSelect:'none'}}>Code / Item {sortConfig.key==='code'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('name')} style={{cursor:'pointer',userSelect:'none'}}>Name / Description {sortConfig.key==='name'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th className="tar" onClick={()=>handleSort('qty')} style={{cursor:'pointer',userSelect:'none'}}>Qty {sortConfig.key==='qty'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('unit')} style={{cursor:'pointer',userSelect:'none'}}>Unit {sortConfig.key==='unit'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th className="tar" onClick={()=>handleSort('price')} style={{cursor:'pointer',userSelect:'none'}}>Price {sortConfig.key==='price'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th className="tar" onClick={()=>handleSort('purchasePrice')} style={{cursor:'pointer',userSelect:'none'}}>Purchase Price {sortConfig.key==='purchasePrice'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('quoteNum')} style={{cursor:'pointer',userSelect:'none'}}>Quote No {sortConfig.key==='quoteNum'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date {sortConfig.key==='date'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer{sh('customer')}</th>
+            <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project{sh('project')}</th>
+            <th onClick={()=>handleSort('code')} style={{cursor:'pointer',userSelect:'none'}}>Code{sh('code')}</th>
+            <th onClick={()=>handleSort('name')} style={{cursor:'pointer',userSelect:'none'}}>Description{sh('name')}</th>
+            <th className="tar" onClick={()=>handleSort('qty')} style={{cursor:'pointer',userSelect:'none'}}>Qty{sh('qty')}</th>
+            <th className="tar" onClick={()=>handleSort('price')} style={{cursor:'pointer',userSelect:'none'}}>Sale Price{sh('price')}</th>
+            <th className="tar" onClick={()=>handleSort('purchasePrice')} style={{cursor:'pointer',userSelect:'none'}}>Purchase Price{sh('purchasePrice')}</th>
+            <th onClick={()=>handleSort('quoteNum')} style={{cursor:'pointer',userSelect:'none'}}>Quote No{sh('quoteNum')}</th>
+            <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date{sh('date')}</th>
             <th></th>
           </tr></thead>
           <tbody>{sorted.map((p,i)=>{
-            const isDup=sorted.some((x,j)=>j!==i&&x.projectId===p.projectId&&x.name===p.name);
+            const isDup=sorted.some((x,j)=>j!==i&&x.customer===p.customer&&x.name.toLowerCase().trim()===p.name.toLowerCase().trim());
             return(<tr key={p.id} style={isDup?{background:'#fff7ed',borderLeft:'3px solid var(--amber)'}:{}}>
+              <td style={{fontWeight:500,color:isDup?'var(--amber)':'var(--g900)'}}>{p.customer||'—'}</td>
               <td style={{color:'var(--g500)',fontSize:12}}>{p.projectId||'—'}</td>
-              <td style={{fontFamily:'monospace',fontSize:11,color:isDup?'var(--amber)':'var(--g900)'}}>{p.code||'—'}</td>
+              <td style={{fontFamily:'monospace',fontSize:11}}>{p.code||'—'}</td>
               <td>{p.name||'—'}</td>
-              <td className="tar">{p.qty}</td>
-              <td style={{color:'var(--g500)'}}>{p.unit||'—'}</td>
-              <td className="tar">£{fmt(+(p.price||0))}</td>
+              <td className="tar">{p.qty} {p.unit||''}</td>
+              <td className="tar" style={{fontWeight:600}}>£{fmt(+(p.price||0))}</td>
               <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>
                 {p.purchasePrice?`£${fmt(+(p.purchasePrice||0))}`:'—'}
               </td>
               <td><span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{p.quoteNum||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{p.date||'—'}</td>
-              <td>
-                <button className="ab" onClick={()=>openPriceModal(p)} title="Add/Edit Purchase Price">
-                  <Ico n="edit"/>
-                </button>
-              </td>
+              <td><button className="ab" onClick={()=>openPriceModal(p)} title="Set Purchase Price"><Ico n="edit"/></button></td>
             </tr>);
           })}</tbody>
         </table></div>
       )}
-      
-      {/* Purchase Price Modal */}
-      {editingItem&&<div style={{
-        position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',
-        display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999
-      }} onClick={closeModal}>
-        <div style={{
-          background:'var(--white)',borderRadius:12,padding:24,width:'90%',maxWidth:420,
-          boxShadow:'0 20px 60px rgba(0,0,0,0.3)'
-        }} onClick={e=>e.stopPropagation()}>
-          <h3 style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>
-            Set Purchase Price
-          </h3>
+
+      {editingItem&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick={closeModal}>
+        <div style={{background:'var(--white)',borderRadius:12,padding:24,width:'90%',maxWidth:420,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={e=>e.stopPropagation()}>
+          <h3 style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>Set Purchase Price</h3>
           <div style={{marginBottom:16}}>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--g700)',marginBottom:4}}>
-              {editingItem.name}
-            </div>
-            <div style={{fontSize:12,color:'var(--g500)'}}>
-              Code: {editingItem.code||'—'} | Qty: {editingItem.qty} {editingItem.unit||''} | Sale Price: £{fmt(+(editingItem.price||0))}
-            </div>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--g700)',marginBottom:2}}>{editingItem.name}</div>
+            <div style={{fontSize:12,color:'var(--g500)'}}>{editingItem.customer||'—'} · {editingItem.quoteNum||'—'} · Sale: £{fmt(+(editingItem.price||0))}</div>
           </div>
           <div style={{marginBottom:20}}>
-            <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--g700)',marginBottom:6}}>
-              Purchase Price (£)
-            </label>
-            <input 
-              type="number"
-              value={tempPrice}
-              onChange={e=>setTempPrice(e.target.value)}
-              placeholder="0.00"
-              min="0"
-              step="0.01"
-              autoFocus
-              onKeyDown={e=>{if(e.key==='Enter')savePurchasePrice();if(e.key==='Escape')closeModal();}}
-              style={{
-                width:'100%',
-                padding:'10px 12px',
-                fontSize:14,
-                fontWeight:600,
-                border:'1px solid var(--g300)',
-                borderRadius:8,
-                fontFamily:'inherit'
-              }}
-            />
+            <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--g700)',marginBottom:6}}>Purchase Price (£)</label>
+            <input type="number" value={tempPrice} onChange={e=>setTempPrice(e.target.value)} placeholder="0.00" min="0" step="0.01" autoFocus onKeyDown={e=>{if(e.key==='Enter')savePurchasePrice();if(e.key==='Escape')closeModal();}} style={{width:'100%',padding:'10px 12px',fontSize:14,fontWeight:600,border:'1px solid var(--g300)',borderRadius:8,fontFamily:'inherit'}}/>
           </div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-            <button 
-              onClick={closeModal}
-              style={{
-                padding:'8px 16px',
-                fontSize:13,
-                fontWeight:600,
-                border:'1px solid var(--g300)',
-                borderRadius:7,
-                background:'var(--white)',
-                color:'var(--g700)',
-                cursor:'pointer'
-              }}
-            >
-              Cancel
-            </button>
-            <button 
-              onClick={savePurchasePrice}
-              style={{
-                padding:'8px 16px',
-                fontSize:13,
-                fontWeight:600,
-                border:'none',
-                borderRadius:7,
-                background:'linear-gradient(135deg,var(--gm-400),var(--gm-500))',
-                color:'var(--white)',
-                cursor:'pointer',
-                boxShadow:'0 2px 8px rgba(200,144,42,0.3)'
-              }}
-            >
-              Save Price
-            </button>
+            <button onClick={closeModal} style={{padding:'8px 16px',fontSize:13,fontWeight:600,border:'1px solid var(--g300)',borderRadius:7,background:'var(--white)',color:'var(--g700)',cursor:'pointer'}}>Cancel</button>
+            <button onClick={savePurchasePrice} style={{padding:'8px 16px',fontSize:13,fontWeight:600,border:'none',borderRadius:7,background:'linear-gradient(135deg,var(--gm-400),var(--gm-500))',color:'var(--white)',cursor:'pointer'}}>Save Price</button>
           </div>
         </div>
       </div>}
@@ -2060,7 +1963,7 @@ function AppOperational({account,onSwitchAccount}){
       {k:'purchase_orders',ico:'po',lbl:'Purchase Orders',val:purchaseOrders.length,sub:`${purchaseOrders.filter(d=>d.status==='sent').length} sent`,color:'#a8c070',bg:'linear-gradient(135deg, rgba(168,192,112,0.08) 0%, rgba(168,192,112,0.02) 100%)'},
       {k:'received_invoices',ico:'received',lbl:'Received Invoices',val:receivedInvoices.length,sub:`${receivedInvoices.filter(d=>d.status==='pending').length} pending`,color:'#1a2a0a',bg:'linear-gradient(135deg, rgba(26,42,10,0.08) 0%, rgba(26,42,10,0.02) 100%)'},
       {k:'projects',ico:'project',lbl:'Projects',val:projects.length,sub:`${projects.filter(d=>d.status==='active').length} active`,color:'#608425',bg:'linear-gradient(135deg, rgba(96,132,37,0.08) 0%, rgba(96,132,37,0.02) 100%)'},
-      {k:'product_pool',ico:'pool',lbl:'Product Pool',val:productPool.length,sub:'items',color:'#4f6f1f',bg:'linear-gradient(135deg, rgba(79,111,31,0.08) 0%, rgba(79,111,31,0.02) 100%)'},
+      {k:'product_pool',ico:'pool',lbl:'Product Pool',val:poolItems.length,sub:'items',color:'#4f6f1f',bg:'linear-gradient(135deg, rgba(79,111,31,0.08) 0%, rgba(79,111,31,0.02) 100%)'},
       {k:'customers',ico:'customers',lbl:'Customers',val:customers.length,sub:'contacts',color:'#3B6D11',bg:'linear-gradient(135deg, rgba(59,109,17,0.08) 0%, rgba(59,109,17,0.02) 100%)'},
     ];
     
@@ -2166,7 +2069,7 @@ function AppOperational({account,onSwitchAccount}){
     {div:true},
     {group:'Project Management'},
     {k:'projects',ico:'project',lbl:'Projects',cnt:projects.length},
-    {k:'product_pool',ico:'pool',lbl:'Product Pool',cnt:productPool.length},
+    {k:'product_pool',ico:'pool',lbl:'Product Pool',cnt:poolItems.length},
     {k:'expenses',ico:'expense',lbl:'Expenses',cnt:expenses.length},
     {div:true},
     {group:'CRM'},
