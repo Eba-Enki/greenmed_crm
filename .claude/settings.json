@@ -59,7 +59,10 @@
       "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" status)",
       "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" diff js/app-operational.js)",
       "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" diff .claude/settings.json)",
-      "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" add js/app-operational.js .claude/settings.json)"
+      "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" add js/app-operational.js .claude/settings.json)",
+      "Bash(git -C 'd:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med' commit -m ' *)",
+      "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" push)",
+      "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" add js/app-operational.js)"
     ],
     "additionalDirectories": [
       "d:\\Eba Asus Yedek 09.02.2025\\Şirketler Web Siteleri\\green_med\\.claude"

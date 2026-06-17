@@ -22,6 +22,8 @@ function AppOperational({account,onSwitchAccount}){
   const[documents,setDocuments]=useState([]);
   const[users,setUsers]=useState([]);
   const[cnt,setCnt]=useState({sq:0,si:0,po:0,prj:0});
+  const[confirmDlg,setConfirmDlg]=useState(null);
+  const askConfirm=(msg,onYes)=>setConfirmDlg({msg,onYes});
 
   useEffect(()=>{
     const load=k=>LS.get(ns+k);
@@ -30,9 +32,16 @@ function AppOperational({account,onSwitchAccount}){
     const pr=load('proj');if(pr)setProjects(pr);
     const sq=load('sq');if(sq)setSalesQuotes(sq);
     const si=load('si');if(si)setSalesInvoices(si);
-    const pq=load('pq');if(pq)setPurchaseQuotes(pq);
-    const po=load('po');if(po)setPurchaseOrders(po);
-    const ri=load('ri');if(ri)setReceivedInvoices(ri);
+    const pq=load('pq');const po=load('po');const ri=load('ri');
+    const migratedPO=(po||[]).map(p=>{const out={...p};delete out.status;if(!out.linkedRI){const linked=(ri||[]).find(r=>r.poId===p.id);if(linked)out.linkedRI={id:linked.id,number:linked.number};}return out;});
+    const migratedPQ=(pq||[]).map(q=>{const out={...q};delete out.status;if(!out.linkedPO){const linked=migratedPO.find(p=>p.pqId===q.id);if(linked)out.linkedPO={id:linked.id,number:linked.number};}return out;});
+    const migratedRI=(ri||[]).map(r=>r.status==='pending'?{...r,status:'unpaid'}:r);
+    if(pq)setPurchaseQuotes(migratedPQ);
+    if(po)setPurchaseOrders(migratedPO);
+    if(ri)setReceivedInvoices(migratedRI);
+    if(pq&&migratedPQ.some((q,i)=>q!==pq[i]))LS.set(ns+'pq',migratedPQ);
+    if(po&&migratedPO.some((p,i)=>p!==po[i]))LS.set(ns+'po',migratedPO);
+    if(ri&&migratedRI.some((r,i)=>r!==ri[i]))LS.set(ns+'ri',migratedRI);
     const pp=load('pp');if(pp)setProductPool(pp);
     const ex=load('exp');if(ex)setExpenses(ex);
     const ec=load('expcat');if(ec)setExpCats(ec);else setExpCats(EXP_CATS_DEF.map(n=>({id:uid(),name:n})));
@@ -158,6 +167,10 @@ function AppOperational({account,onSwitchAccount}){
     sSQ(salesQuotes.map(x=>x.id===q.id?{...x,status:'sent'}:x));
     showToast('Quote marked as sent');
   };
+  const handleMarkInvoiceAsSent=(inv)=>{
+    sSI(salesInvoices.map(x=>x.id===inv.id?{...x,status:'sent'}:x));
+    showToast('Invoice marked as sent');
+  };
   const handleApproveQuote=(q)=>{
     sSQ(salesQuotes.map(x=>x.id===q.id?{...x,status:'approved',locked:true}:x));
     showToast('Quote approved & locked');
@@ -211,10 +224,10 @@ function AppOperational({account,onSwitchAccount}){
   };
 
   // ── PROCUREMENT LOGIC ──
-  const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',status:'draft',project:'',projectNumber:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
+  const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkPurchaseOrder=(pq)=>{
     const n=cnt.po;const num=genPONum(n+1);
-    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplier:(pq&&pq.supplier)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',status:'draft',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''};
+    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplier:(pq&&pq.supplier)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''};
   };
   const assignPONumber=(po)=>{
     if(!po.number||po.number.startsWith('PO')){
@@ -224,7 +237,7 @@ function AppOperational({account,onSwitchAccount}){
     }
     return po;
   };
-  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplier:(po&&po.supplier)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'pending',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''});
+  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplier:(po&&po.supplier)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''});
 
   const handleSavePQ=pq=>{
     const fresh=!pq.id;const saved={...pq,id:pq.id||uid()};
@@ -234,8 +247,9 @@ function AppOperational({account,onSwitchAccount}){
   const handleConvertPQtoPO=(pq)=>{
     const po=mkPurchaseOrder(pq);
     const numbered=assignPONumber(po);
-    sPO([...purchaseOrders,{...numbered,id:uid()}]);
-    sPQ(purchaseQuotes.map(x=>x.id===pq.id?{...x,status:'po-created'}:x));
+    const newPO={...numbered,id:uid()};
+    sPO([...purchaseOrders,newPO]);
+    sPQ(purchaseQuotes.map(x=>x.id===pq.id?{...x,linkedPO:{id:newPO.id,number:newPO.number}}:x));
     showToast('Converted to PO');go('purchase_orders');
   };
   const handleSavePO=po=>{
@@ -247,8 +261,16 @@ function AppOperational({account,onSwitchAccount}){
   };
   const handleConvertPOtoRI=(po)=>{
     const ri=mkReceivedInvoice(po);
-    sPO(purchaseOrders.map(x=>x.id===po.id?{...x,status:'received'}:x));
-    setCur(ri);go('received_invoice_form');
+    setCur({...ri,_pendingPOId:po.id});
+    go('received_invoice_form');
+  };
+  const handleSaveRIFromPO=(ri)=>{
+    const fresh=!ri.id;const saved={...ri,id:ri.id||uid()};
+    const pendingPOId=ri._pendingPOId;
+    const {_pendingPOId:_,...cleanRI}=saved;
+    sRI(fresh?[...receivedInvoices,cleanRI]:receivedInvoices.map(x=>x.id===cleanRI.id?cleanRI:x));
+    if(pendingPOId)sPO(purchaseOrders.map(x=>x.id===pendingPOId?{...x,linkedRI:{id:cleanRI.id,number:cleanRI.number}}:x));
+    showToast('Saved ✓');go('received_invoices');
   };
   const handleSaveRI=ri=>{
     const fresh=!ri.id;const saved={...ri,id:ri.id||uid()};
@@ -380,16 +402,15 @@ function AppOperational({account,onSwitchAccount}){
                 </td>
                 <td className="tac"><Badge s={latest.status}/></td>
                 <td><div className="aw">
-                  <button className="ab" onClick={()=>{setCur(latest);go('sales_quote_preview');}}><Ico n="eye"/></button>
-                  {latest.status==='draft'&&<button className="ab" onClick={()=>{setCur(latest);go('sales_quote_form');}}><Ico n="edit"/></button>}
-                  {latest.status==='draft'&&<button className="ab" onClick={()=>handleMarkAsSent(latest)}><Ico n="mail"/>Mark as Sent</button>}
-                  {latest.status==='sent'&&<button className="ab" onClick={()=>handleApproveQuote(latest)}><Ico n="check"/>Approve</button>}
-                  {latest.status==='sent'&&<button className="ab" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/>Revise</button>}
-                  {(latest.status==='approved'||latest.status==='locked')&&<button className="ab" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/>Revise</button>}
-                  {latest.status==='approved'&&remaining.length>0&&<button className="ab primary" onClick={()=>{setCur(mkSalesInvoice(latest));go('sales_invoice_form');}}>
-                    <Ico n="invoice" style={{stroke:'#fff'}}/>Invoice
-                  </button>}
-                  <button className="ab danger" onClick={()=>{if(!confirm('Delete this quotation?'))return;sSQ(salesQuotes.filter(x=>x.id!==latest.id));showToast('Deleted');}}><Ico n="trash"/></button>}
+                  <button className="ab" title="Preview" onClick={()=>{setCur(latest);go('sales_quote_preview');}}><Ico n="eye"/></button>
+                  <button className="ab" title="Download PDF" onClick={()=>savePDF(latest,co,'sales_quote')}><Ico n="dl"/></button>
+                  {latest.status==='draft'&&<button className="ab" title="Edit" onClick={()=>{setCur(latest);go('sales_quote_form');}}><Ico n="edit"/></button>}
+                  {latest.status==='draft'&&<button className="ab" title="Mark as Sent" onClick={()=>handleMarkAsSent(latest)}><Ico n="send"/></button>}
+                  {latest.status==='sent'&&<button className="ab" title="Approve" onClick={()=>handleApproveQuote(latest)}><Ico n="check"/></button>}
+                  {latest.status==='sent'&&<button className="ab" title="Revise" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/></button>}
+                  {(latest.status==='approved'||latest.status==='locked')&&<button className="ab" title="Revise" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/></button>}
+                  {latest.status==='approved'&&remaining.length>0&&<button className="ab" title="Create Invoice" onClick={()=>{setCur(mkSalesInvoice(latest));go('sales_invoice_form');}}><Ico n="invoice"/></button>}
+                  <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this quotation?',()=>{sSQ(salesQuotes.filter(x=>x.id!==latest.id));showToast('Deleted');})}><Ico n="trash"/></button>
                 </div></td>
               </tr>
               {expanded&&history.map(q=>(
@@ -407,9 +428,9 @@ function AppOperational({account,onSwitchAccount}){
                   <td className="tar" style={{fontSize:12}}>{CURR[q.currency]||'£'}{fmt(dt(q.items))}</td>
                   <td className="tac"><Badge s={q.status}/></td>
                   <td><div className="aw">
-                    <button className="ab" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
-                    <button className="ab" onClick={()=>savePDF(q,co,'sales_quote')}><Ico n="dl"/></button>
-                    <button className="ab danger" onClick={()=>{if(!confirm('Delete this revision?'))return;sSQ(salesQuotes.filter(x=>x.id!==q.id));showToast('Deleted');}}><Ico n="trash"/></button>
+                    <button className="ab" title="Preview" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
+                    <button className="ab" title="Download PDF" onClick={()=>savePDF(q,co,'sales_quote')}><Ico n="dl"/></button>
+                    <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this revision?',()=>{sSQ(salesQuotes.filter(x=>x.id!==q.id));showToast('Deleted');})}><Ico n="trash"/></button>
                   </div></td>
                 </tr>
               ))}
@@ -435,7 +456,7 @@ function AppOperational({account,onSwitchAccount}){
     const isLocked=q.locked;
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...q,items})!==_initStr.current;
-    const _handleCancel=()=>{if(!isLocked&&_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
+    const _handleCancel=()=>{if(!isLocked&&_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     
     // Check Product Pool for price history
     const checkPriceHistory=(itemId,description)=>{
@@ -768,7 +789,7 @@ function AppOperational({account,onSwitchAccount}){
     const savedInv={...inv,items};
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...inv,items})!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
+    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
@@ -933,10 +954,11 @@ function AppOperational({account,onSwitchAccount}){
               <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items))}</td>
               <td className="tac"><Badge s={d.status}/></td>
               <td><div className="aw">
-                <button className="ab" onClick={()=>{setCur(d);go('sales_invoice_preview');}}><Ico n="eye"/></button>
-                <button className="ab" onClick={()=>savePDF(d,co,'invoice')}><Ico n="dl"/></button>
-                <button className="ab" onClick={()=>{if(d.status==='sent'&&!confirm('This invoice has been marked as sent. Edit anyway?'))return;setCur(d);go('sales_invoice_edit');}}><Ico n="edit"/></button>
-                <button className="ab danger" onClick={()=>{if(!confirm('Delete?'))return;sSI(salesInvoices.filter(x=>x.id!==d.id));showToast('Deleted');}}><Ico n="trash"/></button>
+                <button className="ab" title="Preview" onClick={()=>{setCur(d);go('sales_invoice_preview');}}><Ico n="eye"/></button>
+                <button className="ab" title="Download PDF" onClick={()=>savePDF(d,co,'invoice')}><Ico n="dl"/></button>
+                <button className="ab" title="Edit" onClick={()=>{if(d.status==='sent'){askConfirm('This invoice has been marked as sent. Edit anyway?',()=>{setCur(d);go('sales_invoice_edit');});}else{setCur(d);go('sales_invoice_edit');}}}><Ico n="edit"/></button>
+                {d.status==='draft'&&<button className="ab" title="Mark as Sent" onClick={()=>handleMarkInvoiceAsSent(d)}><Ico n="send"/></button>}
+                <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this invoice?',()=>{sSI(salesInvoices.filter(x=>x.id!==d.id));showToast('Deleted');})}><Ico n="trash"/></button>
               </div></td>
             </tr>
           ))}</tbody>
@@ -952,9 +974,10 @@ function AppOperational({account,onSwitchAccount}){
     const handleSort=(key)=>{
       setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
     };
+    const isRI=type==='ri',isPQ=type==='pq',isPO=type==='po';
     const filtered=items.filter(d=>{
       if(fs.q&&![d.supplierCompany||'',d.number||''].some(x=>x.toLowerCase().includes(fs.q.toLowerCase())))return false;
-      if(fs.s&&d.status!==fs.s)return false;
+      if(isRI&&fs.s&&d.status!==fs.s)return false;
       if(fs.dateFrom&&d.date<fs.dateFrom)return false;
       if(fs.dateTo&&d.date>fs.dateTo)return false;
       return true;
@@ -967,30 +990,29 @@ function AppOperational({account,onSwitchAccount}){
       else if(sortConfig.key==='supplier')aVal=a.supplierCompany||'',bVal=b.supplierCompany||'';
       else if(sortConfig.key==='project')aVal=a.project||'',bVal=b.project||'';
       else if(sortConfig.key==='total')aVal=dt(a.items||[]),bVal=dt(b.items||[]);
-      else if(sortConfig.key==='status')aVal=a.status,bVal=b.status;
       else return 0;
       if(typeof aVal==='string')return sortConfig.dir==='asc'?aVal.localeCompare(bVal):bVal.localeCompare(aVal);
       return sortConfig.dir==='asc'?aVal-bVal:bVal-aVal;
     });
-    const statuses=type==='pq'?['draft','sent','po-created']:type==='po'?['draft','sent','received','cancelled']:['pending','paid','overdue','cancelled'];
-    const lbl=type==='pq'?'Purchase Quotation':type==='po'?'Purchase Order':'Received Invoice';
+    const lbl=isPQ?'Received Quote':isPO?'Purchase Order':'Received Invoice';
+    const linkChip=(label,num)=><span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{label} {num}</span>;
     return(<div className="content">
       <div className="sec-hdr"><h2>{title}</h2>
-        {type==='pq'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>New PQ</Btn>}
-        {type==='po'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>New PO</Btn>}
-        {type==='ri'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
+        {isPQ&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>New Received Quote</Btn>}
+        {isPO&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
+        {isRI&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
       </div>
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder="Search supplier or ref..."/></div>
-        <select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
-          <option value="">All Statuses</option>{statuses.map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}
-        </select>
+        {isRI&&<select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
+          <option value="">All</option><option value="unpaid">Unpaid</option><option value="paid">Paid</option>
+        </select>}
         <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
-        <Btn v="bgh bsm" onClick={()=>exportExcel([['Number','Date','Supplier','Total','Status'],...filtered.map(d=>[d.number,d.date,d.supplierCompany,fmt(dt(d.items)),d.status])],type)}><Ico n="export"/>Export</Btn>
+        <Btn v="bgh bsm" onClick={()=>exportExcel([['Number','Date','Supplier','Total',...(isRI?['Status']:[])],...filtered.map(d=>[d.number,d.date,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type)}><Ico n="export"/>Export</Btn>
       </div>
-      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={type==='ri'?'received':'po'} size={38}/><div className="empty-t">No {lbl.toLowerCase()}s yet</div></div></div>:(
+      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isRI?'received':'po'} size={38}/><div className="empty-t">No {lbl.toLowerCase()}s yet</div></div></div>:(
         <div className="tcard"><table className="dt">
           <thead><tr>
             <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
@@ -998,28 +1020,31 @@ function AppOperational({account,onSwitchAccount}){
             <th onClick={()=>handleSort('supplier')} style={{cursor:'pointer',userSelect:'none'}}>Supplier {sortConfig.key==='supplier'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project {sortConfig.key==='project'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th className="tar" onClick={()=>handleSort('total')} style={{cursor:'pointer',userSelect:'none'}}>Total {sortConfig.key==='total'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th className="tac" onClick={()=>handleSort('status')} style={{cursor:'pointer',userSelect:'none'}}>Status {sortConfig.key==='status'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th className="tac">{isPQ?'Linked To':'Linked From'}</th>
+            {isRI&&<th className="tac">Status</th>}
             <th></th>
           </tr></thead>
           <tbody>{sorted.map(d=>(
             <tr key={d.id}>
-              <td>
-                <span className="dn">{d.number||'—'}</span>
-                {d.pqNum&&<div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>from {d.pqNum}</div>}
-                {d.poNum&&<div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>from {d.poNum}</div>}
-              </td>
+              <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
               <td style={{color:'var(--g800)'}}>{d.supplierCompany||'—'}</td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
               <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items||[]))}</td>
-              <td className="tac"><Badge s={d.status}/></td>
+              <td className="tac">
+                {isPQ&&(d.linkedPO?linkChip('→',d.linkedPO.number):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
+                {isPO&&(d.pqNum?linkChip('←',d.pqNum):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
+                {isRI&&(d.poNum?linkChip('←',d.poNum):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
+              </td>
+              {isRI&&<td className="tac"><Badge s={d.status||'unpaid'}/></td>}
               <td><div className="aw">
-                {type!=='ri'&&<button className="ab" onClick={()=>{setCur(d);go(type==='pq'?'pq_preview':'po_preview');}}><Ico n="eye"/></button>}
-                {type!=='ri'&&<button className="ab" onClick={()=>savePDF(d,co,type==='po'?'po':'quote')}><Ico n="dl"/></button>}
-                <button className="ab" onClick={()=>{setCur(d);go(type==='pq'?'pq_form':type==='po'?'po_form':'ri_form');}}><Ico n="edit"/></button>
-                {type==='pq'&&d.status==='draft'&&<button className="ab primary" onClick={()=>handleConvertPQtoPO(d)}><Ico n="convert" style={{stroke:'#fff'}}/>To PO</button>}
-                {type==='po'&&d.status==='sent'&&<button className="ab primary" onClick={()=>handleConvertPOtoRI(d)}><Ico n="invoice" style={{stroke:'#fff'}}/>To Received Invoice</button>}
-                <button className="ab danger" onClick={()=>{if(!confirm('Delete?'))return;type==='pq'?sPQ(purchaseQuotes.filter(x=>x.id!==d.id)):type==='po'?sPO(purchaseOrders.filter(x=>x.id!==d.id)):sRI(receivedInvoices.filter(x=>x.id!==d.id));showToast('Deleted');}}><Ico n="trash"/></button>
+                <button className="ab" title="Preview" onClick={()=>{setCur(d);go(isPQ?'pq_preview':isPO?'po_preview':'ri_preview');}}><Ico n="eye"/></button>
+                <button className="ab" title="Download PDF" onClick={()=>savePDF(d,co,isPO?'po':isRI?'invoice':'quote')}><Ico n="dl"/></button>
+                <button className="ab" title="Edit" onClick={()=>{setCur(d);go(isPQ?'pq_form':isPO?'po_form':'ri_form');}}><Ico n="edit"/></button>
+                {isPQ&&!d.linkedPO&&<button className="ab" title="Convert to Purchase Order" onClick={()=>handleConvertPQtoPO(d)}><Ico n="convert"/></button>}
+                {isPO&&!d.linkedRI&&<button className="ab" title="Create Received Invoice" onClick={()=>handleConvertPOtoRI(d)}><Ico n="invoice"/></button>}
+                {isRI&&d.status==='unpaid'&&<button className="ab" title="Mark as Paid" onClick={()=>{sRI(receivedInvoices.map(x=>x.id===d.id?{...x,status:'paid'}:x));showToast('Marked as paid');}}><Ico n="check"/></button>}
+                <button className="ab danger" title="Delete" onClick={()=>askConfirm(`Delete this ${lbl.toLowerCase()}?`,()=>{isPQ?sPQ(purchaseQuotes.filter(x=>x.id!==d.id)):isPO?sPO(purchaseOrders.filter(x=>x.id!==d.id)):sRI(receivedInvoices.filter(x=>x.id!==d.id));showToast('Deleted');})}><Ico n="trash"/></button>
               </div></td>
             </tr>
           ))}</tbody>
@@ -1035,17 +1060,16 @@ function AppOperational({account,onSwitchAccount}){
     const set=(p,v)=>setDoc(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...doc,items})!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
+    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     const isPQ=docType==='pq',isPO=docType==='po',isRI=docType==='ri';
-    const lbl=isPQ?'Purchase Quotation':isPO?'Purchase Order':'Received Invoice';
-    const statuses=isPQ?['draft','sent']:isPO?['draft','sent','received','cancelled']:['pending','paid','overdue','cancelled'];
+    const lbl=isPQ?'Received Quote':isPO?'Purchase Order':'Received Invoice';
     const savedDoc={...doc,items};
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?`Edit ${lbl}`:`New ${lbl}`}</h2>
         <div style={{flex:1}}/>
-        {!isRI&&<Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,isPO?'po':'quote')}><Ico n="dl"/>PDF</Btn>}
+        <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,isPO?'po':isRI?'invoice':'quote')}><Ico n="dl"/>PDF</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>Save {lbl}</Btn>
       </div>
       {doc.pqNum&&<div style={{background:'var(--teall)',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--teal)'}}>From Purchase Quotation: <strong>{doc.pqNum}</strong></div>}
@@ -1059,7 +1083,7 @@ function AppOperational({account,onSwitchAccount}){
         </div>
         <div className="fg g3" style={{marginTop:12}}>
           {isRI&&<Fld label="Terms"><select value={doc.terms||'Due on Receipt'} onChange={e=>set('terms',e.target.value)} className="fi">{ITRM.map(t=><option key={t} value={t}>{t}</option>)}</select></Fld>}
-          <Fld label="Status"><select value={doc.status||statuses[0]} onChange={e=>set('status',e.target.value)} className="fi">{statuses.map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}</select></Fld>
+          {isRI&&<Fld label="Status"><select value={doc.status||'unpaid'} onChange={e=>set('status',e.target.value)} className="fi"><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select></Fld>}
           <Fld label="Project"><select value={doc.project||''} onChange={e=>{const projName=e.target.value;const proj=projects.find(p=>p.name===projName);set('project',projName);if(proj)set('projectNumber',proj.number);else set('projectNumber','');}} className="fi"><option value="">— None —</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
           {!isRI&&<div/>}
         </div>
@@ -1162,7 +1186,7 @@ function AppOperational({account,onSwitchAccount}){
                 <div style={{display:'flex',gap:6,alignItems:'center'}}>
                   <button className="ab" onClick={()=>{setCur(p);go('proj_detail');}}>View →</button>
                   <button className="ab" onClick={()=>{setCur(p);go('proj_form');}}><Ico n="edit"/></button>
-                  <button className="ab danger" onClick={()=>{if(!confirm(`Delete "${p.name}"?`))return;sProj(projects.filter(x=>x.id!==p.id));showToast('Deleted');}}><Ico n="trash"/></button>
+                  <button className="ab danger" onClick={()=>askConfirm(`Delete "${p.name}"?`,()=>{sProj(projects.filter(x=>x.id!==p.id));showToast('Deleted');})}><Ico n="trash"/></button>
                 </div>
               </div>
             </div>);
@@ -1218,7 +1242,7 @@ function AppOperational({account,onSwitchAccount}){
     const[p,setP]=useState(init);const s=(k,v)=>setP(d=>({...d,[k]:v}));
     const _initStr=useRef(JSON.stringify(init));
     const _isDirty=()=>JSON.stringify(p)!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
+    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     return(<div className="content"><div className="fw" style={{maxWidth:640}}>
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
       <div className="fc"><div className="fct">Project Details</div>
@@ -1473,7 +1497,7 @@ function AppOperational({account,onSwitchAccount}){
             <td className="tar" style={{fontWeight:700}}>{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(e);go('exp_form');}}><Ico n="edit"/></button>
-              <button className="ab danger" onClick={()=>{if(!confirm('Delete?'))return;sExp(expenses.filter(x=>x.id!==e.id));showToast('Deleted');}}><Ico n="trash"/></button>
+              <button className="ab danger" onClick={()=>askConfirm('Delete this expense?',()=>{sExp(expenses.filter(x=>x.id!==e.id));showToast('Deleted');})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
         </table></div>
@@ -1485,7 +1509,7 @@ function AppOperational({account,onSwitchAccount}){
     const[e,setE]=useState(init);const s=(k,v)=>setE(d=>({...d,[k]:v}));
     const _initStr=useRef(JSON.stringify(init));
     const _isDirty=()=>JSON.stringify(e)!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
+    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     const allCats=expCats.map(c=>typeof c==='string'?{id:c,name:c}:c);
     return(<div className="content"><div className="fw" style={{maxWidth:660}}>
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
@@ -1536,7 +1560,7 @@ function AppOperational({account,onSwitchAccount}){
             <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(c);go('cust_form');}}><Ico n="edit"/></button>
-              <button className="ab danger" onClick={()=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}><Ico n="trash"/></button>
+              <button className="ab danger" onClick={()=>askConfirm(`Delete "${c.company||c.contact}"?`,()=>{sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
         </table></div>
@@ -1548,7 +1572,7 @@ function AppOperational({account,onSwitchAccount}){
     const[c,setC]=useState(init);const s=(k,v)=>setC(d=>({...d,[k]:v}));
     const _initStr=useRef(JSON.stringify(init));
     const _isDirty=()=>JSON.stringify(c)!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
+    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     return(<div className="content"><div className="fw" style={{maxWidth:600}}>
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
       <div className="fc"><div className="fct">Customer Info</div>
@@ -1604,7 +1628,7 @@ function AppOperational({account,onSwitchAccount}){
                 link.click();
               }}><Ico n="dl"/>Download</button>
               <button className="ab" onClick={()=>{setEditDoc(d);setShowForm(true);}}><Ico n="edit"/></button>
-              <button className="ab danger" onClick={()=>{if(!confirm(`Delete "${d.name}"?`))return;sDocs(documents.filter(x=>x.id!==d.id));showToast('Deleted');}}><Ico n="trash"/></button>
+              <button className="ab danger" onClick={()=>askConfirm(`Delete "${d.name}"?`,()=>{sDocs(documents.filter(x=>x.id!==d.id));showToast('Deleted');})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
         </table></div>
@@ -1665,7 +1689,7 @@ function AppOperational({account,onSwitchAccount}){
     const s=(k,v)=>setU(x=>({...x,[k]:v}));
     const _initStr=useRef(JSON.stringify(init));
     const _isDirty=()=>JSON.stringify(u)!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
+    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     
     return(<div className="content"><div className="fw">
       <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12}}>
@@ -1756,9 +1780,7 @@ function AppOperational({account,onSwitchAccount}){
       setEditingBank(null);
     };
     const deleteBank=(id)=>{
-      if(!confirm('Delete this bank account?'))return;
-      const banks=(c.banks||[]).filter(b=>b.id!==id);
-      s('banks',banks);
+      askConfirm('Delete this bank account?',()=>{const banks=(c.banks||[]).filter(b=>b.id!==id);s('banks',banks);});
     };
     const setDefaultBank=(id)=>{
       const banks=(c.banks||[]).map(b=>({...b,isDefault:b.id===id}));
@@ -2014,7 +2036,7 @@ function AppOperational({account,onSwitchAccount}){
                   <td style={{color:'var(--g600)',fontSize:12}}>{u.createdAt}</td>
                   <td><div className="aw">
                     <button className="ab" onClick={()=>{LS.set(ns+'settingsMenu','users');setCur(u);go('user_form','settings');}}><Ico n="edit"/></button>
-                    <button className="ab danger" onClick={()=>{if(!confirm(`Delete user "${u.username}"?`))return;sUsers(users.filter(x=>x.id!==u.id));showToast('User deleted');}}><Ico n="trash"/></button>
+                    <button className="ab danger" onClick={()=>askConfirm(`Delete user "${u.username}"?`,()=>{sUsers(users.filter(x=>x.id!==u.id));showToast('User deleted');})}><Ico n="trash"/></button>
                   </div></td>
                 </tr>)}</tbody>
               </table></div>
@@ -2176,7 +2198,7 @@ function AppOperational({account,onSwitchAccount}){
         </div>
       </div>
       <div className="main">
-        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats'].includes(view)&&
+        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats'].includes(view)&&
           <div className="topbar no-print">
             <div style={{flex:1}}/>
             <span style={{fontSize:10.5,fontWeight:600,padding:'2px 9px',borderRadius:9,background:'var(--greenl)',color:'var(--green)',marginRight:8}}>Operational</span>
@@ -2203,7 +2225,7 @@ function AppOperational({account,onSwitchAccount}){
         {view==='pq_form'&&cur&&<ProcurementForm doc={cur} docType="pq" onSave={handleSavePQ} onCancel={()=>go('purchase_quotes')}/>}
         {view==='po_form'&&cur&&<ProcurementForm doc={cur} docType="po" onSave={handleSavePO} onCancel={()=>go('purchase_orders')}/>}
         {view==='ri_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRI} onCancel={()=>go('received_invoices')}/>}
-        {view==='received_invoice_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRI} onCancel={()=>go('purchase_orders')}/>}
+        {view==='received_invoice_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRIFromPO} onCancel={()=>go('purchase_orders')}/>}
         {view==='proj_form'&&cur&&<ProjectForm proj={cur} onSave={handleSaveProj} onCancel={()=>go('projects')}/>}
         {view==='exp_form'&&cur&&<ExpenseForm exp={cur} onSave={handleSaveExp} onCancel={()=>go('expenses')}/>}
         {view==='exp_cats'&&<ExpCatsView/>}
@@ -2213,8 +2235,18 @@ function AppOperational({account,onSwitchAccount}){
         {view==='sales_invoice_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" onBack={()=>go(prev)}/>}
         {view==='pq_preview'&&cur&&<Preview doc={cur} co={co} docType="quote" onBack={()=>go('purchase_quotes')}/>}
         {view==='po_preview'&&cur&&<Preview doc={cur} co={co} docType="po" onBack={()=>go('purchase_orders')}/>}
+        {view==='ri_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" onBack={()=>go('received_invoices')}/>}
       </div>
       {toast&&<div className="toast">{toast}</div>}
+      {confirmDlg&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setConfirmDlg(null)}>
+        <div style={{background:'#fff',borderRadius:12,padding:'28px 32px',minWidth:320,maxWidth:440,boxShadow:'0 8px 40px rgba(0,0,0,.18)',display:'flex',flexDirection:'column',gap:20}} onClick={e=>e.stopPropagation()}>
+          <p style={{margin:0,fontSize:14.5,lineHeight:1.6,color:'var(--g700)',fontWeight:500}}>{confirmDlg.msg}</p>
+          <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+            <button style={{padding:'7px 20px',borderRadius:7,border:'1.5px solid var(--g200)',background:'#fff',color:'var(--g600)',fontSize:13,fontWeight:500,cursor:'pointer'}} onClick={()=>setConfirmDlg(null)}>Cancel</button>
+            <button style={{padding:'7px 20px',borderRadius:7,border:'none',background:'var(--gm-600)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={()=>{confirmDlg.onYes();setConfirmDlg(null);}}>Yes</button>
+          </div>
+        </div>
+      </div>}
     </div>
   );
 }

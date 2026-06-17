@@ -33,7 +33,7 @@ function AppOfficial({account,onSwitchAccount}){
     if(g)setCo({...DEF_CO,...g,logo:logo||''});else setCo({...DEF_CO,logo:logo||''});
     if(h)setExpenses(h);else setExpenses([]);
     if(k)setExpCats(k);else setExpCats(EXP_CATS_DEF.map(n=>({id:uid(),name:n})));
-    if(l)setCustomers(l);else setCustomers([]);
+    if(l){const migrated=l.map(c=>{if('name'in c&&!('contact'in c)){const{name,...rest}=c;return{...rest,contact:name};}return c;});setCustomers(migrated);if(migrated.some((c,i)=>c!==l[i]))LS.set(ns+'cust',migrated);}else setCustomers([]);
     if(m){
       setUsers(m);
     }else{
@@ -85,7 +85,7 @@ function AppOfficial({account,onSwitchAccount}){
   };
   const handleSavePrj=p=>{const fresh=!p.id;const saved=fresh?{...p,id:uid()}:p;spr(fresh?[...projects,saved]:projects.map(d=>d.id===saved.id?saved:d));showToast('Saved ✓');go('projects');};
   const handleSaveExp=e=>{const fresh=!e.id;const saved=fresh?{...e,id:uid()}:e;sExp(fresh?[...expenses,saved]:expenses.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('expenses');};
-  const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('customers');};
+  const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('off_customers');};
 
   // Simple generic form
   function SimpleDocForm({doc:init,onSave,onCancel,onPreview}){
@@ -124,7 +124,7 @@ function AppOfficial({account,onSwitchAccount}){
           {customers.length>0&&<div style={{marginBottom:12}}>
             <select className="fi" style={{maxWidth:320}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){if(isRec||isPO){set('supplier',c.company||c.name);set('supplierAddress',c.address||'');}else{set('client.name',c.company||c.name);set('client.email',c.email||'');set('client.address',c.address||'');}}}}>
               <option value="">— Quick fill from Customers —</option>
-              {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.name})`:c.name}</option>)}
+              {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
             </select>
           </div>}
           {(isRec||isPO)?(<div className="fg g2">
@@ -266,7 +266,7 @@ function AppOfficial({account,onSwitchAccount}){
         {view==='off_quotes'&&<OffListView type="quote" items={quo}/>}
         {view==='off_pos'&&<OffListView type="po" items={pos}/>}
         {view==='off_received'&&<OffListView type="received" items={rec}/>}
-        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} quo={quo} onNew={()=>{setCur({id:null,name:'',email:'',phone:'',address:'',company:'',notes:''});go('off_custform');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(`Delete "${c.name}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}/>}
+        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} quo={quo} onNew={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('off_custform');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}/>}
         {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(`Delete "${p.name}"?`))return;spr(projects.filter(d=>d.id!==p.id));showToast('Deleted');}}/>}
         {view==='off_expenses'&&<OffExpenses expenses={expenses} projects={projects} cats={expCats} onNew={()=>{setCur(mkExp());go('off_expform');}} onEdit={e=>{setCur(e);go('off_expform');}} onDelete={e=>{if(!confirm('Delete?'))return;sExp(expenses.filter(x=>x.id!==e.id));showToast('Deleted');}} onManageCats={()=>go('off_expcats')}/>}
         {view==='off_form'&&cur&&<SimpleDocForm doc={cur} onSave={d=>{handleSave({...d,type:cur.type});}} onCancel={()=>go(prev)} onPreview={d=>{setCur(d);go('off_preview','off_form');}}/>}
@@ -286,33 +286,40 @@ function AppOfficial({account,onSwitchAccount}){
 // Simple Official sub-components
 function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
   const[q,setQ]=useState('');
-  const f=customers.filter(c=>[c.name,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())));
+  const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
   return(<div className="content">
     <div className="sec-hdr"><h2>Customers</h2><Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>New Customer</Btn></div>
     <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
+    {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No customers yet</div></div></div>:(
     <div className="tcard"><table className="dt">
-      <thead><tr><th>Company</th><th>Name</th><th>Email</th><th className="tac">Inv</th><th className="tac">Quotes</th><th></th></tr></thead>
-      <tbody>{f.length===0?<tr><td colSpan={6}><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No customers yet</div></div></td></tr>:f.map(c=><tr key={c.id}>
-        <td>{c.company||'—'}</td>
-        <td>{c.name}</td>
+      <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th className="tac">Inv</th><th className="tac">Quotes</th><th></th></tr></thead>
+      <tbody>{f.map(c=><tr key={c.id}>
+        <td style={{fontWeight:500}}>{c.company||'—'}</td>
+        <td>{c.contact||'—'}</td>
         <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
-        <td className="tac" style={{color:'var(--green)'}}>{inv.filter(d=>(d&&d.client&&d.client.name)===c.name||(d&&d.client&&d.client.name)===c.company).length}</td>
-        <td className="tac" style={{color:'var(--gm-500)'}}>{quo.filter(d=>(d&&d.client&&d.client.name)===c.name||(d&&d.client&&d.client.name)===c.company).length}</td>
+        <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
+        <td className="tac" style={{color:'var(--green)'}}>{inv.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
+        <td className="tac" style={{color:'var(--gm-500)'}}>{quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
         <td><div className="aw"><button className="ab" onClick={()=>onEdit(c)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(c)}><Ico n="trash"/></button></div></td>
       </tr>)}</tbody>
     </table></div>
+    )}
   </div>);
 }
 function OffCustForm({cust:init,onSave,onCancel}){
   const[c,setC]=useState(init);const s=(k,v)=>setC(d=>({...d,[k]:v}));
+  const _initStr=useRef(JSON.stringify(init));
+  const _isDirty=()=>JSON.stringify(c)!==_initStr.current;
+  const _handleCancel=()=>{if(_isDirty()){if(!confirm('You have unsaved changes. Leave without saving?'))return;}onCancel();};
   return(<div className="content"><div className="fw" style={{maxWidth:640}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
     <div className="fc"><div className="fct">Customer Info</div>
-      <div className="fg g2"><Fld label="Name"><input value={c.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder="John Smith"/></Fld><Fld label="Company"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd"/></Fld></div>
+      <div className="fg g2"><Fld label="Company Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
       <div style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
+      <div style={{marginTop:12}}><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
   </div></div>);
 }
 function OffProjects({projects,onNew,onEdit,onDelete}){
