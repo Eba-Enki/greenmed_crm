@@ -49,7 +49,13 @@
       "PowerShell(php --version 2>&1)",
       "PowerShell(gh api repos/Eba-Enki/greenmed_crm --jq '.visibility')",
       "PowerShell(gh api repos/Eba-Enki/greenmed_crm/pages --method POST --field source='{\"branch\":\"main\",\"path\":\"/\"}' 2>&1)",
-      "Bash(gh api *)"
+      "Bash(gh api *)",
+      "WebFetch(domain:eba-enki.github.io)",
+      "Bash(cd \"/d/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" && ls -lh index.html js/*.js)",
+      "Read(//d/d/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://eba-enki.github.io/greenmed_crm/js/utils.js\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://eba-enki.github.io/greenmed_crm/js/fonts.js\")",
+      "Bash(curl -s \"https://eba-enki.github.io/greenmed_crm/js/app-shell.js\")"
     ],
     "additionalDirectories": [
       "d:\\Eba Asus Yedek 09.02.2025\\Şirketler Web Siteleri\\green_med\\.claude"

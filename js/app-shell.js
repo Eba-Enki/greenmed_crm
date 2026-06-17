@@ -85,8 +85,8 @@ function AccountSelector({onSelect}){
     <div className="acc-screen">
       <div style={{maxWidth:'420px',width:'100%'}}>
         <div style={{textAlign:'center',marginBottom:32}}>
-          <img src={getLogo()||LOGO} style={{width:120,height:120,objectFit:'contain',marginBottom:16}} alt="Green Med Ltd"/>
-          <h2 style={{fontSize:24,fontWeight:700,color:'var(--g900)',marginBottom:8}}>
+          <img src={getLogo()||LOGO} style={{width:150,height:'auto',display:'block',margin:'0 auto 16px'}} alt="Green Med Ltd"/>
+          <h2 style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:8}}>
             {selectedAccount==='off'?'Official':'Operational'} Login
           </h2>
           <p style={{fontSize:14,color:'var(--g500)'}}>Enter your credentials to continue</p>
