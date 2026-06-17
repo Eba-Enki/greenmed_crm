@@ -219,6 +219,10 @@ table.ie td input:hover{border-color:var(--g200);background:rgba(255,255,255,.6)
 table.ie td input:focus{border-color:var(--gm-400)!important;background:var(--white)!important;box-shadow:0 0 0 2px rgba(96,132,37,.1)!important;outline:none!important}
 table.ie td input[readonly]{background:transparent;color:var(--g500)}
 .lt{text-align:right;font-weight:600;color:var(--dk);padding-right:10px!important;font-size:13px}
+.tip-wrap{position:relative;display:inline-flex;align-items:center}
+.tip-wrap .tip-box{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:#f1f5f9;font-size:11.5px;font-weight:400;white-space:normal;max-width:260px;min-width:120px;padding:7px 10px;border-radius:7px;box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none;z-index:9999;line-height:1.4;transition:opacity .15s,visibility .15s}
+.tip-wrap .tip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#1e293b}
+.tip-wrap:hover .tip-box{visibility:visible;opacity:1}
 .dlb{background:none;border:none;cursor:pointer;color:var(--g300);font-size:18px;padding:3px 6px;border-radius:5px;transition:background .15s,border-color .15s,box-shadow .15s,color .15s,transform .15s;font-weight:700}
 .dlb:hover{color:var(--red);background:var(--redl);transform:scale(1.1)}
 .totbox{background:linear-gradient(135deg,var(--dk),var(--dk2));border-radius:10px;padding:12px 20px;display:inline-flex;align-items:center;gap:14px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
