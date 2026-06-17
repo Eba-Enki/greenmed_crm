@@ -71,6 +71,7 @@ function AppOperational({account,onSwitchAccount}){
   // items carry invoicedQty (tracked per item)
   const getNextQuoteBase=()=>{
     const n=cnt.sq;const base=genQuoteBase(n+1);
+    sCnt({...cnt,sq:n+1});
     return base;
   };
   const assignQuoteNumber=(q)=>{
