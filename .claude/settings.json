@@ -55,7 +55,11 @@
       "Read(//d/d/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med/**)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://eba-enki.github.io/greenmed_crm/js/utils.js\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://eba-enki.github.io/greenmed_crm/js/fonts.js\")",
-      "Bash(curl -s \"https://eba-enki.github.io/greenmed_crm/js/app-shell.js\")"
+      "Bash(curl -s \"https://eba-enki.github.io/greenmed_crm/js/app-shell.js\")",
+      "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" status)",
+      "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" diff js/app-operational.js)",
+      "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" diff .claude/settings.json)",
+      "Bash(git -C \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med\" add js/app-operational.js .claude/settings.json)"
     ],
     "additionalDirectories": [
       "d:\\Eba Asus Yedek 09.02.2025\\Şirketler Web Siteleri\\green_med\\.claude"

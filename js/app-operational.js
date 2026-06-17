@@ -153,6 +153,10 @@ function AppOperational({account,onSwitchAccount}){
     }
   };
 
+  const handleMarkAsSent=(q)=>{
+    sSQ(salesQuotes.map(x=>x.id===q.id?{...x,status:'sent'}:x));
+    showToast('Quote marked as sent');
+  };
   const handleApproveQuote=(q)=>{
     sSQ(salesQuotes.map(x=>x.id===q.id?{...x,status:'approved',locked:true}:x));
     showToast('Quote approved & locked');
@@ -360,14 +364,15 @@ function AppOperational({account,onSwitchAccount}){
                 {q.rev>0&&<span className="rev-badge" style={{marginRight:5}}>R{String(q.rev).padStart(2,'0')}</span>}
                 {q.locked&&<span className="locked-badge" style={{marginRight:5}}><Ico n="lock" size={10}/>Locked</span>}
                 <button className="ab" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
-                {!q.locked&&q.status!=='passive'&&q.status!=='closed'&&<button className="ab" onClick={()=>{setCur(q);go('sales_quote_form');}}><Ico n="edit"/></button>}
-                {!q.locked&&q.status!=='passive'&&q.status!=='closed'&&q.status==='draft'&&<button className="ab" onClick={()=>handleApproveQuote(q)} title="Approve"><Ico n="check"/>Approve</button>}
-                {(q.status==='approved'||q.status==='locked')&&<button className="ab" onClick={()=>handleNewRevision(q)}><Ico n="rev"/>New Rev.</button>}
-                {(q.status==='passive')&&<button className="ab" onClick={()=>handleUnlockQuote(q)}><Ico n="unlock"/>Unlock</button>}
+                {q.status==='draft'&&<button className="ab" onClick={()=>{setCur(q);go('sales_quote_form');}}><Ico n="edit"/></button>}
+                {q.status==='draft'&&<button className="ab" onClick={()=>handleMarkAsSent(q)}><Ico n="mail"/>Mark as Sent</button>}
+                {q.status==='sent'&&<button className="ab" onClick={()=>handleApproveQuote(q)}><Ico n="check"/>Approve</button>}
+                {q.status==='sent'&&<button className="ab" onClick={()=>handleNewRevision(q)}><Ico n="rev"/>Revise</button>}
+                {(q.status==='approved'||q.status==='locked')&&<button className="ab" onClick={()=>handleNewRevision(q)}><Ico n="rev"/>Revise</button>}
                 {q.status==='approved'&&remaining.length>0&&<button className="ab primary" onClick={()=>{setCur(mkSalesInvoice(q));go('sales_invoice_form');}}>
                   <Ico n="invoice" style={{stroke:'#fff'}}/>Invoice
                 </button>}
-                {q.status!=='passive'&&<button className="ab danger" onClick={()=>{if(!confirm('Delete?'))return;sSQ(salesQuotes.filter(x=>x.id!==q.id));showToast('Deleted');}}><Ico n="trash"/></button>}
+                {(q.status==='draft'||q.status==='sent')&&<button className="ab danger" onClick={()=>{if(!confirm('Delete this quotation?'))return;sSQ(salesQuotes.filter(x=>x.id!==q.id));showToast('Deleted');}}><Ico n="trash"/></button>}
               </div></td>
             </tr>);
           })}</tbody>
@@ -535,8 +540,7 @@ function AppOperational({account,onSwitchAccount}){
           <Fld label="Valid Until"><input type="date" value={q.validUntil||addD(30)} onChange={e=>set('validUntil',e.target.value)} className="fi" disabled={isLocked}/></Fld>
           <Fld label="Currency"><select value={q.currency||'GBP'} onChange={e=>set('currency',e.target.value)} className="fi" disabled={isLocked}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
         </div>
-        <div className="fg g3" style={{marginTop:12}}>
-          <Fld label="Status"><select value={q.status||'draft'} onChange={e=>set('status',e.target.value)} className="fi" disabled={isLocked}>{['draft','sent'].map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}</select></Fld>
+        <div className="fg g2" style={{marginTop:12}}>
           <Fld label="Project"><select value={q.project||''} onChange={e=>{const projName=e.target.value;const proj=projects.find(p=>p.name===projName);set('project',projName);if(proj)set('projectNumber',proj.number);else set('projectNumber','');}} className="fi" disabled={isLocked}><option value="">— None —</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
           <div/>
         </div>
