@@ -388,7 +388,7 @@ function AppOperational({account,onSwitchAccount}){
                   {latest.status==='approved'&&remaining.length>0&&<button className="ab primary" onClick={()=>{setCur(mkSalesInvoice(latest));go('sales_invoice_form');}}>
                     <Ico n="invoice" style={{stroke:'#fff'}}/>Invoice
                   </button>}
-                  {(latest.status==='draft'||latest.status==='sent')&&<button className="ab danger" onClick={()=>{if(!confirm('Delete this quotation?'))return;sSQ(salesQuotes.filter(x=>x.id!==latest.id));showToast('Deleted');}}><Ico n="trash"/></button>}
+                  <button className="ab danger" onClick={()=>{if(!confirm('Delete this quotation?'))return;sSQ(salesQuotes.filter(x=>x.id!==latest.id));showToast('Deleted');}}><Ico n="trash"/></button>}
                 </div></td>
               </tr>
               {expanded&&history.map(q=>(
@@ -408,6 +408,7 @@ function AppOperational({account,onSwitchAccount}){
                   <td><div className="aw">
                     <button className="ab" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
                     <button className="ab" onClick={()=>savePDF(q,co,'sales_quote')}><Ico n="dl"/></button>
+                    <button className="ab danger" onClick={()=>{if(!confirm('Delete this revision?'))return;sSQ(salesQuotes.filter(x=>x.id!==q.id));showToast('Deleted');}}><Ico n="trash"/></button>
                   </div></td>
                 </tr>
               ))}
