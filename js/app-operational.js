@@ -356,7 +356,7 @@ function AppOperational({account,onSwitchAccount}){
             const remaining=getQuoteRemainingItems(latest);
             const remAmt=dt(remaining.map(i=>({...i,qty:i.remainingQty})));
             return(<React.Fragment key={base}>
-              <tr style={{opacity:latest.status==='passive'?0.55:1}}>
+              <tr style={{fontStyle:latest.status==='passive'?'italic':'normal'}}>
                 <td>
                   <div style={{display:'flex',alignItems:'center',gap:5}}>
                     {hasHistory
@@ -393,18 +393,18 @@ function AppOperational({account,onSwitchAccount}){
                 </div></td>
               </tr>
               {expanded&&history.map(q=>(
-                <tr key={q.id} style={{background:'var(--g50)',opacity:0.65}}>
+                <tr key={q.id} style={{background:'var(--g50)',fontStyle:'italic'}}>
                   <td>
                     <div style={{display:'flex',alignItems:'center',gap:5,paddingLeft:22}}>
                       <span style={{color:'var(--g300)',fontSize:13,lineHeight:1}}>└</span>
                       <span style={{fontFamily:'Inter',fontSize:11}}>{q.number}</span>
-                      <span className="rev-badge">R{String(q.rev).padStart(2,'0')}</span>
+                      {q.rev>0&&<span className="rev-badge">R{String(q.rev).padStart(2,'0')}</span>}
                     </div>
                   </td>
-                  <td style={{color:'var(--g400)',fontSize:12}}>{q.date}</td>
-                  <td style={{color:'var(--g400)',fontSize:12}}>{(q.client&&q.client.company)||'—'}</td>
-                  <td style={{color:'var(--g400)',fontSize:12}}>{q.project||'—'}</td>
-                  <td className="tar" style={{color:'var(--g400)',fontSize:12}}>{CURR[q.currency]||'£'}{fmt(dt(q.items))}</td>
+                  <td style={{fontSize:12}}>{q.date}</td>
+                  <td style={{fontSize:12}}>{(q.client&&q.client.company)||'—'}</td>
+                  <td style={{fontSize:12}}>{q.project||'—'}</td>
+                  <td className="tar" style={{fontSize:12}}>{CURR[q.currency]||'£'}{fmt(dt(q.items))}</td>
                   <td className="tac"><Badge s={q.status}/></td>
                   <td><div className="aw">
                     <button className="ab" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
