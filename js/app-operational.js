@@ -2094,7 +2094,7 @@ function AppOperational({account,onSwitchAccount}){
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <div className="sidebar no-print">
         <div className="sb-brand" onClick={()=>go('home')}>
-          <img src={getLogo()||LOGO_DARK} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">Operations</div></div>
+          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">Operations</div></div>
         </div>
         <div className="sb-acc-pill">
           <span className="sb-acc-name" style={{color:'var(--gm-600)'}}>Operational</span>

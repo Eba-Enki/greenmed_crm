@@ -33,7 +33,26 @@
       "Bash(jobs -l)",
       "PowerShell(Set-Location \"d:\\\\Eba Asus Yedek 09.02.2025\\\\Şirketler Web Siteleri\\\\green_med\"; Start-Process -FilePath \"node\" -ArgumentList \"serve.mjs\" -WindowStyle Hidden -RedirectStandardOutput \"serve_out.log\" -RedirectStandardError \"serve_err.log\"; Start-Sleep -Seconds 2; try { \\(Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -TimeoutSec 3\\).StatusCode } catch { \"failed: $_\" })",
       "PowerShell(Get-Command git -ErrorAction SilentlyContinue)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(mkdir -p \"d:/Eba Asus Yedek 09.02.2025/Şirketler Web Siteleri/green_med/.claude/commands\")",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -TimeoutSec 3\\).StatusCode } catch { \"down\" })",
+      "PowerShell(Get-Job | Remove-Job -Force; Start-Job -Name \"serve\" -ScriptBlock { powershell -ExecutionPolicy Bypass -File \"d:\\\\Eba Asus Yedek 09.02.2025\\\\Şirketler Web Siteleri\\\\green_med\\\\serve.ps1\" } | Out-Null; Start-Sleep -Seconds 3; try { \\(Invoke-WebRequest -Uri \"http://localhost:3000\" -UseBasicParsing -TimeoutSec 5\\).StatusCode } catch { \"failed: $_\" })",
+      "PowerShell(Get-Job)",
+      "PowerShell(Receive-Job -Name \"serve\" 2>&1)",
+      "PowerShell(Get-Process -Id 29888 -ErrorAction SilentlyContinue)",
+      "PowerShell(netstat -ano)",
+      "PowerShell(Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri \"http://127.0.0.1:3000\" -UseBasicParsing -TimeoutSec 5; \"Status: $\\($r.StatusCode\\)\" } catch { \"Error: $_\" })",
+      "PowerShell(python --version 2>&1)",
+      "PowerShell(py --version 2>&1)",
+      "PowerShell(php --version 2>&1)",
+      "PowerShell(gh api repos/Eba-Enki/greenmed_crm --jq '.visibility')",
+      "PowerShell(gh api repos/Eba-Enki/greenmed_crm/pages --method POST --field source='{\"branch\":\"main\",\"path\":\"/\"}' 2>&1)",
+      "Bash(gh api *)"
+    ],
+    "additionalDirectories": [
+      "d:\\Eba Asus Yedek 09.02.2025\\Şirketler Web Siteleri\\green_med\\.claude"
     ]
   }
 }
