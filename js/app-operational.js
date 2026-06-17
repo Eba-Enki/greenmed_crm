@@ -433,6 +433,9 @@ function AppOperational({account,onSwitchAccount}){
     const fileRef=useRef();
     const savedQ={...q,items};
     const isLocked=q.locked;
+    const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
+    const _isDirty=()=>JSON.stringify({...q,items})!==_initStr.current;
+    const _handleCancel=()=>{if(!isLocked&&_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
     
     // Check Product Pool for price history
     const checkPriceHistory=(itemId,description)=>{
@@ -556,7 +559,7 @@ function AppOperational({account,onSwitchAccount}){
     
     return(<div className="content"><div className="fw">
       <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-        <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
+        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
         <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
         <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)',letterSpacing:'-.3px'}}>
           {q.id?'Edit Quotation':'New Quotation'} — <span style={{fontFamily:'Inter',fontWeight:700,color:'var(--gm-500)'}}>{q.number}</span>
@@ -763,9 +766,12 @@ function AppOperational({account,onSwitchAccount}){
     const set=(p,v)=>setInv(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
     const sym=CURR[inv.currency]||'£';
     const savedInv={...inv,items};
+    const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
+    const _isDirty=()=>JSON.stringify({...inv,items})!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
+        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>New Sales Invoice — <span style={{fontFamily:'Inter',fontWeight:600,color:'var(--gm-500)'}}>{inv.number}</span></h2>
         <div style={{flex:1}}/>
         <Btn v="bgh bsm" onClick={()=>savePDF(savedInv,co,'invoice')}><Ico n="dl"/>PDF</Btn>
@@ -858,7 +864,7 @@ function AppOperational({account,onSwitchAccount}){
           </label>
         </div>
       </div>
-      <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(savedInv)}>Save Invoice</Btn></div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(savedInv)}>Save Invoice</Btn></div>
     </div></div>);
   }
 
@@ -929,7 +935,7 @@ function AppOperational({account,onSwitchAccount}){
               <td><div className="aw">
                 <button className="ab" onClick={()=>{setCur(d);go('sales_invoice_preview');}}><Ico n="eye"/></button>
                 <button className="ab" onClick={()=>savePDF(d,co,'invoice')}><Ico n="dl"/></button>
-                <button className="ab" onClick={()=>{setCur(d);go('sales_invoice_edit');}}><Ico n="edit"/></button>
+                <button className="ab" onClick={()=>{if(d.status==='sent'&&!confirm('This invoice has been marked as sent. Edit anyway?'))return;setCur(d);go('sales_invoice_edit');}}><Ico n="edit"/></button>
                 <button className="ab danger" onClick={()=>{if(!confirm('Delete?'))return;sSI(salesInvoices.filter(x=>x.id!==d.id));showToast('Deleted');}}><Ico n="trash"/></button>
               </div></td>
             </tr>
@@ -1027,13 +1033,16 @@ function AppOperational({account,onSwitchAccount}){
     const[doc,setDoc]=useState(init);
     const[items,setItems]=useState(init.items||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
     const set=(p,v)=>setDoc(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
+    const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
+    const _isDirty=()=>JSON.stringify({...doc,items})!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
     const isPQ=docType==='pq',isPO=docType==='po',isRI=docType==='ri';
     const lbl=isPQ?'Purchase Quotation':isPO?'Purchase Order':'Received Invoice';
     const statuses=isPQ?['draft','sent']:isPO?['draft','sent','received','cancelled']:['pending','paid','overdue','cancelled'];
     const savedDoc={...doc,items};
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
+        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?`Edit ${lbl}`:`New ${lbl}`}</h2>
         <div style={{flex:1}}/>
         {!isRI&&<Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,isPO?'po':'quote')}><Ico n="dl"/>PDF</Btn>}
@@ -1117,7 +1126,7 @@ function AppOperational({account,onSwitchAccount}){
           </label>
         </div>}
       </div>
-      <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>Save {lbl}</Btn></div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>Save {lbl}</Btn></div>
     </div></div>);
   }
 
@@ -1207,8 +1216,11 @@ function AppOperational({account,onSwitchAccount}){
   // Project Form
   function ProjectForm({proj:init,onSave,onCancel}){
     const[p,setP]=useState(init);const s=(k,v)=>setP(d=>({...d,[k]:v}));
+    const _initStr=useRef(JSON.stringify(init));
+    const _isDirty=()=>JSON.stringify(p)!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
     return(<div className="content"><div className="fw" style={{maxWidth:640}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
       <div className="fc"><div className="fct">Project Details</div>
         <div className="fg g2"><Fld label="Project No"><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label="Project Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
         <div className="fg g3" style={{marginTop:12}}>
@@ -1222,7 +1234,7 @@ function AppOperational({account,onSwitchAccount}){
         </div>
         <div style={{marginTop:12}}><Fld label="Description"><textarea value={p.desc||''} onChange={e=>s('desc',e.target.value)} rows={2} className="fi"/></Fld></div>
       </div>
-      <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
     </div></div>);
   }
 
@@ -1471,9 +1483,12 @@ function AppOperational({account,onSwitchAccount}){
 
   function ExpenseForm({exp:init,onSave,onCancel}){
     const[e,setE]=useState(init);const s=(k,v)=>setE(d=>({...d,[k]:v}));
+    const _initStr=useRef(JSON.stringify(init));
+    const _isDirty=()=>JSON.stringify(e)!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
     const allCats=expCats.map(c=>typeof c==='string'?{id:c,name:c}:c);
     return(<div className="content"><div className="fw" style={{maxWidth:660}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
       <div className="fc"><div className="fct">Expense Details</div>
         <div className="fg g3"><Fld label="Date"><input type="date" value={e.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label="Amount"><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label="Currency"><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
         <div className="fg g3" style={{marginTop:12}}>
@@ -1487,7 +1502,7 @@ function AppOperational({account,onSwitchAccount}){
         </div>
         <div style={{marginTop:12}}><Fld label="Notes"><textarea value={e.notes||''} onChange={x=>s('notes',x.target.value)} rows={2} className="fi"/></Fld></div>
       </div>
-      <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
     </div></div>);
   }
 
@@ -1531,15 +1546,18 @@ function AppOperational({account,onSwitchAccount}){
 
   function CustomerForm({cust:init,onSave,onCancel}){
     const[c,setC]=useState(init);const s=(k,v)=>setC(d=>({...d,[k]:v}));
+    const _initStr=useRef(JSON.stringify(init));
+    const _isDirty=()=>JSON.stringify(c)!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
     return(<div className="content"><div className="fw" style={{maxWidth:600}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
       <div className="fc"><div className="fct">Customer Info</div>
         <div className="fg g2"><Fld label="Company Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
         <div className="fg g2" style={{marginTop:12}}><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
         <div style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
         <div style={{marginTop:12}}><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
       </div>
-      <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
     </div></div>);
   }
 
@@ -1645,10 +1663,13 @@ function AppOperational({account,onSwitchAccount}){
   function UserForm({user:init,onSave,onCancel}){
     const[u,setU]=useState(init);
     const s=(k,v)=>setU(x=>({...x,[k]:v}));
+    const _initStr=useRef(JSON.stringify(init));
+    const _isDirty=()=>JSON.stringify(u)!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty()&&!confirm('You have unsaved changes. Leave without saving?'))return;onCancel();};
     
     return(<div className="content"><div className="fw">
       <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12}}>
-        <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
+        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
         <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
         <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)'}}>{u.id?'Edit User':'New User'}</h2>
         <div style={{flex:1}}/>
@@ -1686,7 +1707,7 @@ function AppOperational({account,onSwitchAccount}){
       </div>
       
       <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:16}}>
-        <Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn>
+        <Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(u)} disabled={!u.username||(u.id?false:!u.password)}>Save User</Btn>
       </div>
     </div></div>);
