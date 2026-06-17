@@ -26,7 +26,7 @@ function AppOperational({account,onSwitchAccount}){
   useEffect(()=>{
     const load=k=>LS.get(ns+k);
     const c=load('co');const logo=getLogo();const signature=getSignature();if(c)setCo({...DEF_CO,...c,logo:logo||'',signature:signature||''});else setCo({...DEF_CO,logo:logo||'',signature:signature||''});
-    const cu=load('cust');if(cu)setCustomers(cu);
+    const cu=load('cust');if(cu){const migrated=cu.map(c=>{if('name'in c&&!('contact'in c)){const{name,...rest}=c;return{...rest,contact:name};}return c;});setCustomers(migrated);if(migrated.some((c,i)=>c!==cu[i]))LS.set(ns+'cust',migrated);}
     const pr=load('proj');if(pr)setProjects(pr);
     const sq=load('sq');if(sq)setSalesQuotes(sq);
     const si=load('si');if(si)setSalesInvoices(si);
@@ -289,12 +289,11 @@ function AppOperational({account,onSwitchAccount}){
   function SalesQuotesList(){
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
     const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
-    const groups={};
-    salesQuotes.forEach(q=>{if(!groups[q.base])groups[q.base]=[];groups[q.base].push(q);});
-    const handleSort=(key)=>{
-      setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
-    };
-    const filtered=salesQuotes.filter(q=>{
+    const[expandedGroups,setExpandedGroups]=useState(new Set());
+    const hasFilter=fs.q||fs.s||fs.dateFrom||fs.dateTo;
+    const toggleGroup=(base)=>{setExpandedGroups(prev=>{const next=new Set(prev);if(next.has(base))next.delete(base);else next.add(base);return next;});};
+    const handleSort=(key)=>{setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));};
+    const matchesFilter=(q)=>{
       const company=(q.client&&q.client.company)||'';
       const contact=(q.client&&q.client.contact)||'';
       if(fs.q&&![company,contact,q.number].some(x=>x.toLowerCase().includes(fs.q.toLowerCase())))return false;
@@ -302,20 +301,27 @@ function AppOperational({account,onSwitchAccount}){
       if(fs.dateFrom&&q.date<fs.dateFrom)return false;
       if(fs.dateTo&&q.date>fs.dateTo)return false;
       return true;
-    });
-    const sorted=[...filtered].sort((a,b)=>{
-      if(!sortConfig.key)return b.date.localeCompare(a.date);
+    };
+    const allGroups={};
+    salesQuotes.forEach(q=>{if(!allGroups[q.base])allGroups[q.base]=[];allGroups[q.base].push(q);});
+    const filteredGroups=Object.entries(allGroups)
+      .filter(([,revs])=>!hasFilter||revs.some(matchesFilter))
+      .map(([base,revs])=>{const sorted=[...revs].sort((a,b)=>b.rev-a.rev);return{base,revs:sorted,latest:sorted[0]};});
+    const flatFiltered=salesQuotes.filter(matchesFilter);
+    const sortedGroups=[...filteredGroups].sort((a,b)=>{
+      if(!sortConfig.key)return b.latest.date.localeCompare(a.latest.date);
       let aVal,bVal;
-      if(sortConfig.key==='number')aVal=a.number,bVal=b.number;
-      else if(sortConfig.key==='date')aVal=a.date,bVal=b.date;
-      else if(sortConfig.key==='customer')aVal=(a.client&&a.client.company)||'',bVal=(b.client&&b.client.company)||'';
-      else if(sortConfig.key==='project')aVal=a.project||'',bVal=b.project||'';
-      else if(sortConfig.key==='total')aVal=dt(a.items),bVal=dt(b.items);
-      else if(sortConfig.key==='status')aVal=a.status,bVal=b.status;
+      if(sortConfig.key==='number')aVal=a.base,bVal=b.base;
+      else if(sortConfig.key==='date')aVal=a.latest.date,bVal=b.latest.date;
+      else if(sortConfig.key==='customer')aVal=(a.latest.client&&a.latest.client.company)||'',bVal=(b.latest.client&&b.latest.client.company)||'';
+      else if(sortConfig.key==='project')aVal=a.latest.project||'',bVal=b.latest.project||'';
+      else if(sortConfig.key==='total')aVal=dt(a.latest.items),bVal=dt(b.latest.items);
+      else if(sortConfig.key==='status')aVal=a.latest.status,bVal=b.latest.status;
       else return 0;
       if(typeof aVal==='string')return sortConfig.dir==='asc'?aVal.localeCompare(bVal):bVal.localeCompare(aVal);
       return sortConfig.dir==='asc'?aVal-bVal:bVal-aVal;
     });
+    const isExpanded=(base)=>hasFilter||expandedGroups.has(base);
     return(<div className="content">
       <div className="sec-hdr"><h2>Sales Quotations</h2>
         <Btn v="bp bsm" onClick={()=>{const base=getNextQuoteBase();setCur(mkSalesQuote(base,0));go('sales_quote_form');}}><Ico n="plus"/>New Quotation</Btn>
@@ -329,9 +335,9 @@ function AppOperational({account,onSwitchAccount}){
         <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
-        <Btn v="bgh bsm" onClick={()=>exportExcel([['Number','Date','Company','Contact','Total','Status','Project'],...filtered.map(q=>[q.number,q.date,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}><Ico n="export"/>Export</Btn>
+        <Btn v="bgh bsm" onClick={()=>exportExcel([['Number','Date','Company','Contact','Total','Status','Project'],...flatFiltered.map(q=>[q.number,q.date,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}><Ico n="export"/>Export</Btn>
       </div>
-      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">No quotations yet</div></div></div>:(
+      {sortedGroups.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">No quotations yet</div></div></div>:(
         <div className="tcard"><table className="dt">
           <thead><tr>
             <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>Quote No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
@@ -342,39 +348,70 @@ function AppOperational({account,onSwitchAccount}){
             <th className="tac" onClick={()=>handleSort('status')} style={{cursor:'pointer',userSelect:'none'}}>Status {sortConfig.key==='status'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th></th>
           </tr></thead>
-          <tbody>{sorted.map(q=>{
-            const remaining=getQuoteRemainingItems(q);
+          <tbody>{sortedGroups.map(({base,revs,latest})=>{
+            const history=revs.slice(1);
+            const hasHistory=history.length>0;
+            const expanded=isExpanded(base);
+            const remaining=getQuoteRemainingItems(latest);
             const remAmt=dt(remaining.map(i=>({...i,qty:i.remainingQty})));
-            return(<tr key={q.id} className={q.status==='passive'?'':''}
-              style={{opacity:q.status==='passive'?0.55:1}}>
-              <td>
-                <span style={{fontFamily:'Inter',fontSize:11}}>{q.number}</span>
-              </td>
-              <td style={{color:'var(--g500)',fontSize:12}}>{q.date}</td>
-              <td>
-                {(q.client&&q.client.company)?q.client.company:'—'}
-              </td>
-              <td style={{color:'var(--g500)',fontSize:12}}>{q.project||'—'}</td>
-              <td className="tar">
-                {CURR[q.currency]||'£'}{fmt(dt(q.items))}
-                {q.status==='approved'&&remaining.length>0&&<div style={{fontSize:10,color:'var(--amber)',marginTop:1}}>Rem: £{fmt(remAmt)}</div>}
-              </td>
-              <td className="tac"><Badge s={q.status}/></td>
-              <td><div className="aw">
-                {q.rev>0&&<span className="rev-badge" style={{marginRight:5}}>R{String(q.rev).padStart(2,'0')}</span>}
-                {q.locked&&<span className="locked-badge" style={{marginRight:5}}><Ico n="lock" size={10}/>Locked</span>}
-                <button className="ab" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
-                {q.status==='draft'&&<button className="ab" onClick={()=>{setCur(q);go('sales_quote_form');}}><Ico n="edit"/></button>}
-                {q.status==='draft'&&<button className="ab" onClick={()=>handleMarkAsSent(q)}><Ico n="mail"/>Mark as Sent</button>}
-                {q.status==='sent'&&<button className="ab" onClick={()=>handleApproveQuote(q)}><Ico n="check"/>Approve</button>}
-                {q.status==='sent'&&<button className="ab" onClick={()=>handleNewRevision(q)}><Ico n="rev"/>Revise</button>}
-                {(q.status==='approved'||q.status==='locked')&&<button className="ab" onClick={()=>handleNewRevision(q)}><Ico n="rev"/>Revise</button>}
-                {q.status==='approved'&&remaining.length>0&&<button className="ab primary" onClick={()=>{setCur(mkSalesInvoice(q));go('sales_invoice_form');}}>
-                  <Ico n="invoice" style={{stroke:'#fff'}}/>Invoice
-                </button>}
-                {(q.status==='draft'||q.status==='sent')&&<button className="ab danger" onClick={()=>{if(!confirm('Delete this quotation?'))return;sSQ(salesQuotes.filter(x=>x.id!==q.id));showToast('Deleted');}}><Ico n="trash"/></button>}
-              </div></td>
-            </tr>);
+            return(<React.Fragment key={base}>
+              <tr style={{opacity:latest.status==='passive'?0.55:1}}>
+                <td>
+                  <div style={{display:'flex',alignItems:'center',gap:5}}>
+                    {hasHistory
+                      ?<button onClick={()=>toggleGroup(base)} style={{background:'none',border:'none',cursor:'pointer',padding:'2px',color:'var(--g400)',display:'flex',alignItems:'center',flexShrink:0}}>
+                          <svg style={{width:12,height:12,transition:'transform .15s',transform:expanded?'rotate(90deg)':'rotate(0deg)',stroke:'currentColor',fill:'none',strokeWidth:2}} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
+                      :<span style={{width:16,flexShrink:0}}/>
+                    }
+                    <span style={{fontFamily:'Inter',fontSize:11}}>{latest.number}</span>
+                    {latest.rev>0&&<span className="rev-badge">R{String(latest.rev).padStart(2,'0')}</span>}
+                    {latest.locked&&<span className="locked-badge"><Ico n="lock" size={10}/>Locked</span>}
+                    {hasHistory&&<span style={{fontSize:10,color:'var(--g400)',background:'var(--g100)',padding:'1px 6px',borderRadius:8,flexShrink:0}}>{history.length} rev</span>}
+                  </div>
+                </td>
+                <td style={{color:'var(--g500)',fontSize:12}}>{latest.date}</td>
+                <td>{(latest.client&&latest.client.company)?latest.client.company:'—'}</td>
+                <td style={{color:'var(--g500)',fontSize:12}}>{latest.project||'—'}</td>
+                <td className="tar">
+                  {CURR[latest.currency]||'£'}{fmt(dt(latest.items))}
+                  {latest.status==='approved'&&remaining.length>0&&<div style={{fontSize:10,color:'var(--amber)',marginTop:1}}>Rem: £{fmt(remAmt)}</div>}
+                </td>
+                <td className="tac"><Badge s={latest.status}/></td>
+                <td><div className="aw">
+                  <button className="ab" onClick={()=>{setCur(latest);go('sales_quote_preview');}}><Ico n="eye"/></button>
+                  {latest.status==='draft'&&<button className="ab" onClick={()=>{setCur(latest);go('sales_quote_form');}}><Ico n="edit"/></button>}
+                  {latest.status==='draft'&&<button className="ab" onClick={()=>handleMarkAsSent(latest)}><Ico n="mail"/>Mark as Sent</button>}
+                  {latest.status==='sent'&&<button className="ab" onClick={()=>handleApproveQuote(latest)}><Ico n="check"/>Approve</button>}
+                  {latest.status==='sent'&&<button className="ab" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/>Revise</button>}
+                  {(latest.status==='approved'||latest.status==='locked')&&<button className="ab" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/>Revise</button>}
+                  {latest.status==='approved'&&remaining.length>0&&<button className="ab primary" onClick={()=>{setCur(mkSalesInvoice(latest));go('sales_invoice_form');}}>
+                    <Ico n="invoice" style={{stroke:'#fff'}}/>Invoice
+                  </button>}
+                  {(latest.status==='draft'||latest.status==='sent')&&<button className="ab danger" onClick={()=>{if(!confirm('Delete this quotation?'))return;sSQ(salesQuotes.filter(x=>x.id!==latest.id));showToast('Deleted');}}><Ico n="trash"/></button>}
+                </div></td>
+              </tr>
+              {expanded&&history.map(q=>(
+                <tr key={q.id} style={{background:'var(--g50)',opacity:0.65}}>
+                  <td>
+                    <div style={{display:'flex',alignItems:'center',gap:5,paddingLeft:22}}>
+                      <span style={{color:'var(--g300)',fontSize:13,lineHeight:1}}>└</span>
+                      <span style={{fontFamily:'Inter',fontSize:11}}>{q.number}</span>
+                      <span className="rev-badge">R{String(q.rev).padStart(2,'0')}</span>
+                    </div>
+                  </td>
+                  <td style={{color:'var(--g400)',fontSize:12}}>{q.date}</td>
+                  <td style={{color:'var(--g400)',fontSize:12}}>{(q.client&&q.client.company)||'—'}</td>
+                  <td style={{color:'var(--g400)',fontSize:12}}>{q.project||'—'}</td>
+                  <td className="tar" style={{color:'var(--g400)',fontSize:12}}>{CURR[q.currency]||'£'}{fmt(dt(q.items))}</td>
+                  <td className="tac"><Badge s={q.status}/></td>
+                  <td><div className="aw">
+                    <button className="ab" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
+                    <button className="ab" onClick={()=>savePDF(q,co,'sales_quote')}><Ico n="dl"/></button>
+                  </div></td>
+                </tr>
+              ))}
+            </React.Fragment>);
           })}</tbody>
         </table></div>
       )}
@@ -553,9 +590,9 @@ function AppOperational({account,onSwitchAccount}){
         </div>
         <div className="fc-body">
         {customers.length>0&&!isLocked&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('client.company',c.company||'');set('client.contact',c.name||'');set('client.email',c.email||'');set('client.address',c.address||'');set('client.phone',c.phone||'');}}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('client.company',c.company||'');set('client.contact',c.contact||'');set('client.email',c.email||'');set('client.address',c.address||'');set('client.phone',c.phone||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.name})`:c.name}</option>)}
+            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
         </div>}
         <div className="fg g2">
@@ -582,9 +619,9 @@ function AppOperational({account,onSwitchAccount}){
         </div>
         <div className="fc-body">
         {customers.length>0&&!isLocked&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('shipTo.company',c.company||'');set('shipTo.contact',c.name||'');set('shipTo.email',c.email||'');set('shipTo.address',c.address||'');set('shipTo.phone',c.phone||'');}}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('shipTo.company',c.company||'');set('shipTo.contact',c.contact||'');set('shipTo.email',c.email||'');set('shipTo.address',c.address||'');set('shipTo.phone',c.phone||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.name})`:c.name}</option>)}
+            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
         </div>}
         <div className="fg g2">
@@ -747,9 +784,9 @@ function AppOperational({account,onSwitchAccount}){
       </div>
       <div className="fc"><div className="fct">Bill To</div>
         {customers.length>0&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('client.company',c.company||'');set('client.contact',c.name||'');set('client.email',c.email||'');set('client.address',c.address||'');set('client.phone',c.phone||'');}}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('client.company',c.company||'');set('client.contact',c.contact||'');set('client.email',c.email||'');set('client.address',c.address||'');set('client.phone',c.phone||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.name})`:c.name}</option>)}
+            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
         </div>}
         <div className="fg g2">
@@ -767,9 +804,9 @@ function AppOperational({account,onSwitchAccount}){
       </div>}
       {inv.shipToEnabled&&<div className="fc"><div className="fct">Ship To</div>
         {customers.length>0&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('shipTo.company',c.company||'');set('shipTo.contact',c.name||'');set('shipTo.email',c.email||'');set('shipTo.address',c.address||'');set('shipTo.phone',c.phone||'');}}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('shipTo.company',c.company||'');set('shipTo.contact',c.contact||'');set('shipTo.email',c.email||'');set('shipTo.address',c.address||'');set('shipTo.phone',c.phone||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.name})`:c.name}</option>)}
+            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
         </div>}
         <div className="fg g2">
@@ -1018,9 +1055,9 @@ function AppOperational({account,onSwitchAccount}){
       </div>
       <div className="fc"><div className="fct">Vendor / Supplier</div>
         {customers.length>0&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('supplierCompany',c.company||'');set('supplierContact',c.name||'');set('supplierEmail',c.email||'');set('supplierPhone',c.phone||'');set('supplierAddress',c.address||'');}}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('supplierCompany',c.company||'');set('supplierContact',c.contact||'');set('supplierEmail',c.email||'');set('supplierPhone',c.phone||'');set('supplierAddress',c.address||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.name})`:c.name}</option>)}
+            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
         </div>}
         <div className="fg g2">
@@ -1041,9 +1078,9 @@ function AppOperational({account,onSwitchAccount}){
       </div>}
       {(isPO||isPQ)&&doc.shipToEnabled&&<div className="fc"><div className="fct">Ship To</div>
         {customers.length>0&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('shipTo.company',c.company||'');set('shipTo.contact',c.name||'');set('shipTo.email',c.email||'');set('shipTo.address',c.address||'');set('shipTo.phone',c.phone||'');}}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('shipTo.company',c.company||'');set('shipTo.contact',c.contact||'');set('shipTo.email',c.email||'');set('shipTo.address',c.address||'');set('shipTo.phone',c.phone||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.name})`:c.name}</option>)}
+            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
         </div>}
         <div className="fg g2">
@@ -1173,7 +1210,7 @@ function AppOperational({account,onSwitchAccount}){
       <div className="fc"><div className="fct">Project Details</div>
         <div className="fg g2"><Fld label="Project No"><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label="Project Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
         <div className="fg g3" style={{marginTop:12}}>
-          <Fld label="Client"><select value={p.clientId||''} onChange={e=>{s('clientId',e.target.value);const c=customers.find(x=>x.id===e.target.value);if(c)s('client',c.company||c.name);}} className="fi"><option value="">— Select customer —</option>{customers.map(c=><option key={c.id} value={c.id}>{c.company||c.name}</option>)}</select></Fld>
+          <Fld label="Client"><select value={p.clientId||''} onChange={e=>{s('clientId',e.target.value);const c=customers.find(x=>x.id===e.target.value);if(c)s('client',c.company||c.contact||'');}} className="fi"><option value="">— Select customer —</option>{customers.map(c=><option key={c.id} value={c.id}>{c.company||c.contact||''}</option>)}</select></Fld>
           <Fld label="Start Date"><input type="date" value={p.startDate||td()} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld>
           <Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld>
         </div>
@@ -1468,21 +1505,21 @@ function AppOperational({account,onSwitchAccount}){
 
   function CustomersView(){
     const[q,setQ]=useState('');
-    const f=customers.filter(c=>[c.name,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())));
+    const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
     return(<div className="content">
-      <div className="sec-hdr"><h2>Customers</h2><Btn v="bp bsm" onClick={()=>{setCur({id:null,name:'',email:'',phone:'',address:'',company:'',notes:''});go('cust_form');}}><Ico n="plus"/>New Customer</Btn></div>
+      <div className="sec-hdr"><h2>Customers</h2><Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('cust_form');}}><Ico n="plus"/>New Customer</Btn></div>
       <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">No customers yet</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <thead><tr><th>Company</th><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+          <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th></th></tr></thead>
           <tbody>{f.map(c=><tr key={c.id}>
-            <td>{c.company||'—'}</td>
-            <td>{c.name}</td>
+            <td style={{fontWeight:500}}>{c.company||'—'}</td>
+            <td>{c.contact||'—'}</td>
             <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
             <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(c);go('cust_form');}}><Ico n="edit"/></button>
-              <button className="ab danger" onClick={()=>{if(!confirm(`Delete "${c.name}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}><Ico n="trash"/></button>
+              <button className="ab danger" onClick={()=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
         </table></div>
@@ -1495,7 +1532,7 @@ function AppOperational({account,onSwitchAccount}){
     return(<div className="content"><div className="fw" style={{maxWidth:600}}>
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
       <div className="fc"><div className="fct">Customer Info</div>
-        <div className="fg g2"><Fld label="Name"><input value={c.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder="John Smith"/></Fld><Fld label="Company"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd"/></Fld></div>
+        <div className="fg g2"><Fld label="Company Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
         <div className="fg g2" style={{marginTop:12}}><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
         <div style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
         <div style={{marginTop:12}}><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
