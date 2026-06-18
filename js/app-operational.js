@@ -290,6 +290,7 @@ function AppOperational({account,onSwitchAccount}){
     const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
     const[expandedGroups,setExpandedGroups]=useState(new Set());
     const hasFilter=fs.q||fs.s||fs.dateFrom||fs.dateTo;
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const toggleGroup=(base)=>{setExpandedGroups(prev=>{const next=new Set(prev);if(next.has(base))next.delete(base);else next.add(base);return next;});};
     const handleSort=(key)=>{setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));};
     const matchesFilter=(q)=>{
@@ -344,7 +345,7 @@ function AppOperational({account,onSwitchAccount}){
             <th className="tac" onClick={()=>handleSort('status')} style={{cursor:'pointer',userSelect:'none'}}>Status {sortConfig.key==='status'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th></th>
           </tr></thead>
-          <tbody>{sortedGroups.map(({base,revs,latest})=>{
+          <tbody>{sortedGroups.slice((pg-1)*ps,pg*ps).map(({base,revs,latest})=>{
             const history=revs.slice(1);
             const hasHistory=history.length>0;
             const expanded=isExpanded(base);
@@ -409,7 +410,7 @@ function AppOperational({account,onSwitchAccount}){
               ))}
             </React.Fragment>);
           })}</tbody>
-        </table></div>
+        </table><Pagination total={sortedGroups.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
     </div>);
   }
@@ -878,6 +879,7 @@ function AppOperational({account,onSwitchAccount}){
   function SalesInvoicesList(){
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
     const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const handleSort=(key)=>{
       setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
     };
@@ -925,7 +927,7 @@ function AppOperational({account,onSwitchAccount}){
             <th className="tac" onClick={()=>handleSort('status')} style={{cursor:'pointer',userSelect:'none'}}>Status {sortConfig.key==='status'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th></th>
           </tr></thead>
-          <tbody>{sorted.map(d=>(
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
             <tr key={d.id}>
               <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
@@ -944,7 +946,7 @@ function AppOperational({account,onSwitchAccount}){
               </div></td>
             </tr>
           ))}</tbody>
-        </table></div>
+        </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
     </div>);
   }
@@ -953,6 +955,7 @@ function AppOperational({account,onSwitchAccount}){
   function ProcurementList({type,items,title}){
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
     const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const handleSort=(key)=>{
       setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
     };
@@ -1001,7 +1004,7 @@ function AppOperational({account,onSwitchAccount}){
             {isRI&&<th className="tac">Status</th>}
             <th></th>
           </tr></thead>
-          <tbody>{sorted.map(d=>(
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
             <tr key={d.id}>
               <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
@@ -1025,7 +1028,7 @@ function AppOperational({account,onSwitchAccount}){
               </div></td>
             </tr>
           ))}</tbody>
-        </table></div>
+        </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
     </div>);
   }
@@ -1133,10 +1136,12 @@ function AppOperational({account,onSwitchAccount}){
 
   // Projects with detail view
   function ProjectsList(){
+    const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
     return(<div className="content">
       {projects.length===0?<div className="tcard"><div className="empty"><Ico n="project" size={38}/><div className="empty-t">No projects yet</div></div></div>:(
+        <React.Fragment>
         <div style={{display:'grid',gap:12}}>
-          {projects.map(p=>{
+          {projects.slice((pg-1)*ps,pg*ps).map(p=>{
             const pInv=salesInvoices.filter(d=>d.project===p.name);
             const pPO=purchaseOrders.filter(d=>d.project===p.name);
             const pExp=expenses.filter(d=>d.project===p.name);
@@ -1166,6 +1171,8 @@ function AppOperational({account,onSwitchAccount}){
             </div>);
           })}
         </div>
+        <Pagination total={projects.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/>
+        </React.Fragment>
       )}
     </div>);
   }
@@ -1244,6 +1251,7 @@ function AppOperational({account,onSwitchAccount}){
     const[editingItem,setEditingItem]=useState(null);
     const[tempPrice,setTempPrice]=useState('');
     const[sortConfig,setSortConfig]=useState({key:'date',dir:'desc'});
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo}));
 
     const handleSort=(key)=>setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
     const openPriceModal=(item)=>{setEditingItem(item);setTempPrice(item.purchasePrice||'');};
@@ -1298,7 +1306,7 @@ function AppOperational({account,onSwitchAccount}){
             <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer{sh('customer')}</th>
             <th></th>
           </tr></thead>
-          <tbody>{sorted.map((p,i)=>{
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map((p,i)=>{
             const isDup=sorted.some((x,j)=>j!==i&&x.customer===p.customer&&x.name.toLowerCase().trim()===p.name.toLowerCase().trim());
             return(<tr key={p.id} style={isDup?{background:'#fff7ed',borderLeft:'3px solid var(--amber)'}:{}}>
               <td style={{fontFamily:'monospace',fontSize:11,whiteSpace:'nowrap'}}>{p.code||'—'}</td>
@@ -1315,7 +1323,7 @@ function AppOperational({account,onSwitchAccount}){
               <td><button className="ab" onClick={()=>openPriceModal(p)} title="Set Purchase Price"><Ico n="edit"/></button></td>
             </tr>);
           })}</tbody>
-        </table></div>
+        </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
 
       {editingItem&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick={closeModal}>
@@ -1341,6 +1349,7 @@ function AppOperational({account,onSwitchAccount}){
   // Expenses
   function ExpensesView(){
     const[fs,setFs]=useState({q:'',cat:'',p:'',dateFrom:'',dateTo:''});
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const filtered=expenses.filter(e=>{
       if(fs.q&&![e.description,e.supplier].some(x=>(x||'').toLowerCase().includes(fs.q.toLowerCase())))return false;
       if(fs.cat&&e.category!==fs.cat)return false;
@@ -1369,7 +1378,7 @@ function AppOperational({account,onSwitchAccount}){
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">No expenses yet</div></div></div>:(
         <div className="tcard"><table className="dt">
           <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Supplier</th><th>Project</th><th className="tar">Amount</th><th></th></tr></thead>
-          <tbody>{[...filtered].reverse().map(e=><tr key={e.id}>
+          <tbody>{[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id}>
             <td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td>
             <td>{e.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{e.category}</span>:'—'}</td>
             <td style={{fontWeight:500,color:'var(--g800)'}}>{e.description||'—'}</td>
@@ -1381,7 +1390,7 @@ function AppOperational({account,onSwitchAccount}){
               <button className="ab danger" onClick={()=>askConfirm('Delete this expense?',()=>{sExp(expenses.filter(x=>x.id!==e.id));showToast('Deleted');})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
-        </table></div>
+        </table><Pagination total={filtered.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
     </div>);
   }
@@ -1427,13 +1436,14 @@ function AppOperational({account,onSwitchAccount}){
 
   function CustomersView(){
     const[q,setQ]=useState('');
+    const {pg,ps,setPg,setPs}=usePagination(q);
     const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
     return(<div className="content">
       <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">No customers yet</div></div></div>:(
         <div className="tcard"><table className="dt">
           <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th></th></tr></thead>
-          <tbody>{f.map(c=><tr key={c.id}>
+          <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
             <td style={{fontWeight:500}}>{c.company||'—'}</td>
             <td>{c.contact||'—'}</td>
             <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
@@ -1443,7 +1453,7 @@ function AppOperational({account,onSwitchAccount}){
               <button className="ab danger" onClick={()=>askConfirm(`Delete "${c.company||c.contact}"?`,()=>{sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
-        </table></div>
+        </table><Pagination total={f.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
     </div>);
   }
@@ -1469,6 +1479,7 @@ function AppOperational({account,onSwitchAccount}){
   function DocumentsView(){
     const[showForm,setShowForm]=useState(false);
     const[editDoc,setEditDoc]=useState(null);
+    const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
     useEffect(()=>{if(docUploadTrigger>0){setEditDoc({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowForm(true);}},[docUploadTrigger]);
 
     return(<div className="content">
@@ -1491,7 +1502,7 @@ function AppOperational({account,onSwitchAccount}){
             <th>Upload Date</th>
             <th></th>
           </tr></thead>
-          <tbody>{documents.map((d,idx)=><tr key={d.id}>
+          <tbody>{documents.slice((pg-1)*ps,pg*ps).map((d,idx)=><tr key={d.id}>
             <td style={{textAlign:'center',color:'var(--g500)',fontSize:13,fontWeight:600}}>{idx+1}</td>
             <td style={{fontWeight:500}}>{d.name}</td>
             <td style={{color:'var(--g700)',fontSize:13}}>{d.category||'—'}</td>
@@ -1508,7 +1519,7 @@ function AppOperational({account,onSwitchAccount}){
               <button className="ab danger" onClick={()=>askConfirm(`Delete "${d.name}"?`,()=>{sDocs(documents.filter(x=>x.id!==d.id));showToast('Deleted');})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
-        </table></div>
+        </table><Pagination total={documents.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
 
       {/* Upload Form Modal */}

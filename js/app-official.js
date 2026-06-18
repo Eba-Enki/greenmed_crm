@@ -152,6 +152,7 @@ function AppOfficial({account,onSwitchAccount}){
 
   function OffListView({type,items}){
     const[fs,setFs]=useState({s:'',q:'',dateFrom:'',dateTo:''});
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const isRec=type==='received';
     const lbl=type==='invoice'?'Invoice':type==='po'?'Purchase Order':isRec?'Received Invoice':'Quotation';
     const sts=type==='invoice'?['draft','sent','paid','overdue','cancelled']:type==='po'?['draft','sent','approved','received','cancelled']:isRec?['pending','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
@@ -189,7 +190,7 @@ function AppOfficial({account,onSwitchAccount}){
                 <th className="tac">Status</th>
                 <th></th>
               </tr></thead>
-              <tbody>{[...filtered].reverse().map(d=>(
+              <tbody>{[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(d=>(
                 <tr key={d.id}>
                   <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number||'—'}</span></td>
                   <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
@@ -206,6 +207,7 @@ function AppOfficial({account,onSwitchAccount}){
                 </tr>
               ))}</tbody>
             </table>
+            <Pagination total={filtered.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/>
           </div>
         )}
       </div>
@@ -290,13 +292,14 @@ function AppOfficial({account,onSwitchAccount}){
 // Simple Official sub-components
 function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
   const[q,setQ]=useState('');
+  const {pg,ps,setPg,setPs}=usePagination(q);
   const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
   return(<div className="content">
     <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
     {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No customers yet</div></div></div>:(
     <div className="tcard"><table className="dt">
       <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th className="tac">Inv</th><th className="tac">Quotes</th><th></th></tr></thead>
-      <tbody>{f.map(c=><tr key={c.id}>
+      <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
         <td style={{fontWeight:500}}>{c.company||'—'}</td>
         <td>{c.contact||'—'}</td>
         <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
@@ -305,7 +308,7 @@ function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
         <td className="tac" style={{color:'var(--gm-500)'}}>{quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
         <td><div className="aw"><button className="ab" onClick={()=>onEdit(c)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(c)}><Ico n="trash"/></button></div></td>
       </tr>)}</tbody>
-    </table></div>
+    </table><Pagination total={f.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
     )}
   </div>);
 }
@@ -326,12 +329,13 @@ function OffCustForm({cust:init,onSave,onCancel}){
   </div></div>);
 }
 function OffProjects({projects,onNew,onEdit,onDelete}){
+  const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
   return(<div className="content">
     <div className="tcard"><table className="dt">
       <thead><tr><th>Name</th><th>Client</th><th>Start</th><th>Status</th><th></th></tr></thead>
-      <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">No projects yet</div></div></td></tr>:projects.map(p=><tr key={p.id}><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
+      <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">No projects yet</div></div></td></tr>:projects.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id}><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
       </tbody>
-    </table></div>
+    </table><Pagination total={projects.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
 }
 function OffProjForm({proj:init,onSave,onCancel}){
@@ -350,6 +354,7 @@ function OffExpenses({expenses,projects,cats,onNew,onEdit,onDelete,onManageCats}
   const[q,setQ]=useState('');
   const[dateFrom,setDateFrom]=useState('');
   const[dateTo,setDateTo]=useState('');
+  const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo}));
   const f=expenses.filter(e=>{
     if(q&&![e.description,e.supplier,e.category].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
     if(dateFrom&&e.date<dateFrom)return false;
@@ -367,9 +372,9 @@ function OffExpenses({expenses,projects,cats,onNew,onEdit,onDelete,onManageCats}
     </div>
     <div className="tcard"><table className="dt">
       <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Supplier</th><th className="tar">Amount</th><th></th></tr></thead>
-      <tbody>{f.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">No expenses yet</div></div></td></tr>:f.map(e=><tr key={e.id}><td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td><td>{e.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{e.category}</span>:'—'}</td><td>{e.description||'—'}</td><td style={{color:'var(--g600)'}}>{e.supplier||'—'}</td><td className="tar">{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td><td><div className="aw"><button className="ab" onClick={()=>onEdit(e)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(e)}><Ico n="trash"/></button></div></td></tr>)}
+      <tbody>{f.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">No expenses yet</div></div></td></tr>:f.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id}><td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td><td>{e.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{e.category}</span>:'—'}</td><td>{e.description||'—'}</td><td style={{color:'var(--g600)'}}>{e.supplier||'—'}</td><td className="tar">{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td><td><div className="aw"><button className="ab" onClick={()=>onEdit(e)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(e)}><Ico n="trash"/></button></div></td></tr>)}
       </tbody>
-    </table></div>
+    </table><Pagination total={f.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
 }
 function OffExpForm({exp:init,projects,cats,onSave,onCancel}){
@@ -463,6 +468,7 @@ function OffSettings({ns,co:init,users,sUsers,go,setCur,cur,showToast,onSave,onC
   const[activeMenu,setActiveMenu]=useState(()=>LS.get(ns+'settingsMenu')||'company');
   const[numLocked,setNumLocked]=useState(true);
   const[editingBank,setEditingBank]=useState(null);
+  const[uPg,setUPg]=useState(1);const[uPs,setUPs]=useState(25);
   
   const handleLogoUpload=(e)=>{
     const f=e.target.files[0];
@@ -741,7 +747,7 @@ function OffSettings({ns,co:init,users,sUsers,go,setCur,cur,showToast,onSave,onC
                 <th>Created</th>
                 <th></th>
               </tr></thead>
-              <tbody>{users.map((u,idx)=><tr key={u.id}>
+              <tbody>{users.slice((uPg-1)*uPs,uPg*uPs).map((u,idx)=><tr key={u.id}>
                 <td style={{textAlign:'center',color:'var(--g500)',fontSize:13,fontWeight:600}}>{idx+1}</td>
                 <td style={{fontWeight:500}}>{u.firstName||'—'}</td>
                 <td style={{fontWeight:500}}>{u.lastName||'—'}</td>
@@ -755,10 +761,10 @@ function OffSettings({ns,co:init,users,sUsers,go,setCur,cur,showToast,onSave,onC
                   <button className="ab danger" onClick={()=>{if(!confirm(`Delete user "${u.username}"?`))return;sUsers(users.filter(x=>x.id!==u.id));showToast('User deleted');}}><Ico n="trash"/></button>
                 </div></td>
               </tr>)}</tbody>
-            </table></div>
+            </table><Pagination total={users.length} page={uPg} pageSize={uPs} onPageChange={setUPg} onPageSizeChange={v=>{setUPs(v);setUPg(1);}}/></div>
           )}
         </>)}
-        
+
         {/* Signature */}
         
       </div>
