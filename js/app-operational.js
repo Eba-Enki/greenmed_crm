@@ -1962,11 +1962,11 @@ function AppOperational({account,onSwitchAccount}){
     const activePQ=purchaseQuotes.filter(d=>d.status==='draft').length;
     
     const cards=[
-      {k:'sales_quotes',ico:'quote',lbl:'Sales Quotes',val:salesQuotes.filter(d=>d.status!=='passive').length,sub:`${salesQuotes.filter(d=>d.status==='approved').length} approved`,color:'#608425',bg:'linear-gradient(135deg, rgba(96,132,37,0.08) 0%, rgba(96,132,37,0.02) 100%)'},
-      {k:'sales_invoices',ico:'invoice',lbl:'Sales Invoices',val:salesInvoices.length,sub:`${salesInvoices.filter(d=>d.status==='draft').length} draft`,color:'#4f6f1f',bg:'linear-gradient(135deg, rgba(79,111,31,0.08) 0%, rgba(79,111,31,0.02) 100%)'},
-      {k:'purchase_quotes',ico:'po',lbl:'Purchase Quotes',val:purchaseQuotes.length,sub:`${activePQ} active`,color:'#3B6D11',bg:'linear-gradient(135deg, rgba(59,109,17,0.08) 0%, rgba(59,109,17,0.02) 100%)'},
+      {k:'sales_quotes',ico:'sq',lbl:'Sales Quotes',val:salesQuotes.filter(d=>d.status!=='passive').length,sub:`${salesQuotes.filter(d=>d.status==='approved').length} approved`,color:'#608425',bg:'linear-gradient(135deg, rgba(96,132,37,0.08) 0%, rgba(96,132,37,0.02) 100%)'},
+      {k:'sales_invoices',ico:'si',lbl:'Sales Invoices',val:salesInvoices.length,sub:`${salesInvoices.filter(d=>d.status==='draft').length} draft`,color:'#4f6f1f',bg:'linear-gradient(135deg, rgba(79,111,31,0.08) 0%, rgba(79,111,31,0.02) 100%)'},
+      {k:'purchase_quotes',ico:'rq',lbl:'Purchase Quotes',val:purchaseQuotes.length,sub:`${activePQ} active`,color:'#3B6D11',bg:'linear-gradient(135deg, rgba(59,109,17,0.08) 0%, rgba(59,109,17,0.02) 100%)'},
       {k:'purchase_orders',ico:'po',lbl:'Purchase Orders',val:purchaseOrders.length,sub:`${purchaseOrders.filter(d=>d.status==='sent').length} sent`,color:'#a8c070',bg:'linear-gradient(135deg, rgba(168,192,112,0.08) 0%, rgba(168,192,112,0.02) 100%)'},
-      {k:'received_invoices',ico:'received',lbl:'Received Invoices',val:receivedInvoices.length,sub:`${receivedInvoices.filter(d=>d.status==='pending').length} pending`,color:'#1a2a0a',bg:'linear-gradient(135deg, rgba(26,42,10,0.08) 0%, rgba(26,42,10,0.02) 100%)'},
+      {k:'received_invoices',ico:'ri',lbl:'Received Invoices',val:receivedInvoices.length,sub:`${receivedInvoices.filter(d=>d.status==='pending').length} pending`,color:'#1a2a0a',bg:'linear-gradient(135deg, rgba(26,42,10,0.08) 0%, rgba(26,42,10,0.02) 100%)'},
       {k:'projects',ico:'project',lbl:'Projects',val:projects.length,sub:`${projects.filter(d=>d.status==='active').length} active`,color:'#608425',bg:'linear-gradient(135deg, rgba(96,132,37,0.08) 0%, rgba(96,132,37,0.02) 100%)'},
       {k:'product_pool',ico:'pool',lbl:'Product Pool',val:poolItems.length,sub:'items',color:'#4f6f1f',bg:'linear-gradient(135deg, rgba(79,111,31,0.08) 0%, rgba(79,111,31,0.02) 100%)'},
       {k:'customers',ico:'customers',lbl:'Customers',val:customers.length,sub:'contacts',color:'#3B6D11',bg:'linear-gradient(135deg, rgba(59,109,17,0.08) 0%, rgba(59,109,17,0.02) 100%)'},
@@ -2064,13 +2064,13 @@ function AppOperational({account,onSwitchAccount}){
 
   const SB=[
     {group:'Sales'},
-    {k:'sales_quotes',ico:'quote',lbl:'Sales Quotations',cnt:salesQuotes.filter(d=>d.status!=='passive').length},
-    {k:'sales_invoices',ico:'invoice',lbl:'Sales Invoices',cnt:salesInvoices.length},
+    {k:'sales_quotes',ico:'sq',lbl:'Sales Quotations',cnt:salesQuotes.filter(d=>d.status!=='passive').length},
+    {k:'sales_invoices',ico:'si',lbl:'Sales Invoices',cnt:salesInvoices.length},
     {div:true},
     {group:'Procurement'},
-    {k:'purchase_quotes',ico:'po',lbl:'Received Quotes',cnt:purchaseQuotes.length},
+    {k:'purchase_quotes',ico:'rq',lbl:'Received Quotes',cnt:purchaseQuotes.length},
     {k:'purchase_orders',ico:'po',lbl:'Purchase Orders',cnt:purchaseOrders.length},
-    {k:'received_invoices',ico:'received',lbl:'Received Invoices',cnt:receivedInvoices.length},
+    {k:'received_invoices',ico:'ri',lbl:'Received Invoices',cnt:receivedInvoices.length},
     {div:true},
     {group:'Project Management'},
     {k:'projects',ico:'project',lbl:'Projects',cnt:projects.length},
