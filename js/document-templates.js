@@ -679,30 +679,125 @@ function DocPage({doc,co,docType}){
 }
 
 function Preview({doc,co,docType,onBack,onEdit}){
-  const handlePrint=()=>{
-    const w=window.open('','_blank','width=900,height=1100');
-    if(!w){alert('Please allow popups.');return;}
-    const pageEl=document.getElementById('doc-preview-page');
-    const html=pageEl?pageEl.innerHTML:'';
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Print</title>
-<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#fff;font-family:Arial,sans-serif}
-@page{size:A4;margin:0}@media print{html,body{width:210mm;height:297mm}}</style>
-</head><body><div style="width:793.7px">${html}</div></body></html>`);
-    w.document.close();
-    setTimeout(()=>{w.focus();w.print();},400);
-  };
+  const sym=CURR[doc.currency]||'£';
+  const total=dt(doc.items||[]);
+  const isInv=docType==='invoice';
+  const isPO=docType==='po';
+  const isPQ=docType==='quote';
+
+  const typeLabel=isInv?'Commercial Invoice':docType==='sales_quote'?'Sales Quotation':isPO?'Purchase Order':isPQ?'Received Quote':'Document';
+
+  const partyLabel=(isPO||isPQ)?'Supplier':'Bill To';
+  const partyCompany=(isPO||isPQ)?(doc.supplierCompany||'—'):((doc.client&&doc.client.company)||'—');
+  const partyContact=(isPO||isPQ)?(doc.supplierContact||''):((doc.client&&doc.client.contact)||'');
+  const partyEmail=(isPO||isPQ)?(doc.supplierEmail||''):((doc.client&&doc.client.email)||'');
+  const partyAddr=(isPO||isPQ)?(doc.supplierAddress||''):((doc.client&&doc.client.address)||'');
+
+  const hasShipTo=((doc.shipToEnabled||doc.shipTo)&&!isPO)||isPQ||isPO;
+  const shipTo=doc.shipTo||{};
+
+  const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
+  const statusClass=statusMap[doc.status]||'b-draft';
+  const statusLabel=doc.status?(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' ')):'Draft';
+
+  const defaultBank=(co.banks||[]).find(b=>b.isDefault)||(co.banks||[])[0]||null;
+
   return(
     <div>
       <div className="pvbar no-print">
         <button className="pvbtn" onClick={onBack}><Ico n="back"/>Back</button>
         {onEdit&&<button className="pvbtn" onClick={onEdit}><Ico n="edit"/>Edit</button>}
         <div style={{flex:1}}/>
-        <button className="pvbtn" onClick={()=>savePDF(doc,co,docType)}><Ico n="dl"/>Save PDF</button>
-        <button className="pvbtn primary" onClick={handlePrint}><Ico n="print"/>Print</button>
+        <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType)}><Ico n="dl"/>Save PDF</button>
       </div>
-      <div className="pvouter">
-        <div id="doc-preview-page" style={{boxShadow:'0 4px 32px rgba(0,0,0,.18)'}}>
-          <DocPage doc={doc} co={co} docType={docType}/>
+      <div className="pv2-outer">
+        <div className="pv2-wrap">
+
+          <div className="pv2-hdr">
+            <div className="pv2-hdr-left">
+              <div className="pv2-type-label">{typeLabel}</div>
+              <div className="pv2-docnum">{doc.number||'—'}</div>
+            </div>
+            <div className="pv2-hdr-right">
+              {isInv&&doc.quoteNum&&<span className="pv2-linked">From {doc.quoteNum}</span>}
+              {doc.status&&<span className={`bdg ${statusClass}`}>{statusLabel}</span>}
+            </div>
+          </div>
+
+          <div className="pv2-meta">
+            <div className="pv2-meta-card">
+              <div className="pv2-meta-label">{partyLabel}</div>
+              <div className="pv2-meta-value lg">{partyCompany}</div>
+              {partyContact&&<div className="pv2-meta-sub">{partyContact}</div>}
+              {partyEmail&&<div className="pv2-meta-sub">{partyEmail}</div>}
+              {partyAddr&&<div className="pv2-meta-sub addr">{partyAddr}</div>}
+            </div>
+            {hasShipTo&&(shipTo.company||shipTo.contact)&&(
+              <div className="pv2-meta-card">
+                <div className="pv2-meta-label">Ship To</div>
+                {shipTo.company&&<div className="pv2-meta-value lg">{shipTo.company}</div>}
+                {shipTo.contact&&<div className="pv2-meta-sub">{shipTo.contact}</div>}
+                {shipTo.email&&<div className="pv2-meta-sub">{shipTo.email}</div>}
+                {shipTo.address&&<div className="pv2-meta-sub addr">{shipTo.address}</div>}
+              </div>
+            )}
+            <div className="pv2-meta-card">
+              <div className="pv2-meta-label">Date</div>
+              <div className="pv2-meta-value">{doc.date||td()}</div>
+              {doc.validity&&<><div className="pv2-meta-sep"/><div className="pv2-meta-label">Valid Until</div><div className="pv2-meta-value">{doc.validity}</div></>}
+              {doc.project&&<><div className="pv2-meta-sep"/><div className="pv2-meta-label">Project</div><div className="pv2-meta-value">{doc.project}</div></>}
+            </div>
+            <div className="pv2-meta-card">
+              <div className="pv2-meta-label">Currency</div>
+              <div className="pv2-meta-value">{doc.currency||'GBP'} <span style={{color:'var(--g400)',fontWeight:400,fontSize:12}}>({sym})</span></div>
+              {defaultBank&&<>
+                <div className="pv2-meta-sep"/>
+                <div className="pv2-meta-label">Bank</div>
+                <div className="pv2-meta-value" style={{fontSize:12}}>{defaultBank.name||defaultBank.bank||'—'}</div>
+                {defaultBank.iban&&<div className="pv2-meta-sub" style={{fontFamily:'monospace',fontSize:11,letterSpacing:'.5px'}}>{defaultBank.iban}</div>}
+              </>}
+            </div>
+          </div>
+
+          <div className="pv2-section">
+            <div className="pv2-sec-title">Line Items</div>
+            <div style={{borderRadius:8,overflow:'hidden',border:'1px solid var(--g200)'}}>
+              <table className="pv2-tbl">
+                <thead><tr>
+                  <th style={{width:'13%'}}>Item</th>
+                  <th style={{width:'37%'}}>Description</th>
+                  <th style={{width:'9%',textAlign:'right'}}>Qty</th>
+                  <th style={{width:'8%'}}>Unit</th>
+                  <th style={{width:'14%',textAlign:'right'}}>Unit Price</th>
+                  <th style={{width:'14%',textAlign:'right',paddingRight:16}}>Total</th>
+                </tr></thead>
+                <tbody>{(doc.items||[]).map((it,i)=>(
+                  <tr key={it.id||i}>
+                    <td style={{fontFamily:'monospace',fontSize:11,color:'var(--g500)',whiteSpace:'nowrap'}}>{it.item||'—'}</td>
+                    <td style={{color:'var(--g800)'}}>{it.desc||'—'}</td>
+                    <td style={{textAlign:'right',color:'var(--g700)'}}>{it.qty||'1'}</td>
+                    <td style={{fontSize:11,color:'var(--g400)'}}>{it.unit||''}</td>
+                    <td style={{textAlign:'right',fontWeight:500,color:'var(--g800)',fontVariantNumeric:'tabular-nums'}}>{sym}{fmt(+(it.price||0))}</td>
+                    <td style={{textAlign:'right',fontWeight:700,color:'var(--dk)',paddingRight:16,fontVariantNumeric:'tabular-nums'}}>{sym}{fmt(lt(it))}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <div className="pv2-totals">
+              <div className="pv2-totbox">
+                <span className="pv2-totlbl">Total</span>
+                <span className="pv2-totamt">{sym}{fmt(total)}</span>
+              </div>
+            </div>
+          </div>
+
+          {doc.notes&&(
+            <div className="pv2-section">
+              <div className="pv2-sec-title">Notes</div>
+              <div className="pv2-notes">{doc.notes}</div>
+            </div>
+          )}
+
         </div>
       </div>
     </div>

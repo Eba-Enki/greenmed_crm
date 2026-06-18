@@ -1305,8 +1305,6 @@ function AppOperational({account,onSwitchAccount}){
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">Pool is empty</div><div className="empty-s">Mark quotations as Sent to populate the pool</div></div></div>:(
         <div className="tcard"><table className="dt">
           <thead><tr>
-            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer{sh('customer')}</th>
-            <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project{sh('project')}</th>
             <th onClick={()=>handleSort('code')} style={{cursor:'pointer',userSelect:'none'}}>Code{sh('code')}</th>
             <th onClick={()=>handleSort('name')} style={{cursor:'pointer',userSelect:'none'}}>Description{sh('name')}</th>
             <th className="tar" onClick={()=>handleSort('qty')} style={{cursor:'pointer',userSelect:'none'}}>Qty{sh('qty')}</th>
@@ -1314,22 +1312,24 @@ function AppOperational({account,onSwitchAccount}){
             <th className="tar" onClick={()=>handleSort('purchasePrice')} style={{cursor:'pointer',userSelect:'none'}}>Purchase Price{sh('purchasePrice')}</th>
             <th onClick={()=>handleSort('quoteNum')} style={{cursor:'pointer',userSelect:'none'}}>Quote No{sh('quoteNum')}</th>
             <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date{sh('date')}</th>
+            <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project{sh('project')}</th>
+            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer{sh('customer')}</th>
             <th></th>
           </tr></thead>
           <tbody>{sorted.map((p,i)=>{
             const isDup=sorted.some((x,j)=>j!==i&&x.customer===p.customer&&x.name.toLowerCase().trim()===p.name.toLowerCase().trim());
             return(<tr key={p.id} style={isDup?{background:'#fff7ed',borderLeft:'3px solid var(--amber)'}:{}}>
-              <td style={{fontWeight:500,color:isDup?'var(--amber)':'var(--g900)'}}>{p.customer||'—'}</td>
-              <td style={{color:'var(--g500)',fontSize:12}}>{p.projectId||'—'}</td>
-              <td style={{fontFamily:'monospace',fontSize:11}}>{p.code||'—'}</td>
-              <td>{p.name||'—'}</td>
+              <td style={{fontFamily:'monospace',fontSize:11,whiteSpace:'nowrap'}}>{p.code||'—'}</td>
+              <td style={{maxWidth:'300px',wordBreak:'break-word',whiteSpace:'normal',lineHeight:1.4}}>{p.name||'—'}</td>
               <td className="tar">{p.qty} {p.unit||''}</td>
               <td className="tar" style={{fontWeight:600}}>£{fmt(+(p.price||0))}</td>
               <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>
                 {p.purchasePrice?`£${fmt(+(p.purchasePrice||0))}`:'—'}
               </td>
               <td><span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{p.quoteNum||'—'}</span></td>
-              <td style={{color:'var(--g500)',fontSize:12}}>{p.date||'—'}</td>
+              <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{p.date||'—'}</td>
+              <td style={{color:'var(--g500)',fontSize:12}}>{p.projectId||'—'}</td>
+              <td style={{fontWeight:500,color:isDup?'var(--amber)':'var(--g900)'}}>{p.customer||'—'}</td>
               <td><button className="ab" onClick={()=>openPriceModal(p)} title="Set Purchase Price"><Ico n="edit"/></button></td>
             </tr>);
           })}</tbody>
