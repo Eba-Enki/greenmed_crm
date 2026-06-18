@@ -332,7 +332,7 @@ function AppOperational({account,onSwitchAccount}){
         <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
-        <Btn v="bgh bsm" onClick={()=>exportExcel([['Number','Date','Company','Contact','Total','Status','Project'],...flatFiltered.map(q=>[q.number,q.date,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}><Ico n="export"/>Export</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Number','Date','Company','Contact','Total','Status','Project'],...flatFiltered.map(q=>[q.number,q.date,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}><Ico n="export"/>Export</Btn>
       </div>
       {sortedGroups.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">No quotations yet</div></div></div>:(
         <div className="tcard"><table className="dt">
@@ -914,7 +914,7 @@ function AppOperational({account,onSwitchAccount}){
         <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
-        <Btn v="bgh bsm" onClick={()=>exportExcel([['Number','Date','Company','Contact','Total','Status','From Quote'],...filtered.map(d=>[d.number,d.date,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}><Ico n="export"/>Export</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Number','Date','Company','Contact','Total','Status','From Quote'],...filtered.map(d=>[d.number,d.date,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}><Ico n="export"/>Export</Btn>
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="invoice" size={38}/><div className="empty-t">No sales invoices yet</div><div className="empty-s">Approve a quotation and convert it to invoice</div></div></div>:(
         <div className="tcard"><table className="dt">
@@ -990,7 +990,7 @@ function AppOperational({account,onSwitchAccount}){
         <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
-        <Btn v="bgh bsm" onClick={()=>exportExcel([['Number','Date','Supplier','Total',...(isRI?['Status']:[])],...filtered.map(d=>[d.number,d.date,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type)}><Ico n="export"/>Export</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Number','Date','Supplier','Total',...(isRI?['Status']:[])],...filtered.map(d=>[d.number,d.date,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type)}><Ico n="export"/>Export</Btn>
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isRI?'received':'po'} size={38}/><div className="empty-t">No {lbl.toLowerCase()}s yet</div></div></div>:(
         <div className="tcard"><table className="dt">
@@ -1373,7 +1373,7 @@ function AppOperational({account,onSwitchAccount}){
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
         {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>Total: £{fmt(total)}</span>}
-        <Btn v="bgh bsm" onClick={()=>exportExcel([['Date','Category','Description','Supplier','Reference','Amount','Currency','Project'],...filtered.map(e=>[e.date,e.category,e.description,e.supplier,e.reference,e.amount,e.currency,e.project])],'expenses')}><Ico n="export"/>Export</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Category','Description','Supplier','Reference','Amount','Currency','Project'],...filtered.map(e=>[e.date,e.category,e.description,e.supplier,e.reference,e.amount,e.currency,e.project])],'expenses')}><Ico n="export"/>Export</Btn>
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">No expenses yet</div></div></div>:(
         <div className="tcard"><table className="dt">
@@ -2093,7 +2093,7 @@ function AppOperational({account,onSwitchAccount}){
             {view==='purchase_orders'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
             {view==='received_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
             {view==='projects'&&<Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>New Project</Btn>}
-            {view==='product_pool'&&<Btn v="bgh bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Purchase Price','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}><Ico n="export"/>Export Excel</Btn>}
+            {view==='product_pool'&&<Btn v="bex bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Purchase Price','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}><Ico n="export"/>Export Excel</Btn>}
             {view==='expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>Categories</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>New Expense</Btn></div>}
             {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('cust_form');}}><Ico n="plus"/>New Customer</Btn>}
             {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>Upload Document</Btn>}

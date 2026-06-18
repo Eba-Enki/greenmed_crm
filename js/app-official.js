@@ -174,7 +174,7 @@ function AppOfficial({account,onSwitchAccount}){
           <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
           <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
           <div style={{flex:1}}/>
-          <Btn v="bgh bsm" onClick={()=>exportExcel([['Number',isRec?'Supplier':'Customer','Date','Amount','Status'],...filtered.map(d=>[d.number,isRec?d.supplier:(d&&d.client&&d.client.name)||'',d.date,fmt(dt(d.items||[])),d.status])],type)}><Ico n="export"/>Export</Btn>
+          <Btn v="bex bsm" onClick={()=>exportExcel([['Number',isRec?'Supplier':'Customer','Date','Amount','Status'],...filtered.map(d=>[d.number,isRec?d.supplier:(d&&d.client&&d.client.name)||'',d.date,fmt(dt(d.items||[])),d.status])],type)}><Ico n="export"/>Export</Btn>
         </div>
         {filtered.length===0?(
           <div className="tcard"><div className="empty"><Ico n={type==='invoice'?'invoice':isRec?'received':type==='po'?'po':'quote'} size={40}/><div className="empty-t">No {lbl.toLowerCase()}s yet</div><div className="empty-s">Get started by creating one</div><Btn v="bp bsm" onClick={()=>{setCur(isRec?mkRec():mkDoc(type));go('off_form');}}><Ico n="plus"/>New {lbl}</Btn></div></div>
