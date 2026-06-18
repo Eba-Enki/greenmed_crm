@@ -203,7 +203,7 @@ function AppOperational({account,onSwitchAccount}){
   const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkPurchaseOrder=(pq)=>{
     const n=cnt.po;const num=genPONum(n+1);
-    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplier:(pq&&pq.supplier)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''};
+    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''};
   };
   const assignPONumber=(po)=>{
     if(!po.number||po.number.startsWith('PO')){
@@ -213,7 +213,7 @@ function AppOperational({account,onSwitchAccount}){
     }
     return po;
   };
-  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplier:(po&&po.supplier)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''});
+  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''});
 
   const handleSavePQ=pq=>{
     const fresh=!pq.id;const saved={...pq,id:pq.id||uid()};
@@ -1043,6 +1043,8 @@ function AppOperational({account,onSwitchAccount}){
     const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
     const isPQ=docType==='pq',isPO=docType==='po',isRI=docType==='ri';
     const lbl=isPQ?'Received Quote':isPO?'Purchase Order':'Received Invoice';
+    const supplierLocked=(isPO&&!!doc.pqId)||(isRI&&!!doc.poId);
+    const roStyle={background:'var(--g50)',color:'var(--g700)',cursor:'default'};
     const savedDoc={...doc,items};
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
@@ -1068,23 +1070,23 @@ function AppOperational({account,onSwitchAccount}){
           {!isRI&&<div/>}
         </div>
       </div>
-      <div className="fc"><div className="fct">Vendor / Supplier</div>
-        {customers.length>0&&<div style={{marginBottom:12}}>
+      <div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>Vendor / Supplier{supplierLocked&&<span style={{fontSize:11,fontWeight:600,color:'var(--g500)',display:'inline-flex',alignItems:'center',gap:3}}><Ico n="lock" size={11}/>Locked</span>}</div>
+        {!supplierLocked&&customers.length>0&&<div style={{marginBottom:12}}>
           <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('supplierCompany',c.company||'');set('supplierContact',c.contact||'');set('supplierEmail',c.email||'');set('supplierPhone',c.phone||'');set('supplierAddress',c.address||'');}}}>
             <option value="">— Quick fill —</option>
             {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
         </div>}
         <div className="fg g2">
-          <Fld label="Company Name"><input value={doc.supplierCompany||''} onChange={e=>set('supplierCompany',e.target.value)} className="fi"/></Fld>
-          <Fld label="Contact Person"><input value={doc.supplierContact||''} onChange={e=>set('supplierContact',e.target.value)} className="fi"/></Fld>
+          <Fld label="Company Name"><input value={doc.supplierCompany||''} onChange={e=>set('supplierCompany',e.target.value)} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
+          <Fld label="Contact Person"><input value={doc.supplierContact||''} onChange={e=>set('supplierContact',e.target.value)} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
         </div>
         <div className="fg g2" style={{marginTop:12}}>
-          <Fld label="Email"><input value={doc.supplierEmail||''} onChange={e=>set('supplierEmail',e.target.value)} className="fi"/></Fld>
-          <Fld label="Phone"><input value={doc.supplierPhone||''} onChange={e=>set('supplierPhone',e.target.value)} className="fi"/></Fld>
+          <Fld label="Email"><input value={doc.supplierEmail||''} onChange={e=>set('supplierEmail',e.target.value)} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
+          <Fld label="Phone"><input value={doc.supplierPhone||''} onChange={e=>set('supplierPhone',e.target.value)} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
         </div>
         <div className="fg g2" style={{marginTop:12}}>
-          <Fld label="Address"><textarea value={doc.supplierAddress||''} onChange={e=>set('supplierAddress',e.target.value)} rows={2} className="fi"/></Fld>
+          <Fld label="Address"><textarea value={doc.supplierAddress||''} onChange={e=>set('supplierAddress',e.target.value)} rows={2} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
           <Fld label="Reference"><input value={doc.ref||''} onChange={e=>set('ref',e.target.value)} className="fi"/></Fld>
         </div>
       </div>
