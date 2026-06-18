@@ -24,7 +24,7 @@ function AppOperational({account,onSwitchAccount}){
   const[cnt,setCnt]=useState({sq:0,si:0,po:0,prj:0});
   const[confirmDlg,setConfirmDlg]=useState(null);
   const askConfirm=(msg,onYes)=>setConfirmDlg({msg,onYes});
-  const[docUploadTrigger,setDocUploadTrigger]=useState(0);
+  const[showDocForm,setShowDocForm]=useState(false);const[docToEdit,setDocToEdit]=useState(null);
 
   useEffect(()=>{
     const load=k=>LS.get(ns+k);
@@ -1477,10 +1477,7 @@ function AppOperational({account,onSwitchAccount}){
 
   // Documents View
   function DocumentsView(){
-    const[showForm,setShowForm]=useState(false);
-    const[editDoc,setEditDoc]=useState(null);
     const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
-    useEffect(()=>{if(docUploadTrigger>0){setEditDoc({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowForm(true);setDocUploadTrigger(0);}},[docUploadTrigger]);
 
     return(<div className="content">
 
@@ -1515,7 +1512,7 @@ function AppOperational({account,onSwitchAccount}){
                 link.download=d.name+(d.fileType==='application/pdf'?'.pdf':'.jpg');
                 link.click();
               }}><Ico n="dl"/>Download</button>
-              <button className="ab" onClick={()=>{setEditDoc(d);setShowForm(true);}}><Ico n="edit"/></button>
+              <button className="ab" onClick={()=>{setDocToEdit(d);setShowDocForm(true);}}><Ico n="edit"/></button>
               <button className="ab danger" onClick={()=>askConfirm(`Delete "${d.name}"?`,()=>{sDocs(documents.filter(x=>x.id!==d.id));showToast('Deleted');})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
@@ -1523,15 +1520,15 @@ function AppOperational({account,onSwitchAccount}){
       )}
 
       {/* Upload Form Modal */}
-      {showForm&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setShowForm(false)}>
+      {showDocForm&&docToEdit&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setShowDocForm(false)}>
         <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:500,maxWidth:'90vw'}}>
-          <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{editDoc.id?'Edit Document':'Upload Document'}</div>
-          <DocumentForm doc={editDoc} onSave={(d)=>{
+          <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{docToEdit.id?'Edit Document':'Upload Document'}</div>
+          <DocumentForm doc={docToEdit} onSave={(d)=>{
             const doc={...d,id:d.id||uid(),uploadDate:d.uploadDate||td()};
             sDocs(doc.id&&documents.find(x=>x.id===doc.id)?documents.map(x=>x.id===doc.id?doc:x):[...documents,doc]);
-            setShowForm(false);
+            setShowDocForm(false);
             showToast('Document saved');
-          }} onCancel={()=>setShowForm(false)}/>
+          }} onCancel={()=>setShowDocForm(false)}/>
         </div>
       </div>}
     </div>);
@@ -2099,7 +2096,7 @@ function AppOperational({account,onSwitchAccount}){
             {view==='product_pool'&&<Btn v="bgh bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Purchase Price','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}><Ico n="export"/>Export Excel</Btn>}
             {view==='expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>Categories</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>New Expense</Btn></div>}
             {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('cust_form');}}><Ico n="plus"/>New Customer</Btn>}
-            {view==='documents'&&<Btn v="bp bsm" onClick={()=>setDocUploadTrigger(t=>t+1)}><Ico n="plus"/>Upload Document</Btn>}
+            {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>Upload Document</Btn>}
           </div>
         }
         {view==='home'&&<Dashboard/>}
