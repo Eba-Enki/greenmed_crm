@@ -165,12 +165,6 @@ function AppOfficial({account,onSwitchAccount}){
     });
     return(
       <div className="content">
-        <div className="sec-hdr">
-          <h2>{type==='invoice'?'Invoices':type==='po'?'Purchase Orders':isRec?'Received Invoices':'Quotations'}</h2>
-          <Btn v="bp bsm" onClick={()=>{setCur(isRec?mkRec():mkDoc(type));go('off_form');}}>
-            <Ico n="plus"/>New {lbl}
-          </Btn>
-        </div>
         <div className="fbar">
           <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={`Search ${isRec?'supplier':'customer'} or ref...`}/></div>
           <select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
@@ -253,10 +247,20 @@ function AppOfficial({account,onSwitchAccount}){
         </div>
       </div>
       <div className="main">
-        {view!=='off_preview'&&<div className="topbar no-print">
-          <div style={{flex:1}}/>
-          <span style={{fontSize:10.5,fontWeight:600,padding:'2px 9px',borderRadius:9,background:'var(--amberl)',color:'var(--amber)',marginRight:8}}>Official</span>
-        </div>}
+        {!['off_preview','off_form','off_custform','off_projform','off_expform','off_expcats'].includes(view)&&(()=>{
+          const offTitles={home:'Dashboard',off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Customers',off_projects:'Projects',off_expenses:'Expenses',settings:'Settings'};
+          return(<div className="topbar no-print">
+            <h1 className="topbar-title">{offTitles[view]||''}</h1>
+            <div style={{flex:1}}/>
+            {view==='off_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('invoice'));go('off_form');}}><Ico n="plus"/>New Invoice</Btn>}
+            {view==='off_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('quote'));go('off_form');}}><Ico n="plus"/>New Quotation</Btn>}
+            {view==='off_pos'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('po'));go('off_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
+            {view==='off_received'&&<Btn v="bp bsm" onClick={()=>{setCur(mkRec());go('off_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
+            {view==='off_customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('off_custform');}}><Ico n="plus"/>New Customer</Btn>}
+            {view==='off_projects'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}}><Ico n="plus"/>New Project</Btn>}
+            {view==='off_expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('off_expcats')}><Ico n="tag"/>Categories</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExp());go('off_expform');}}><Ico n="plus"/>New Expense</Btn></div>}
+          </div>);
+        })()}
         {view==='home'&&<div className="content"><div style={{marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:'var(--g900)',marginBottom:2}}>Dashboard</div><div style={{fontSize:12,color:'var(--g500)'}}>Official Account</div></div>
           <div className="nav-cards">
             {[{k:'off_invoices',ico:'invoice',lbl:'Invoices',val:inv.length},{k:'off_quotes',ico:'quote',lbl:'Quotations',val:quo.length},{k:'off_pos',ico:'po',lbl:'POs',val:pos.length},{k:'off_received',ico:'received',lbl:'Received',val:rec.length},{k:'off_customers',ico:'customers',lbl:'Customers',val:customers.length},{k:'off_projects',ico:'project',lbl:'Projects',val:projects.length},{k:'off_expenses',ico:'expense',lbl:'Expenses',val:expenses.length}].map(c=><div key={c.k} className="nav-card" onClick={()=>go(c.k)}><div className="nc-ico"><Ico n={c.ico} size={16}/></div><div className="nc-val">{c.val}</div><div className="nc-lbl">{c.lbl}</div></div>)}
@@ -288,7 +292,6 @@ function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
   const[q,setQ]=useState('');
   const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
   return(<div className="content">
-    <div className="sec-hdr"><h2>Customers</h2><Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>New Customer</Btn></div>
     <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
     {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No customers yet</div></div></div>:(
     <div className="tcard"><table className="dt">
@@ -324,7 +327,6 @@ function OffCustForm({cust:init,onSave,onCancel}){
 }
 function OffProjects({projects,onNew,onEdit,onDelete}){
   return(<div className="content">
-    <div className="sec-hdr"><h2>Projects</h2><Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>New Project</Btn></div>
     <div className="tcard"><table className="dt">
       <thead><tr><th>Name</th><th>Client</th><th>Start</th><th>Status</th><th></th></tr></thead>
       <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">No projects yet</div></div></td></tr>:projects.map(p=><tr key={p.id}><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
@@ -356,7 +358,6 @@ function OffExpenses({expenses,projects,cats,onNew,onEdit,onDelete,onManageCats}
   });
   const total=f.reduce((s,e)=>s+(+(e.amount||0)),0);
   return(<div className="content">
-    <div className="sec-hdr"><h2>Expenses</h2><div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={onManageCats}><Ico n="tag"/>Categories</Btn><Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>New Expense</Btn></div></div>
     <div className="fbar">
       <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div>
       <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>

@@ -24,6 +24,7 @@ function AppOperational({account,onSwitchAccount}){
   const[cnt,setCnt]=useState({sq:0,si:0,po:0,prj:0});
   const[confirmDlg,setConfirmDlg]=useState(null);
   const askConfirm=(msg,onYes)=>setConfirmDlg({msg,onYes});
+  const[docUploadTrigger,setDocUploadTrigger]=useState(0);
 
   useEffect(()=>{
     const load=k=>LS.get(ns+k);
@@ -321,9 +322,6 @@ function AppOperational({account,onSwitchAccount}){
     });
     const isExpanded=(base)=>hasFilter||expandedGroups.has(base);
     return(<div className="content">
-      <div className="sec-hdr"><h2>Sales Quotations</h2>
-        <Btn v="bp bsm" onClick={()=>{const base=getNextQuoteBase();setCur(mkSalesQuote(base,0));go('sales_quote_form');}}><Ico n="plus"/>New Quotation</Btn>
-      </div>
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder="Search customer, quote no..."/></div>
         <select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
@@ -906,9 +904,6 @@ function AppOperational({account,onSwitchAccount}){
       return sortConfig.dir==='asc'?aVal-bVal:bVal-aVal;
     });
     return(<div className="content">
-      <div className="sec-hdr"><h2>Sales Invoices</h2>
-        <Btn v="bp bsm" onClick={()=>{const n=cnt.si;const num=genSINum(n+1);sCnt({...cnt,si:n+1});setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>New Invoice</Btn>
-      </div>
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder="Search customer or invoice no..."/></div>
         <select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
@@ -984,11 +979,6 @@ function AppOperational({account,onSwitchAccount}){
     const lbl=isPQ?'Received Quote':isPO?'Purchase Order':'Received Invoice';
     const linkChip=(label,num)=><span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{label} {num}</span>;
     return(<div className="content">
-      <div className="sec-hdr"><h2>{title}</h2>
-        {isPQ&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>New Received Quote</Btn>}
-        {isPO&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
-        {isRI&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
-      </div>
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder="Search supplier or ref..."/></div>
         {isRI&&<select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
@@ -1144,9 +1134,6 @@ function AppOperational({account,onSwitchAccount}){
   // Projects with detail view
   function ProjectsList(){
     return(<div className="content">
-      <div className="sec-hdr"><h2>Projects</h2>
-        <Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>New Project</Btn>
-      </div>
       {projects.length===0?<div className="tcard"><div className="empty"><Ico n="project" size={38}/><div className="empty-t">No projects yet</div></div></div>:(
         <div style={{display:'grid',gap:12}}>
           {projects.map(p=>{
@@ -1289,12 +1276,6 @@ function AppOperational({account,onSwitchAccount}){
     });
     const sh=(k)=>`${sortConfig.key===k?(sortConfig.dir==='asc'?' ▲':' ▼'):''}`;
     return(<div className="content">
-      <div className="sec-hdr"><h2>Product Pool</h2>
-        <Btn v="bgh bsm" onClick={()=>exportExcel([['Customer','Project','Code','Name','Qty','Unit','Sale Price','Purchase Price','Quote No','Date'],...filtered.map(p=>[p.customer||'',p.projectId||'',p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||''])],'product-pool')}><Ico n="export"/>Export Excel</Btn>
-      </div>
-      <div style={{background:'var(--bluel)',border:'1px solid #bfdbfe',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:12.5,color:'var(--blue)'}}>
-        <Ico n="pool"/> All items from <strong>Sent</strong> quotations appear here automatically. Amber rows = same item quoted to same customer more than once.
-      </div>
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search item, customer, project..."/></div>
         <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
@@ -1302,6 +1283,7 @@ function AppOperational({account,onSwitchAccount}){
         <div style={{flex:1}}/>
         <span style={{fontSize:12,color:'var(--g500)'}}>{filtered.length} items</span>
       </div>
+      <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">Pool is empty</div><div className="empty-s">Mark quotations as Sent to populate the pool</div></div></div>:(
         <div className="tcard"><table className="dt">
           <thead><tr>
@@ -1370,12 +1352,6 @@ function AppOperational({account,onSwitchAccount}){
     const total=filtered.reduce((s,e)=>s+(+(e.amount||0)),0);
     const allCats=[...new Set(expenses.map(e=>e.category).filter(Boolean))];
     return(<div className="content">
-      <div className="sec-hdr"><h2>Expenses</h2>
-        <div style={{display:'flex',gap:7}}>
-          <Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>Categories</Btn>
-          <Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>New Expense</Btn>
-        </div>
-      </div>
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder="Search..."/></div>
         <select value={fs.cat} onChange={e=>setFs(f=>({...f,cat:e.target.value}))}>
@@ -1453,7 +1429,6 @@ function AppOperational({account,onSwitchAccount}){
     const[q,setQ]=useState('');
     const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
     return(<div className="content">
-      <div className="sec-hdr"><h2>Customers</h2><Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('cust_form');}}><Ico n="plus"/>New Customer</Btn></div>
       <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">No customers yet</div></div></div>:(
         <div className="tcard"><table className="dt">
@@ -1494,12 +1469,9 @@ function AppOperational({account,onSwitchAccount}){
   function DocumentsView(){
     const[showForm,setShowForm]=useState(false);
     const[editDoc,setEditDoc]=useState(null);
+    useEffect(()=>{if(docUploadTrigger>0){setEditDoc({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowForm(true);}},[docUploadTrigger]);
 
     return(<div className="content">
-      <div className="sec-hdr">
-        <h2>Documents</h2>
-        <Btn v="bp bsm" onClick={()=>{setEditDoc({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowForm(true);}}><Ico n="plus"/>Upload New Document</Btn>
-      </div>
 
       {documents.length===0&&(
         <div style={{padding:80,textAlign:'center',color:'var(--g400)'}}>
@@ -2105,8 +2077,18 @@ function AppOperational({account,onSwitchAccount}){
       <div className="main">
         {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats'].includes(view)&&
           <div className="topbar no-print">
+            <h1 className="topbar-title">{titles[view]||''}</h1>
             <div style={{flex:1}}/>
-            <span style={{fontSize:10.5,fontWeight:600,padding:'2px 9px',borderRadius:9,background:'var(--greenl)',color:'var(--green)',marginRight:8}}>Operational</span>
+            {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{const base=getNextQuoteBase();setCur(mkSalesQuote(base,0));go('sales_quote_form');}}><Ico n="plus"/>New Quotation</Btn>}
+            {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const n=cnt.si;const num=genSINum(n+1);sCnt({...cnt,si:n+1});setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>New Invoice</Btn>}
+            {view==='purchase_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>New Received Quote</Btn>}
+            {view==='purchase_orders'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
+            {view==='received_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
+            {view==='projects'&&<Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>New Project</Btn>}
+            {view==='product_pool'&&<Btn v="bgh bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Purchase Price','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}><Ico n="export"/>Export Excel</Btn>}
+            {view==='expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>Categories</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>New Expense</Btn></div>}
+            {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('cust_form');}}><Ico n="plus"/>New Customer</Btn>}
+            {view==='documents'&&<Btn v="bp bsm" onClick={()=>setDocUploadTrigger(t=>t+1)}><Ico n="plus"/>Upload Document</Btn>}
           </div>
         }
         {view==='home'&&<Dashboard/>}
