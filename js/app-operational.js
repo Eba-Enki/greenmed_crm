@@ -1480,7 +1480,7 @@ function AppOperational({account,onSwitchAccount}){
     const[showForm,setShowForm]=useState(false);
     const[editDoc,setEditDoc]=useState(null);
     const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
-    useEffect(()=>{if(docUploadTrigger>0){setEditDoc({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowForm(true);}},[docUploadTrigger]);
+    useEffect(()=>{if(docUploadTrigger>0){setEditDoc({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowForm(true);setDocUploadTrigger(0);}},[docUploadTrigger]);
 
     return(<div className="content">
 
