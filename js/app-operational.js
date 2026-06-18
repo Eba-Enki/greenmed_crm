@@ -275,6 +275,27 @@ function AppOperational({account,onSwitchAccount}){
     showToast('Saved ✓');go('projects');
   };
 
+  // ── CASCADE DELETE HELPERS ──
+  const deleteSQ=(id)=>{
+    sSQ(salesQuotes.filter(x=>x.id!==id));
+    sSI(salesInvoices.map(si=>si.quoteId===id?{...si,quoteId:null,quoteNum:''}:si));
+  };
+  const deletePQ=(id)=>{
+    sPQ(purchaseQuotes.filter(x=>x.id!==id));
+    sPO(purchaseOrders.map(p=>p.pqId===id?{...p,pqId:null,pqNum:''}:p));
+  };
+  const deletePO=(id)=>{
+    const po=purchaseOrders.find(x=>x.id===id);
+    sPO(purchaseOrders.filter(x=>x.id!==id));
+    sRI(receivedInvoices.map(r=>r.poId===id?{...r,poId:null,poNum:''}:r));
+    if(po&&po.pqId)sPQ(purchaseQuotes.map(q=>q.id===po.pqId?{...q,linkedPO:null}:q));
+  };
+  const deleteRI=(id)=>{
+    const ri=receivedInvoices.find(x=>x.id===id);
+    sRI(receivedInvoices.filter(x=>x.id!==id));
+    if(ri&&ri.poId)sPO(purchaseOrders.map(p=>p.id===ri.poId?{...p,linkedRI:null}:p));
+  };
+
   // ── EXPENSE ──
   const mkExpense=()=>({id:null,date:td(),category:'',description:'',amount:'',currency:'GBP',supplier:'',reference:'',project:'',notes:''});
   const handleSaveExp=e=>{const fresh=!e.id;const saved=fresh?{...e,id:uid()}:e;sExp(fresh?[...expenses,saved]:expenses.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('expenses');};
@@ -384,7 +405,7 @@ function AppOperational({account,onSwitchAccount}){
                   {latest.status==='sent'&&<button className="ab" title="Revise" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/></button>}
                   {(latest.status==='approved'||latest.status==='locked')&&<button className="ab" title="Revise" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/></button>}
                   {latest.status==='approved'&&remaining.length>0&&<button className="ab" title="Create Invoice" onClick={()=>{setCur(mkSalesInvoice(latest));go('sales_invoice_form');}}><Ico n="invoice"/></button>}
-                  <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this quotation?',()=>{sSQ(salesQuotes.filter(x=>x.id!==latest.id));showToast('Deleted');})}><Ico n="trash"/></button>
+                  <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this quotation?',()=>{deleteSQ(latest.id);showToast('Deleted');})}><Ico n="trash"/></button>
                 </div></td>
               </tr>
               {expanded&&history.map(q=>(
@@ -404,7 +425,7 @@ function AppOperational({account,onSwitchAccount}){
                   <td><div className="aw">
                     <button className="ab" title="Preview" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
                     <button className="ab" title="Download PDF" onClick={()=>savePDF(q,co,'sales_quote')}><Ico n="dl"/></button>
-                    <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this revision?',()=>{sSQ(salesQuotes.filter(x=>x.id!==q.id));showToast('Deleted');})}><Ico n="trash"/></button>
+                    <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this revision?',()=>{deleteSQ(q.id);showToast('Deleted');})}><Ico n="trash"/></button>
                   </div></td>
                 </tr>
               ))}
@@ -1024,7 +1045,7 @@ function AppOperational({account,onSwitchAccount}){
                 {isPQ&&!d.linkedPO&&<button className="ab" title="Convert to Purchase Order" onClick={()=>handleConvertPQtoPO(d)}><Ico n="convert"/></button>}
                 {isPO&&!d.linkedRI&&<button className="ab" title="Create Received Invoice" onClick={()=>handleConvertPOtoRI(d)}><Ico n="invoice"/></button>}
                 {isRI&&d.status==='unpaid'&&<button className="ab" title="Mark as Paid" onClick={()=>{sRI(receivedInvoices.map(x=>x.id===d.id?{...x,status:'paid'}:x));showToast('Marked as paid');}}><Ico n="check"/></button>}
-                <button className="ab danger" title="Delete" onClick={()=>askConfirm(`Delete this ${lbl.toLowerCase()}?`,()=>{isPQ?sPQ(purchaseQuotes.filter(x=>x.id!==d.id)):isPO?sPO(purchaseOrders.filter(x=>x.id!==d.id)):sRI(receivedInvoices.filter(x=>x.id!==d.id));showToast('Deleted');})}><Ico n="trash"/></button>
+                <button className="ab danger" title="Delete" onClick={()=>askConfirm(`Delete this ${lbl.toLowerCase()}?`,()=>{isPQ?deletePQ(d.id):isPO?deletePO(d.id):deleteRI(d.id);showToast('Deleted');})}><Ico n="trash"/></button>
               </div></td>
             </tr>
           ))}</tbody>
