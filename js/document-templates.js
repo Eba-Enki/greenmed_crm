@@ -400,7 +400,7 @@ const savePDF=async(doc,co,type='invoice')=>{
     const filename=`${type}_${doc.number||'draft'}_${td()}.pdf`;
     pdf.save(filename);
   }catch(e){
-    alert('PDF oluşturulamadı: '+e.message);
+    alert('PDF could not be generated: '+e.message);
     console.error('PDF generation failed:',e);
   }
 };

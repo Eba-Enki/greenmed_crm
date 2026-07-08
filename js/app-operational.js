@@ -2,7 +2,7 @@
 // ==========================
 // OPERATIONAL MODULE
 // ==========================
-function AppOperational({account,onSwitchAccount}){
+function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfile}){
   const ns='ops_';
   const[view,setView]=useState('home');
   const[prev,setPrev]=useState('home');
@@ -20,7 +20,6 @@ function AppOperational({account,onSwitchAccount}){
   const[expenses,setExpenses]=useState([]);
   const[expCats,setExpCats]=useState([]);
   const[documents,setDocuments]=useState([]);
-  const[users,setUsers]=useState([]);
   const[cnt,setCnt]=useState({sq:0,si:0,po:0,prj:0});
   const[confirmDlg,setConfirmDlg]=useState(null);
   const askConfirm=(msg,onYes)=>setConfirmDlg({msg,onYes});
@@ -47,14 +46,6 @@ function AppOperational({account,onSwitchAccount}){
     const ex=load('exp');if(ex)setExpenses(ex);
     const ec=load('expcat');if(ec)setExpCats(ec);else setExpCats(EXP_CATS_DEF.map(n=>({id:uid(),name:n})));
     const docs=load('docs');if(docs)setDocuments(docs);
-    const usr=load('users');
-    if(usr){
-      setUsers(usr);
-    }else{
-      const defaultUser=[{id:uid(),username:'admin',password:'admin',firstName:'Admin',lastName:'User',email:'admin@greenmedltd.com',role:'Admin',active:true,createdAt:td()}];
-      setUsers(defaultUser);
-      LS.set(ns+'users',defaultUser);
-    }
     const cn=load('cnt');if(cn)setCnt(cn);
     setView('home');setCur(null);
   },[]);
@@ -73,7 +64,6 @@ function AppOperational({account,onSwitchAccount}){
   const sProj=d=>save('proj',setProjects,d);
   const sCust=d=>save('cust',setCustomers,d);
   const sDocs=d=>save('docs',setDocuments,d);
-  const sUsers=d=>save('users',setUsers,d);
   const sCnt=d=>{setCnt(d);LS.set(ns+'cnt',d)};
 
   // ── SALES QUOTATION LOGIC ──
@@ -87,12 +77,12 @@ function AppOperational({account,onSwitchAccount}){
   };
   const assignQuoteNumber=(q)=>{
     if(q.number&&q.number.startsWith('Q')){
-      // Eğer base zaten varsa (revizyon), mevcut base'i kullan
+      // If base already exists (revision), use the existing base
       if(q.base){
         const num=genQuoteNum(q.base,q.rev||0);
         return{...q,number:num};
       }
-      // Yeni teklif - yeni base oluştur
+      // New quote - create a new base
       const n=cnt.sq;const base=genQuoteBase(n+1);
       const num=genQuoteNum(base,q.rev||0);
       sCnt({...cnt,sq:n+1});
@@ -482,35 +472,27 @@ function AppOperational({account,onSwitchAccount}){
     // Excel/CSV Import Handler
     const handleFileImport=(e)=>{
       const file=e.target.files[0];
-      console.log('1. File selected:', file?.name);
       if(!file)return;
-      
+
       const reader=new FileReader();
       reader.onload=(evt)=>{
-        console.log('2. File loaded');
         try{
           let rows=[];
-          
-          // Parse file based on type
+
           if(file.name.toLowerCase().endsWith('.csv')){
-            console.log('3. Parsing CSV');
             const text=evt.target.result;
             rows=text.split('\n').map(line=>line.split(',').map(cell=>cell.trim())).filter(r=>r.length>0);
           }else{
-            console.log('3. Parsing Excel');
             const wb=XLSX.read(evt.target.result,{type:'binary'});
             const ws=wb.Sheets[wb.SheetNames[0]];
             rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
           }
-          
-          console.log('4. Rows parsed:', rows.length, rows);
-          
+
           if(!rows||rows.length===0){
             alert('No data found in file');
             return;
           }
-          
-          // Skip header if detected
+
           let startRow=0;
           if(rows[0]&&rows[0].length>=2){
             const firstCell=String(rows[0][0]||'').toLowerCase();
@@ -518,21 +500,19 @@ function AppOperational({account,onSwitchAccount}){
             if(firstCell.includes('item')||firstCell.includes('code')||
                secondCell.includes('desc')||secondCell.includes('name')){
               startRow=1;
-              console.log('5. Header detected, starting from row 1');
             }
           }
-          
-          // Map rows to items
+
           const imported=[];
           for(let i=startRow;i<rows.length;i++){
             const row=rows[i];
             if(!row||row.length<2)continue;
-            
+
             const item=String(row[0]||'').trim();
             const desc=String(row[1]||'').trim();
-            
+
             if(!item&&!desc)continue;
-            
+
             imported.push({
               id:uid(),
               item:item,
@@ -546,22 +526,15 @@ function AppOperational({account,onSwitchAccount}){
               invoicedQty:0
             });
           }
-          
-          console.log('6. Items created:', imported.length, imported);
-          
+
           if(imported.length===0){
             alert('No valid items found');
             return;
           }
-          
-          // Clear empty default row and add imported items
-          console.log('7. Current items before update:', items);
+
           const currentItems=items.filter(it=>it.item||it.desc||(it.price&&it.price!=='0'));
-          console.log('8. Filtered items:', currentItems);
           const newItems=[...currentItems,...imported];
-          console.log('9. Setting new items:', newItems);
           setItems(newItems);
-          console.log('10. Items set, showing toast');
           showToast(`✓ ${imported.length} items imported`);
           
         }catch(err){
@@ -1592,59 +1565,6 @@ function AppOperational({account,onSwitchAccount}){
     </div>);
   }
 
-  function UserForm({user:init,onSave,onCancel}){
-    const[u,setU]=useState(init);
-    const s=(k,v)=>setU(x=>({...x,[k]:v}));
-    const _initStr=useRef(JSON.stringify(init));
-    const _isDirty=()=>JSON.stringify(u)!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
-    
-    return(<div className="content"><div className="fw">
-      <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12}}>
-        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
-        <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
-        <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)'}}>{u.id?'Edit User':'New User'}</h2>
-        <div style={{flex:1}}/>
-        <Btn v="bp bsm" onClick={()=>onSave(u)}>Save User</Btn>
-      </div>
-      
-      <div className="fc">
-        <div className="fct">User Information</div>
-        <div className="fg g2">
-          <Fld label="First Name"><input value={u.firstName||''} onChange={e=>s('firstName',e.target.value)} className="fi" placeholder="Enter first name"/></Fld>
-          <Fld label="Last Name"><input value={u.lastName||''} onChange={e=>s('lastName',e.target.value)} className="fi" placeholder="Enter last name"/></Fld>
-        </div>
-        <div className="fg g1" style={{marginTop:14}}>
-          <Fld label="Email"><input type="email" value={u.email||''} onChange={e=>s('email',e.target.value)} className="fi" placeholder="Enter email address"/></Fld>
-        </div>
-        <div className="fg g2" style={{marginTop:14}}>
-          <Fld label="Username"><input value={u.username||''} onChange={e=>s('username',e.target.value)} className="fi" placeholder="Enter username"/></Fld>
-          <Fld label="Password"><input type="password" value={u.password||''} onChange={e=>s('password',e.target.value)} className="fi" placeholder={u.id?"Leave empty to keep current":"Enter password"}/></Fld>
-        </div>
-        <div className="fg g2" style={{marginTop:14}}>
-          <Fld label="Role">
-            <select value={u.role||'User'} onChange={e=>s('role',e.target.value)} className="fi">
-              <option value="Admin">Admin</option>
-              <option value="Manager">Manager</option>
-              <option value="User">User</option>
-            </select>
-          </Fld>
-          <Fld label="Status">
-            <select value={u.active?'active':'inactive'} onChange={e=>s('active',e.target.value==='active')} className="fi">
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </Fld>
-        </div>
-      </div>
-      
-      <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:16}}>
-        <Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn>
-        <Btn v="bp bsm" onClick={()=>onSave(u)} disabled={!u.username||(u.id?false:!u.password)}>Save User</Btn>
-      </div>
-    </div></div>);
-  }
-
   function OpsSettings(){
     const[c,setC]=useState(()=>{
       const merged={...DEF_CO,...co};
@@ -1904,52 +1824,15 @@ function AppOperational({account,onSwitchAccount}){
             </div>)}
           </>)}
           
-          {/* Users Management */}
-          {activeMenu==='users'&&(<>
-            <div style={{display:'flex',alignItems:'center',marginBottom:20}}>
-              <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>User Management</div>
-              <div style={{flex:1}}/>
-              <Btn v="bp bsm" onClick={()=>{LS.set(ns+'settingsMenu','users');setCur({id:null,username:'',password:'',firstName:'',lastName:'',email:'',role:'User',active:true,createdAt:td()});go('user_form','settings');}}><Ico n="plus" size={13}/>Add User</Btn>
+          {/* Users → System Management */}
+          {activeMenu==='users'&&(
+            <div style={{padding:40,background:'var(--g50)',borderRadius:12,textAlign:'center'}}>
+              <div style={{fontSize:36,marginBottom:12}}>⚙️</div>
+              <div style={{fontSize:16,fontWeight:700,color:'var(--g800)',marginBottom:8}}>User Management</div>
+              <div style={{fontSize:13,color:'var(--g500)',marginBottom:20,lineHeight:1.6}}>Adding, editing and portal access permissions for users<br/>are now managed centrally from the System Management section.</div>
+              <p style={{fontSize:12,color:'var(--g400)'}}>You can switch to "System Management" from the portal menu in the sidebar.</p>
             </div>
-            
-            {users.length===0&&(
-              <div style={{padding:40,background:'var(--g50)',borderRadius:12,textAlign:'center',color:'var(--g500)',fontSize:13}}>
-                <div style={{fontSize:40,marginBottom:12}}>👤</div>
-                <div style={{fontWeight:600,marginBottom:6}}>No Users</div>
-                <div>Add your first user to start.</div>
-              </div>
-            )}
-            
-            {users.length>0&&(
-              <div className="tcard"><table className="dt">
-                <thead><tr>
-                  <th style={{width:50,textAlign:'center'}}>#</th>
-                  <th>First Name</th>
-                  <th>Last Name</th>
-                  <th>Email</th>
-                  <th>Username</th>
-                  <th>Role</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th></th>
-                </tr></thead>
-                <tbody>{users.map((u,idx)=><tr key={u.id}>
-                  <td style={{textAlign:'center',color:'var(--g500)',fontSize:13,fontWeight:600}}>{idx+1}</td>
-                  <td style={{fontWeight:500}}>{u.firstName||'—'}</td>
-                  <td style={{fontWeight:500}}>{u.lastName||'—'}</td>
-                  <td style={{color:'var(--g600)',fontSize:13}}>{u.email||'—'}</td>
-                  <td style={{fontFamily:'monospace',fontSize:12,color:'var(--g700)'}}>{u.username}</td>
-                  <td><span style={{padding:'3px 10px',borderRadius:5,fontSize:11,fontWeight:600,background:u.role==='Admin'?'var(--purplel)':'var(--bluel)',color:u.role==='Admin'?'var(--purple)':'var(--blue)'}}>{u.role}</span></td>
-                  <td><span style={{padding:'3px 10px',borderRadius:5,fontSize:11,fontWeight:600,background:u.active?'var(--greenl)':'var(--g200)',color:u.active?'var(--green)':'var(--g600)'}}>{u.active?'Active':'Inactive'}</span></td>
-                  <td style={{color:'var(--g600)',fontSize:12}}>{u.createdAt}</td>
-                  <td><div className="aw">
-                    <button className="ab" onClick={()=>{LS.set(ns+'settingsMenu','users');setCur(u);go('user_form','settings');}}><Ico n="edit"/></button>
-                    <button className="ab danger" onClick={()=>askConfirm(`Delete user "${u.username}"?`,()=>{sUsers(users.filter(x=>x.id!==u.id));showToast('User deleted');})}><Ico n="trash"/></button>
-                  </div></td>
-                </tr>)}</tbody>
-              </table></div>
-            )}
-          </>)}
+          )}
           
         </div>
       </div>
@@ -2080,6 +1963,7 @@ function AppOperational({account,onSwitchAccount}){
     {group:'CRM'},
     {k:'customers',ico:'customers',lbl:'Customers',cnt:customers.length},
     {k:'documents',ico:'file',lbl:'Documents',cnt:documents.length},
+    {k:'settings',ico:'settings',lbl:'Settings'},
   ];
 
   const titles={home:'Dashboard',sales_quotes:'Sales Quotations',sales_invoices:'Sales Invoices',purchase_quotes:'Received Quotes',purchase_orders:'Purchase Orders',received_invoices:'Received Invoices',projects:'Projects',proj_detail:(cur&&cur.name)||'Project',product_pool:'Product Pool',expenses:'Expenses',customers:'Customers',documents:'Documents',settings:'Settings',exp_cats:'Expense Categories'};
@@ -2090,10 +1974,7 @@ function AppOperational({account,onSwitchAccount}){
         <div className="sb-brand" onClick={()=>go('home')}>
           <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">Operations</div></div>
         </div>
-        <div className="sb-acc-pill">
-          <span className="sb-acc-name" style={{color:'var(--gm-600)'}}>Operational</span>
-          <button className="sb-acc-switch" onClick={onSwitchAccount}>Switch ↩</button>
-        </div>
+        <PortalDropdown session={session} onPortalSwitch={onPortalSwitch} onLogout={onLogout} onOpenProfile={onOpenProfile}/>
         <div style={{flex:1,overflow:'auto',padding:'6px 0'}}>
           {SB.map((it,i)=>{
             if(it.group)return <div key={i} className="sb-group">{it.group}</div>;
@@ -2102,7 +1983,8 @@ function AppOperational({account,onSwitchAccount}){
           })}
         </div>
         <div className="sb-footer">
-          <button className="sb-footer-btn" onClick={()=>go('settings')}><Ico n="settings" size={13}/><span>Settings</span></button>
+          <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>Profile</span></button>
+          <button className="sb-footer-btn" onClick={onLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
         </div>
       </div>
       <div className="main">
@@ -2134,7 +2016,6 @@ function AppOperational({account,onSwitchAccount}){
         {view==='expenses'&&<ExpensesView/>}
         {view==='customers'&&<CustomersView/>}
         {view==='documents'&&<DocumentsView/>}
-        {view==='user_form'&&cur&&<UserForm user={cur} onSave={u=>{const usr={...u,id:u.id||uid(),createdAt:u.createdAt||td()};sUsers(u.id&&users.find(x=>x.id===u.id)?users.map(x=>x.id===u.id?usr:x):[...users,usr]);showToast('User saved');go('settings');}} onCancel={()=>go('settings')}/>}
         {view==='settings'&&<OpsSettings/>}
         {/* FORMS */}
         {view==='sales_quote_form'&&cur&&<SalesQuoteForm quote={cur} onSave={handleSaveSQ} onCancel={()=>go('sales_quotes')}/>}
