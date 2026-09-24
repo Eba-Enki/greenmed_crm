@@ -70,7 +70,7 @@ function LoginScreen({onLogin}){
 // ==========================
 const PORTAL_INFO={
   off:{label:'Official',desc:'Finance, invoicing and accounting',color:'var(--gm-400)'},
-  ops:{label:'Operational',desc:'Sales, procurement and project management',color:'var(--gm-600)'},
+  ops:{label:'Sales & Procurement',desc:'Sales, procurement and project management',color:'var(--gm-600)'},
   system:{label:'System Management',desc:'User and system management',color:'var(--g700)'}
 };
 
@@ -109,16 +109,12 @@ function PortalDropdown({session,onPortalSwitch}){
   },[]);
 
   const portals=session.portals||{};
-  const accessible=Object.entries(portals).filter(([,r])=>r).map(([k])=>k);
-  const isAdmin=Object.values(portals).includes('Admin');
-  const list=[...accessible,...(isAdmin&&!accessible.includes('system')?['system']:[])];
-  const firstName=session.firstName||session.username;
+  const list=Object.entries(portals).filter(([k,r])=>r&&k!=='system').map(([k])=>k);
 
   return(
     <div ref={ref} style={{position:'relative'}}>
       <div className="sb-acc-pill" onClick={()=>setOpen(o=>!o)} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:8,justifyContent:'space-between'}}>
         <div style={{display:'flex',flexDirection:'column',minWidth:0}}>
-          <span style={{fontSize:11,color:'var(--g400)',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{firstName}</span>
           <span className="sb-acc-name">{(PORTAL_INFO[session.activePortal]||{label:session.activePortal}).label}</span>
         </div>
         <svg viewBox="0 0 24 24" style={{width:13,height:13,stroke:'var(--g400)',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',transform:open?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
@@ -137,6 +133,20 @@ function PortalDropdown({session,onPortalSwitch}){
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ==========================
+// SYSTEM MANAGEMENT LINK (fixed, admin-only)
+// ==========================
+function SystemManagementLink({session,onPortalSwitch}){
+  const isAdmin=Object.values(session.portals||{}).includes('Admin');
+  if(!isAdmin)return null;
+  const active=session.activePortal==='system';
+  return(
+    <div className={`sb-item sb-sysmgmt${active?' active':''}`} onClick={()=>onPortalSwitch('system')}>
+      <Ico n="shield" size={14}/><span className="lbl">System Management</span>
     </div>
   );
 }

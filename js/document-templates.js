@@ -678,7 +678,7 @@ function DocPage({doc,co,docType}){
   );
 }
 
-function Preview({doc,co,docType,onBack,onEdit}){
+function DocSummaryBody({doc,co,docType}){
   const sym=CURR[doc.currency]||'£';
   const total=dt(doc.items||[]);
   const isInv=docType==='invoice';
@@ -700,17 +700,7 @@ function Preview({doc,co,docType,onBack,onEdit}){
   const statusClass=statusMap[doc.status]||'b-draft';
   const statusLabel=doc.status?(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' ')):'Draft';
 
-  const defaultBank=(co.banks||[]).find(b=>b.isDefault)||(co.banks||[])[0]||null;
-
   return(
-    <div>
-      <div className="pvbar no-print">
-        <button className="pvbtn" onClick={onBack}><Ico n="back"/>Back</button>
-        {onEdit&&<button className="pvbtn" onClick={onEdit}><Ico n="edit"/>Edit</button>}
-        <div style={{flex:1}}/>
-        <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType)}><Ico n="dl"/>Save PDF</button>
-      </div>
-      <div className="pv2-outer">
         <div className="pv2-wrap">
 
           <div className="pv2-hdr">
@@ -719,8 +709,17 @@ function Preview({doc,co,docType,onBack,onEdit}){
               <div className="pv2-docnum">{doc.number||'—'}</div>
             </div>
             <div className="pv2-hdr-right">
-              {isInv&&doc.quoteNum&&<span className="pv2-linked">From {doc.quoteNum}</span>}
-              {doc.status&&<span className={`bdg ${statusClass}`}>{statusLabel}</span>}
+              <div className="pv2-hdr-badges">
+                {isInv&&doc.quoteNum&&<span className="pv2-linked">From {doc.quoteNum}</span>}
+                {doc.status&&<span className={`bdg ${statusClass}`}>{statusLabel}</span>}
+              </div>
+              <div className="pv2-hdr-meta">
+                <span><b>{doc.date||td()}</b></span>
+                <span className="pv2-hdr-sep">·</span>
+                <span>{doc.currency||'GBP'} ({sym})</span>
+                {doc.validity&&<><span className="pv2-hdr-sep">·</span><span>Valid until <b>{doc.validity}</b></span></>}
+                {doc.project&&<><span className="pv2-hdr-sep">·</span><span>{doc.project}</span></>}
+              </div>
             </div>
           </div>
 
@@ -741,22 +740,6 @@ function Preview({doc,co,docType,onBack,onEdit}){
                 {shipTo.address&&<div className="pv2-meta-sub addr">{shipTo.address}</div>}
               </div>
             )}
-            <div className="pv2-meta-card">
-              <div className="pv2-meta-label">Date</div>
-              <div className="pv2-meta-value">{doc.date||td()}</div>
-              {doc.validity&&<><div className="pv2-meta-sep"/><div className="pv2-meta-label">Valid Until</div><div className="pv2-meta-value">{doc.validity}</div></>}
-              {doc.project&&<><div className="pv2-meta-sep"/><div className="pv2-meta-label">Project</div><div className="pv2-meta-value">{doc.project}</div></>}
-            </div>
-            <div className="pv2-meta-card">
-              <div className="pv2-meta-label">Currency</div>
-              <div className="pv2-meta-value">{doc.currency||'GBP'} <span style={{color:'var(--g400)',fontWeight:400,fontSize:12}}>({sym})</span></div>
-              {defaultBank&&<>
-                <div className="pv2-meta-sep"/>
-                <div className="pv2-meta-label">Bank</div>
-                <div className="pv2-meta-value" style={{fontSize:12}}>{defaultBank.name||defaultBank.bank||'—'}</div>
-                {defaultBank.iban&&<div className="pv2-meta-sub" style={{fontFamily:'monospace',fontSize:11,letterSpacing:'.5px'}}>{defaultBank.iban}</div>}
-              </>}
-            </div>
           </div>
 
           <div className="pv2-section">
@@ -798,6 +781,49 @@ function Preview({doc,co,docType,onBack,onEdit}){
             </div>
           )}
 
+        </div>
+  );
+}
+
+function Preview({doc,co,docType,onBack,onEdit}){
+  return(
+    <div>
+      <div className="pvbar no-print">
+        <button className="pvbtn" onClick={onBack}><Ico n="back"/>Back</button>
+        {onEdit&&<button className="pvbtn" onClick={onEdit}><Ico n="edit"/>Edit</button>}
+        <div style={{flex:1}}/>
+        <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType)}><Ico n="dl"/>Save PDF</button>
+      </div>
+      <div className="pv2-outer">
+        <DocSummaryBody doc={doc} co={co} docType={docType}/>
+      </div>
+    </div>
+  );
+}
+
+function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions}){
+  const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
+  const statusClass=statusMap[doc.status]||'b-draft';
+  const statusLabel=doc.status?(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' ')):'Draft';
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:14,width:900,maxWidth:'100%',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,.25)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,padding:'16px 24px',borderBottom:'1px solid var(--g200)',flexShrink:0}}>
+          <span style={{fontSize:11,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'.5px'}}>{doc.number||'—'}</span>
+          {doc.status&&<span className={`bdg ${statusClass}`}>{statusLabel}</span>}
+          <div style={{flex:1}}/>
+          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'var(--g400)',lineHeight:1}}>×</button>
+        </div>
+        <div style={{overflowY:'auto',padding:'20px 24px',flex:1}}>
+          <DocSummaryBody doc={doc} co={co} docType={docType}/>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8,padding:'14px 24px',borderTop:'1px solid var(--g200)',flexShrink:0}}>
+          {onDelete&&<button className="ab danger" onClick={onDelete}><Ico n="trash"/></button>}
+          <div style={{flex:1}}/>
+          <Btn v="bgh bsm" onClick={onClose}>Close</Btn>
+          {onEdit&&<Btn v="bgh bsm" onClick={onEdit}>Edit</Btn>}
+          {(extraActions||[]).map((a,i)=><Btn key={i} v="bgh bsm" onClick={a.onClick}>{a.label}</Btn>)}
+          <Btn v="bp bsm" onClick={()=>savePDF(doc,co,docType)}><Ico n="dl"/>Download PDF</Btn>
         </div>
       </div>
     </div>

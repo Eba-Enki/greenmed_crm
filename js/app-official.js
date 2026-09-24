@@ -10,8 +10,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const[pos,setPos]=useState([]);const[rec,setRec]=useState([]);
   const[projects,setProjects]=useState([]);
   const[customers,setCustomers]=useState([]);
-  const[expenses,setExpenses]=useState([]);
   const[expCats,setExpCats]=useState([]);
+  const[incomeCats,setIncomeCats]=useState([]);
   const[cnt,setCnt]=useState({i:0,q:0,p:0,r:0});
   const[co,setCo]=useState(DEF_CO);
   const[cur,setCur]=useState(null);
@@ -19,12 +19,29 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const[bankTx,setBankTx]=useState([]);
   const[selectedBankId,setSelectedBankId]=useState(null);
   const[editingBank,setEditingBank]=useState(null);
+  const[categoryBrowse,setCategoryBrowse]=useState(null);
+  const[editingCategory,setEditingCategory]=useState(null);
+  // Set by whichever form is currently mounted (see each form's "dirtyCheckRef.current=..." line);
+  // reset to null right before render so a non-form view never carries a stale checker over.
+  const dirtyCheckRef=useRef(null);
+  const goGuarded=(v,from)=>{
+    if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)go(v,from);});
+    else go(v,from);
+  };
+  const guardedPortalSwitch=p=>{
+    if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)onPortalSwitch(p);});
+    else onPortalSwitch(p);
+  };
+  const guardedLogout=()=>{
+    if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)onLogout();});
+    else onLogout();
+  };
 
   useEffect(()=>{
     const a=LS.get(ns+'i'),b=LS.get(ns+'q'),c=LS.get(ns+'p'),d=LS.get(ns+'r'),
           e=LS.get(ns+'pr'),f=LS.get(ns+'cnt'),g=LS.get(ns+'co'),
-          h=LS.get(ns+'exp'),k=LS.get(ns+'expcat'),l=LS.get(ns+'cust'),
-          m=LS.get(ns+'banktx');
+          k=LS.get(ns+'expcat'),l=LS.get(ns+'cust'),
+          m=LS.get(ns+'banktx'),n=LS.get(ns+'incomecat');
     if(a)setInv(a);else setInv([]);
     if(b)setQuo(b);else setQuo([]);
     if(c)setPos(c);else setPos([]);
@@ -39,10 +56,10 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
       }
       setCo(merged);
     }else setCo({...DEF_CO,logo:logo||''});
-    if(h)setExpenses(h);else setExpenses([]);
     if(k)setExpCats(k);else setExpCats(EXP_CATS_DEF.map(n=>({id:uid(),name:n})));
     if(l){const migrated=l.map(c=>{if('name'in c&&!('contact'in c)){const{name,...rest}=c;return{...rest,contact:name};}return c;});setCustomers(migrated);if(migrated.some((c,i)=>c!==l[i]))LS.set(ns+'cust',migrated);}else setCustomers([]);
     if(m)setBankTx(m);else setBankTx([]);
+    if(n)setIncomeCats(n);else setIncomeCats(INCOME_CATS_DEF.map(nm=>({id:uid(),name:nm})));
     setView('home');setCur(null);
   },[]);
 
@@ -51,8 +68,21 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const sp=d=>{setPos(d);LS.set(ns+'p',d)};const sr=d=>{setRec(d);LS.set(ns+'r',d)};
   const spr=d=>{setProjects(d);LS.set(ns+'pr',d)};
   const sc=d=>{setCnt(d);LS.set(ns+'cnt',d)};
-  const sExp=d=>{setExpenses(d);LS.set(ns+'exp',d)};
   const sExpCats=d=>{setExpCats(d);LS.set(ns+'expcat',d)};
+  const sIncomeCats=d=>{setIncomeCats(d);LS.set(ns+'incomecat',d)};
+  const saveCategory=(cat)=>{
+    const{direction,...rest}=cat;
+    const list=direction==='in'?incomeCats:expCats;
+    const setter=direction==='in'?sIncomeCats:sExpCats;
+    const idx=list.findIndex(c=>c.id===rest.id);
+    setter(idx>=0?list.map((c,i)=>i===idx?rest:c):[...list,{...rest,id:rest.id||uid()}]);
+  };
+  const deleteCategory=(direction,id,hasChildren)=>{
+    if(hasChildren&&!confirm('Delete this category and its sub-categories?'))return;
+    const list=direction==='in'?incomeCats:expCats;
+    const setter=direction==='in'?sIncomeCats:sExpCats;
+    setter(list.filter(c=>c.id!==id&&c.parentId!==id));
+  };
   const sCust=d=>{setCustomers(d);LS.set(ns+'cust',d)};
   const sBankTx=d=>{setBankTx(d);LS.set(ns+'banktx',d)};
 
@@ -97,7 +127,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     if(saved.linkedDoc)markDocPaid(saved.linkedDoc);
     sBankTx(fresh?[...bankTx,saved]:bankTx.map(t=>t.id===saved.id?saved:t));
     showToast('Saved ✓');
-    go('off_bank_detail');
+    go(prev);
   };
   const handleDeleteBankTx=(t)=>{
     if(!confirm('Delete this transaction?'))return;
@@ -115,8 +145,6 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
 
   const mkDoc=(type)=>({id:null,type,number:genN(type),date:td(),dueDate:type==='invoice'?td():addD(30),terms:type==='invoice'?'Due on Receipt':'Valid for 30 days',currency:'GBP',status:'draft',project:'',client:{name:'',address:'',email:'',ref:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:'Thanks for your business.'});
   const mkRec=()=>({id:null,type:'received',number:'',supplier:'',supplierAddress:'',email:'',ref:'',date:td(),dueDate:addD(30),terms:'Due on Receipt',currency:'GBP',status:'pending',project:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
-  const mkExp=()=>({id:null,date:td(),category:'',description:'',amount:'',currency:'GBP',supplier:'',reference:'',project:'',notes:''});
-
   const handleSave=doc=>{
     const fresh=!doc.id;const saved=fresh?{...doc,id:uid()}:doc;
     if(doc.type==='invoice')si(fresh?[...inv,saved]:inv.map(d=>d.id===saved.id?saved:d));
@@ -128,22 +156,16 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     go(doc.type==='invoice'?'invoices':doc.type==='po'?'pos':doc.type==='received'?'received':'quotes');
   };
   const handleDel=doc=>{
-    if(!confirm(`Delete ${doc.number||doc.supplier}?`))return;
+    if(!confirm(`Delete ${doc.number||doc.supplier}?`))return false;
     if(doc.type==='invoice')si(inv.filter(d=>d.id!==doc.id));
     else if(doc.type==='quote')sq(quo.filter(d=>d.id!==doc.id));
     else if(doc.type==='po')sp(pos.filter(d=>d.id!==doc.id));
     else sr(rec.filter(d=>d.id!==doc.id));
     if(doc.type==='invoice'||doc.type==='received')sBankTx(bankTx.map(t=>t.linkedDoc&&t.linkedDoc.type===doc.type&&t.linkedDoc.id===doc.id?{...t,linkedDoc:null}:t));
     showToast('Deleted');
+    return true;
   };
   const handleSavePrj=p=>{const fresh=!p.id;const saved=fresh?{...p,id:uid()}:p;spr(fresh?[...projects,saved]:projects.map(d=>d.id===saved.id?saved:d));showToast('Saved ✓');go('projects');};
-  const handleSaveExp=e=>{const fresh=!e.id;const saved=fresh?{...e,id:uid()}:e;sExp(fresh?[...expenses,saved]:expenses.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('expenses');};
-  const handleDeleteExp=e=>{
-    if(!confirm('Delete?'))return;
-    sExp(expenses.filter(x=>x.id!==e.id));
-    sBankTx(bankTx.map(t=>t.linkedDoc&&t.linkedDoc.type==='expense'&&t.linkedDoc.id===e.id?{...t,linkedDoc:null}:t));
-    showToast('Deleted');
-  };
   const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('off_customers');};
 
   // Simple generic form
@@ -156,10 +178,14 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     const sts=isInv?['draft','sent','paid','overdue','cancelled']:isPO?['draft','sent','approved','received','cancelled']:isRec?['pending','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
     const typeLabel=isInv?'Invoice':isPO?'Purchase Order':isRec?'Received Invoice':'Quotation';
     const savedDoc={...doc,items};
+    const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
+    const _isDirty=()=>JSON.stringify(savedDoc)!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=_isDirty;
     return(
       <div className="content"><div className="fw">
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-          <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>Back</button>
+          <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>Back</button>
           <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?`Edit ${typeLabel}`:`New ${typeLabel}`}</h2>
           <div style={{flex:1}}/>
           {onPreview&&<Btn v="bgh bsm" onClick={()=>onPreview(savedDoc)}><Ico n="eye"/>Preview</Btn>}
@@ -211,6 +237,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
 
   function OffListView({type,items}){
     const[fs,setFs]=useState({s:'',q:'',dateFrom:'',dateTo:''});
+    const[quickView,setQuickView]=useState(null);
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const isRec=type==='received';
     const lbl=type==='invoice'?'Invoice':type==='po'?'Purchase Order':isRec?'Received Invoice':'Quotation';
@@ -240,6 +267,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         ):(
           <div className="tcard">
             <table className="dt">
+              <Cg w={type==='po'?[1,0.8,2,1,0.9,0.9]:[1,0.8,2,0.9,0.9]}/>
               <thead><tr>
                 <th>No</th>
                 <th>Date</th>
@@ -247,28 +275,22 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
                 {type==='po'&&<th>Project</th>}
                 <th className="tar">Amount</th>
                 <th className="tac">Status</th>
-                <th></th>
               </tr></thead>
               <tbody>{[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(d=>(
-                <tr key={d.id}>
+                <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
                   <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number||'—'}</span></td>
                   <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
                   <td>{isRec?d.supplier:(d&&d.client&&d.client.name)||'—'}</td>
                   {type==='po'&&<td style={{color:'var(--g500)',fontSize:11}}>{d.project||'—'}{d.sourceRef&&<div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>from {d.sourceRef}</div>}</td>}
                   <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items||[]))}</td>
                   <td className="tac"><Badge s={d.status}/></td>
-                  <td><div className="aw">
-                    <button className="ab" onClick={()=>{setCur(d);go('off_preview');}}><Ico n="eye"/></button>
-                    <button className="ab" onClick={()=>savePDF(d,co,type)}><Ico n="dl"/></button>
-                    <button className="ab" onClick={()=>{setCur(d);go('off_form');}}><Ico n="edit"/></button>
-                    <button className="ab danger" onClick={()=>handleDel(d)}><Ico n="trash"/></button>
-                  </div></td>
                 </tr>
               ))}</tbody>
             </table>
             <Pagination total={filtered.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/>
           </div>
         )}
+        {quickView&&<DocQuickModal doc={quickView} co={co} docType={type} onClose={()=>setQuickView(null)} onEdit={()=>{setQuickView(null);setCur(quickView);go('off_form');}} onDelete={()=>{if(handleDel(quickView))setQuickView(null);}}/>}
       </div>
     );
   }
@@ -283,7 +305,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     {sec:'Management'},
     {k:'off_customers',ico:'customers',lbl:'Customers',cnt:customers.length},
     {k:'off_projects',ico:'project',lbl:'Projects',cnt:projects.length},
-    {k:'off_expenses',ico:'expense',lbl:'Expenses',cnt:expenses.length},
+    {k:'off_expenses',ico:'expense',lbl:'Expenses',cnt:expCats.length},
+    {k:'off_incomes',ico:'income',lbl:'Incomes',cnt:incomeCats.length},
     {k:'off_bank',ico:'bank',lbl:'Bank',cnt:(co.banks||[]).length},
     {k:'settings',ico:'settings',lbl:'Settings'},
   ];
@@ -291,28 +314,32 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const selectedBank=(co.banks||[]).find(b=>b.id===selectedBankId)||null;
   const bankTxForAccount=selectedBank?bankTx.filter(t=>t.accountId===selectedBank.id):[];
 
-  const titles={off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Customers',off_projects:'Projects',off_expenses:'Expenses',off_bank:'Bank Accounts',settings:'Settings',home:'Dashboard'};
+  const titles={off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Customers',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings',home:'Dashboard'};
 
+  dirtyCheckRef.current=null;
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <div className="sidebar no-print">
-        <div className="sb-brand" onClick={()=>go('home')}>
-          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">Finance Manager</div></div>
+        <div className="sb-brand" onClick={()=>goGuarded('home')}>
+          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">Official Records</div></div>
         </div>
-        <PortalDropdown session={session} onPortalSwitch={onPortalSwitch} onLogout={onLogout} onOpenProfile={onOpenProfile}/>
+        <PortalDropdown session={session} onPortalSwitch={guardedPortalSwitch} onLogout={guardedLogout} onOpenProfile={onOpenProfile}/>
         {SB.map((it,i)=>{
           if(it.sec)return <div key={i} className="sb-group">{it.sec}</div>;
           if(it.div)return <div key={i} style={{height:1,background:'rgba(255,255,255,.06)',margin:'5px 12px'}}/>;
-          return <div key={it.k} className={`sb-item${view===it.k?' active':''}`} onClick={()=>go(it.k)}><Ico n={it.ico} size={14}/><span className="lbl">{it.lbl}</span>{it.cnt>0&&<span className="sb-cnt">{it.cnt}</span>}</div>;
+          return <div key={it.k} className={`sb-item${view===it.k?' active':''}`} onClick={()=>goGuarded(it.k)}><Ico n={it.ico} size={14}/><span className="lbl">{it.lbl}</span>{it.cnt>0&&<span className="sb-cnt">{it.cnt}</span>}</div>;
         })}
-        <div className="sb-footer">
-          <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>Profile</span></button>
-          <button className="sb-footer-btn" onClick={onLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
+        <div className="sb-pinned">
+          <SystemManagementLink session={session} onPortalSwitch={guardedPortalSwitch}/>
+          <div className="sb-footer">
+            <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>{`${session.firstName||''} ${session.lastName||''}`.trim()||session.username}</span></button>
+            <button className="sb-footer-btn" onClick={guardedLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
+          </div>
         </div>
       </div>
       <div className="main">
-        {!['off_preview','off_form','off_custform','off_projform','off_expform','off_expcats','off_bank_detail','off_banktx_form'].includes(view)&&(()=>{
-          const offTitles={home:'Dashboard',off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Customers',off_projects:'Projects',off_expenses:'Expenses',off_bank:'Bank Accounts',settings:'Settings'};
+        {!['off_preview','off_form','off_custform','off_projform','off_bank_detail','off_banktx_form','off_cat_detail'].includes(view)&&(()=>{
+          const offTitles={home:'Dashboard',off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Customers',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings'};
           return(<div className="topbar no-print">
             <h1 className="topbar-title">{offTitles[view]||''}</h1>
             <div style={{flex:1}}/>
@@ -322,13 +349,14 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
             {view==='off_received'&&<Btn v="bp bsm" onClick={()=>{setCur(mkRec());go('off_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
             {view==='off_customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('off_custform');}}><Ico n="plus"/>New Customer</Btn>}
             {view==='off_projects'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}}><Ico n="plus"/>New Project</Btn>}
-            {view==='off_expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('off_expcats')}><Ico n="tag"/>Categories</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExp());go('off_expform');}}><Ico n="plus"/>New Expense</Btn></div>}
+            {view==='off_expenses'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'out'})}><Ico n="plus"/>New Expense</Btn>}
+            {view==='off_incomes'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'in'})}><Ico n="plus"/>New Income</Btn>}
             {view==='off_bank'&&<Btn v="bp bsm" onClick={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})}><Ico n="plus"/>New Account</Btn>}
           </div>);
         })()}
         {view==='home'&&<div className="content"><div style={{marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:'var(--g900)',marginBottom:2}}>Dashboard</div><div style={{fontSize:12,color:'var(--g500)'}}>Official Account</div></div>
           <div className="nav-cards">
-            {[{k:'off_invoices',ico:'invoice',lbl:'Invoices',val:inv.length},{k:'off_quotes',ico:'quote',lbl:'Quotations',val:quo.length},{k:'off_pos',ico:'po',lbl:'POs',val:pos.length},{k:'off_received',ico:'received',lbl:'Received',val:rec.length},{k:'off_customers',ico:'customers',lbl:'Customers',val:customers.length},{k:'off_projects',ico:'project',lbl:'Projects',val:projects.length},{k:'off_expenses',ico:'expense',lbl:'Expenses',val:expenses.length},{k:'off_bank',ico:'bank',lbl:'Bank',val:(co.banks||[]).length}].map(c=><div key={c.k} className="nav-card" onClick={()=>go(c.k)}><div className="nc-ico"><Ico n={c.ico} size={16}/></div><div className="nc-val">{c.val}</div><div className="nc-lbl">{c.lbl}</div></div>)}
+            {[{k:'off_invoices',ico:'invoice',lbl:'Invoices',val:inv.length},{k:'off_quotes',ico:'quote',lbl:'Quotations',val:quo.length},{k:'off_pos',ico:'po',lbl:'POs',val:pos.length},{k:'off_received',ico:'received',lbl:'Received',val:rec.length},{k:'off_customers',ico:'customers',lbl:'Customers',val:customers.length},{k:'off_projects',ico:'project',lbl:'Projects',val:projects.length},{k:'off_expenses',ico:'expense',lbl:'Expenses',val:expCats.length},{k:'off_incomes',ico:'income',lbl:'Incomes',val:incomeCats.length},{k:'off_bank',ico:'bank',lbl:'Bank',val:(co.banks||[]).length}].map(c=><div key={c.k} className="nav-card" onClick={()=>go(c.k)}><div className="nc-ico"><Ico n={c.ico} size={16}/></div><div className="nc-val">{c.val}</div><div className="nc-lbl">{c.lbl}</div></div>)}
           </div>
         </div>}
         {view==='off_invoices'&&<OffListView type="invoice" items={inv}/>}
@@ -337,20 +365,21 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_received'&&<OffListView type="received" items={rec}/>}
         {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} quo={quo} onNew={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('off_custform');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}/>}
         {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(`Delete "${p.name}"?`))return;spr(projects.filter(d=>d.id!==p.id));showToast('Deleted');}}/>}
-        {view==='off_expenses'&&<OffExpenses expenses={expenses} projects={projects} cats={expCats} onNew={()=>{setCur(mkExp());go('off_expform');}} onEdit={e=>{setCur(e);go('off_expform');}} onDelete={handleDeleteExp} onManageCats={()=>go('off_expcats')}/>}
+        {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
+        {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
+        {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{setCur(t);go('off_banktx_form');}} onDelete={handleDeleteBankTx}/>}
         {view==='off_form'&&cur&&<SimpleDocForm doc={cur} onSave={d=>{handleSave({...d,type:cur.type});}} onCancel={()=>go(prev)} onPreview={d=>{setCur(d);go('off_preview','off_form');}}/>}
         {view==='off_preview'&&cur&&<Preview doc={cur} co={co} docType={cur.type} onBack={()=>go(prev)} onEdit={()=>go('off_form','off_preview')}/>}
-        {view==='off_custform'&&cur&&<OffCustForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('off_customers')}/>}
-        {view==='off_projform'&&cur&&<OffProjForm proj={cur} onSave={handleSavePrj} onCancel={()=>go('off_projects')}/>}
-        {view==='off_expform'&&cur&&<OffExpForm exp={cur} projects={projects} cats={expCats} onSave={handleSaveExp} onCancel={()=>go('off_expenses')}/>}
-        {view==='off_expcats'&&<OffExpCats cats={expCats} onSave={d=>{sExpCats(d);showToast('Saved ✓');go('off_expenses');}} onClose={()=>go('off_expenses')}/>}
+        {view==='off_custform'&&cur&&<OffCustForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('off_customers')} dirtyRef={dirtyCheckRef}/>}
+        {view==='off_projform'&&cur&&<OffProjForm proj={cur} onSave={handleSavePrj} onCancel={()=>go('off_projects')} dirtyRef={dirtyCheckRef}/>}
         {view==='off_bank'&&<OffBankAccounts banks={co.banks||[]} accountBalance={accountBalance} onOpen={b=>{setSelectedBankId(b.id);go('off_bank_detail');}} onEdit={b=>setEditingBank(b)} onDelete={deleteBank} onSetDefault={setDefaultBank}/>}
         {view==='off_bank_detail'&&selectedBank&&<OffBankLedger account={selectedBank} transactions={bankTxForAccount} onBack={()=>go('off_bank')} onNew={()=>{setCur({id:null,accountId:selectedBank.id,date:td(),type:'in',amount:'',category:'',description:'',reference:'',linkedDoc:null});go('off_banktx_form');}} onEdit={t=>{setCur(t);go('off_banktx_form');}} onDelete={handleDeleteBankTx}/>}
-        {view==='off_banktx_form'&&cur&&selectedBank&&<OffBankTxForm tx={cur} account={selectedBank} cats={expCats} invoices={inv} receivedInvoices={rec} expenses={expenses} onSave={handleSaveBankTx} onCancel={()=>go('off_bank_detail')}/>}
+        {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='settings'&&<OffSettings ns={ns} co={co} go={go} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast('Saved ✓');go('home');}} onClose={()=>go('home')}/>}
       </div>
       {toast&&<div className="toast">{toast}</div>}
       {editingBank&&<BankAccountModal bank={editingBank} onSave={b=>{saveBank(b);setEditingBank(null);}} onCancel={()=>setEditingBank(null)}/>}
+      {editingCategory&&<CategoryModal cat={editingCategory} cats={editingCategory.direction==='in'?incomeCats:expCats} onSave={c=>{saveCategory(c);setEditingCategory(null);}} onCancel={()=>setEditingCategory(null)}/>}
     </div>
   );
 }
@@ -361,10 +390,13 @@ function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
   const {pg,ps,setPg,setPs}=usePagination(q);
   const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
   return(<div className="content">
-    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
+    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Company','Contact','Email','Phone','Invoices','Quotes'],...f.map(c=>[c.company||'',c.contact||'',c.email||'',c.phone||'',inv.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length,quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length])],'customers')}><Ico n="export"/>Export</Btn>
+    </div>
     {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No customers yet</div></div></div>:(
     <div className="tcard"><table className="dt">
-      <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th className="tac">Inv</th><th className="tac">Quotes</th><th></th></tr></thead>
+      <Cg w={[2,1.4,1.8,1,0.5,0.6,0.6]}/>
+      <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th className="tac">Inv</th><th className="tac">Quotes</th><th>Actions</th></tr></thead>
       <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
         <td style={{fontWeight:500}}>{c.company||'—'}</td>
         <td>{c.contact||'—'}</td>
@@ -378,11 +410,12 @@ function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
     )}
   </div>);
 }
-function OffCustForm({cust:init,onSave,onCancel}){
+function OffCustForm({cust:init,onSave,onCancel,dirtyRef}){
   const[c,setC]=useState(init);const s=(k,v)=>setC(d=>({...d,[k]:v}));
   const _initStr=useRef(JSON.stringify(init));
   const _isDirty=()=>JSON.stringify(c)!==_initStr.current;
-  const _handleCancel=()=>{if(_isDirty()){if(!confirm('You have unsaved changes. Leave without saving?'))return;}onCancel();};
+  const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+  if(dirtyRef)dirtyRef.current=_isDirty;
   return(<div className="content"><div className="fw" style={{maxWidth:640}}>
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
     <div className="fc"><div className="fct">Customer Info</div>
@@ -397,17 +430,25 @@ function OffCustForm({cust:init,onSave,onCancel}){
 function OffProjects({projects,onNew,onEdit,onDelete}){
   const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
   return(<div className="content">
+    <div className="fbar"><div style={{flex:1}}/>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Name','Client','Start Date','Status'],...projects.map(p=>[p.name||'',p.client||'',p.startDate||'',p.status||''])],'projects')}><Ico n="export"/>Export</Btn>
+    </div>
     <div className="tcard"><table className="dt">
-      <thead><tr><th>Name</th><th>Client</th><th>Start</th><th>Status</th><th></th></tr></thead>
+      <Cg w={[1.8,1.8,0.8,0.9,0.6]}/>
+      <thead><tr><th>Name</th><th>Client</th><th>Start</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">No projects yet</div></div></td></tr>:projects.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id}><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
       </tbody>
     </table><Pagination total={projects.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
 }
-function OffProjForm({proj:init,onSave,onCancel}){
+function OffProjForm({proj:init,onSave,onCancel,dirtyRef}){
   const[p,setP]=useState(init);const s=(k,v)=>setP(d=>({...d,[k]:v}));
+  const _initStr=useRef(JSON.stringify(init));
+  const _isDirty=()=>JSON.stringify(p)!==_initStr.current;
+  const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+  if(dirtyRef)dirtyRef.current=_isDirty;
   return(<div className="content"><div className="fw" style={{maxWidth:580}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
     <div className="fc"><div className="fct">Project Details</div>
       <div className="fg g2"><Fld label="Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder="Project name"/></Fld><Fld label="Client"><input value={p.client||''} onChange={e=>s('client',e.target.value)} className="fi" placeholder="Client"/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label="Start Date"><input type="date" value={p.startDate||td()} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld><Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld></div>
@@ -416,57 +457,135 @@ function OffProjForm({proj:init,onSave,onCancel}){
     <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
   </div></div>);
 }
-function OffExpenses({expenses,projects,cats,onNew,onEdit,onDelete,onManageCats}){
+function CategoryList({cats,direction,bankTx,banks,onOpen,onEdit,onDelete}){
   const[q,setQ]=useState('');
-  const[dateFrom,setDateFrom]=useState('');
-  const[dateTo,setDateTo]=useState('');
-  const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo}));
-  const f=expenses.filter(e=>{
-    if(q&&![e.description,e.supplier,e.category].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
-    if(dateFrom&&e.date<dateFrom)return false;
-    if(dateTo&&e.date>dateTo)return false;
-    return true;
-  });
-  const total=f.reduce((s,e)=>s+(+(e.amount||0)),0);
+  const matches=name=>!q||name.toLowerCase().includes(q.toLowerCase());
+  const catTotal=(names)=>{
+    const acc={};
+    bankTx.filter(t=>t.type===direction&&names.includes(t.category)).forEach(t=>{
+      const bank=banks.find(b=>b.id===t.accountId);
+      const c=(bank&&bank.currency)||'GBP';
+      acc[c]=(acc[c]||0)+(+t.amount||0);
+    });
+    return acc;
+  };
+  const fmtTotal=(acc)=>Object.keys(acc).length===0?'—':Object.entries(acc).map(([c,amt])=>`${CURR[c]||c}${fmt(amt)}`).join(' · ');
+  const groups=groupCats(cats).map(({main,children})=>({main,children:children.filter(ch=>matches(main.name)||matches(ch.name))})).filter(({main,children})=>matches(main.name)||children.length>0);
+  const label=direction==='out'?'Expense':'Income';
   return(<div className="content">
-    <div className="fbar">
-      <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div>
-      <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-      <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-      <div style={{flex:1}}/>
-      {f.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>Total: £{fmt(total)}</span>}
+    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Code','Name','Total'],...groups.flatMap(({main,children})=>[[main.code||'',main.name,fmtTotal(catTotal([main.name,...children.map(c=>c.name)]))],...children.map(ch=>[ch.code||'',ch.name,fmtTotal(catTotal([ch.name]))])])],direction==='out'?'expense-categories':'income-categories')}><Ico n="export"/>Export</Btn>
     </div>
+    {groups.length===0?(
+      <div className="tcard"><div className="empty"><Ico n={direction==='out'?'expense':'income'} size={36}/><div className="empty-t">No {label.toLowerCase()} categories yet</div></div></div>
+    ):(
     <div className="tcard"><table className="dt">
-      <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Supplier</th><th className="tar">Amount</th><th></th></tr></thead>
-      <tbody>{f.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">No expenses yet</div></div></td></tr>:f.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id}><td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td><td>{e.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{e.category}</span>:'—'}</td><td>{e.description||'—'}</td><td style={{color:'var(--g600)'}}>{e.supplier||'—'}</td><td className="tar">{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td><td><div className="aw"><button className="ab" onClick={()=>onEdit(e)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(e)}><Ico n="trash"/></button></div></td></tr>)}
-      </tbody>
-    </table><Pagination total={f.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
+      <Cg w={[0.8,2.2,0.9,0.6]}/>
+      <thead><tr><th>Code</th><th>Name</th><th className="tar">Total</th><th>Actions</th></tr></thead>
+      <tbody>{groups.map(({main,children})=>(<React.Fragment key={main.id}>
+        <tr>
+          <td style={{fontWeight:700,color:'var(--g500)',fontFamily:'monospace',fontSize:12}}>{main.code||'—'}</td>
+          <td style={{fontWeight:700,cursor:'pointer'}} onClick={()=>onOpen(main)}>{main.name}</td>
+          <td className="tar" style={{fontWeight:700}}>{fmtTotal(catTotal([main.name,...children.map(c=>c.name)]))}</td>
+          <td><div className="aw"><button className="ab" onClick={()=>onOpen(main)}><Ico n="eye"/></button><button className="ab" onClick={()=>onEdit(main)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(main.id,children.length>0)}><Ico n="trash"/></button></div></td>
+        </tr>
+        {children.map(ch=>(
+          <tr key={ch.id}>
+            <td style={{color:'var(--g500)',fontFamily:'monospace',fontSize:12,paddingLeft:32}}>{ch.code||'—'}</td>
+            <td style={{color:'var(--g700)',cursor:'pointer'}} onClick={()=>onOpen(ch)}>{ch.name}</td>
+            <td className="tar">{fmtTotal(catTotal([ch.name]))}</td>
+            <td><div className="aw"><button className="ab" onClick={()=>onOpen(ch)}><Ico n="eye"/></button><button className="ab" onClick={()=>onEdit(ch)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(ch.id,false)}><Ico n="trash"/></button></div></td>
+          </tr>
+        ))}
+      </React.Fragment>))}</tbody>
+    </table></div>
+    )}
   </div>);
 }
-function OffExpForm({exp:init,projects,cats,onSave,onCancel}){
-  const[e,setE]=useState(init);const s=(k,v)=>setE(d=>({...d,[k]:v}));
-  return(<div className="content"><div className="fw" style={{maxWidth:680}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
-    <div className="fc"><div className="fct">Expense Details</div>
-      <div className="fg g3"><Fld label="Date"><input type="date" value={e.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label="Amount"><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label="Currency"><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
-      <div className="fg g3" style={{marginTop:12}}><Fld label="Category"><select value={e.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">— Select —</option>{cats.map(c=><option key={c.id||c} value={c.name||c}>{c.name||c}</option>)}</select></Fld><Fld label="Description"><input value={e.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="What was this for?"/></Fld><Fld label="Supplier"><input value={e.supplier||''} onChange={x=>s('supplier',x.target.value)} className="fi" placeholder="Paid to..."/></Fld></div>
-      <div className="fg g2" style={{marginTop:12}}><Fld label="Reference"><input value={e.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Receipt/Ref No"/></Fld><Fld label="Project"><select value={e.project||''} onChange={x=>s('project',x.target.value)} className="fi"><option value="">— None —</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}</select></Fld></div>
-    </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
-  </div></div>);
-}
-function OffExpCats({cats,onSave,onClose}){
-  const[c,setC]=useState(cats.map(x=>typeof x==='string'?{id:uid(),name:x}:{...x}));
-  const[nm,setNm]=useState('');
-  const add=()=>{if(!nm.trim())return;setC(x=>[...x,{id:uid(),name:nm.trim()}]);setNm('');};
-  return(<div className="content"><div className="fw" style={{maxWidth:540}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>Expense Categories</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
-    <div className="fc"><div className="fct">Add Category</div>
-      <div style={{display:'flex',gap:8}}><input value={nm} onChange={e=>setNm(e.target.value)} className="fi" style={{flex:1}} placeholder="Category name..." onKeyDown={e=>e.key==='Enter'&&add()}/><Btn v="bp bsm" onClick={add}><Ico n="plus"/>Add</Btn></div>
-      <div style={{marginTop:14,display:'flex',flexWrap:'wrap',gap:7}}>{c.map(x=><span key={x.id} style={{background:'var(--purplel)',color:'var(--purple)',padding:'3px 10px',borderRadius:12,fontSize:12,fontWeight:600,display:'flex',alignItems:'center',gap:6}}>{x.name}<button onClick={()=>setC(c=>c.filter(y=>y.id!==x.id))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--purple)',fontSize:14,lineHeight:1}}>×</button></span>)}
+function CategoryModal({cat,cats,onSave,onCancel}){
+  const isNew=!cat.id;
+  const isEditingMain=!isNew&&!cat.parentId;
+  // For a new entry, mode starts empty until a Main Category choice is made; editing an existing
+  // Main Category skips that choice entirely (a main can't be re-parented from this screen).
+  const[mode,setMode]=useState(isEditingMain?'main':(cat.parentId?'sub':''));
+  const[parentId,setParentId]=useState(cat.parentId||'');
+  const[code,setCode]=useState(cat.code||'');
+  const[name,setName]=useState(cat.name||'');
+  const mains=cats.filter(x=>!x.parentId&&x.id!==cat.id);
+  const label=cat.direction==='in'?'Income':'Expense';
+  const handleMainSelect=(v)=>{
+    if(v==='__new__'){setMode('main');setParentId('');}
+    else{setMode('sub');setParentId(v);}
+  };
+  const canSave=name.trim()&&(mode==='main'||(mode==='sub'&&parentId));
+  return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={onCancel}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:440,maxWidth:'90vw'}}>
+      <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{isNew?`New ${label}`:(isEditingMain?'Edit Main Category':'Edit Sub-Category')}</div>
+      {!isEditingMain&&(
+        <div style={{marginBottom:16}}><Fld label="Main Category">
+          <select value={mode==='main'?'__new__':parentId} onChange={e=>handleMainSelect(e.target.value)} className="fi">
+            <option value="" disabled>— Choose a Main Category —</option>
+            <option value="__new__">+ Add New Main Category</option>
+            {mains.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        </Fld></div>
+      )}
+      {mode&&(<>
+        {!isEditingMain&&<div style={{fontSize:11,fontWeight:700,color:'var(--g500)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>{mode==='main'?'New Main Category':'Sub-Category'}</div>}
+        <div className="fg g2" style={{marginBottom:16}}>
+          <Fld label="Code"><input value={code} onChange={e=>setCode(e.target.value)} className="fi" placeholder="e.g. AR.01"/></Fld>
+          <Fld label="Name"><input value={name} onChange={e=>setName(e.target.value)} className="fi" autoFocus/></Fld>
+        </div>
+      </>)}
+      <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+        <Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn>
+        <Btn v="bp bsm" disabled={!canSave} onClick={()=>{if(!canSave)return;onSave({id:cat.id,direction:cat.direction,name:name.trim(),code:code.trim(),parentId:mode==='sub'?parentId:null});}}>Save</Btn>
       </div>
     </div>
-  </div></div>);
+  </div>);
+}
+function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelete}){
+  const[q,setQ]=useState('');
+  const{direction,mainName,names}=categoryBrowse;
+  const rows=bankTx.filter(t=>t.type===direction&&names.includes(t.category)).map(t=>({...t,account:banks.find(b=>b.id===t.accountId)}));
+  const filtered=rows.filter(t=>{
+    if(!q)return true;
+    return[t.description,t.reference,(t.account&&t.account.accountName)].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()));
+  }).sort((a,b)=>a.date===b.date?0:(a.date<b.date?1:-1));
+  const totalsByCurrency=filtered.reduce((acc,t)=>{const c=(t.account&&t.account.currency)||'GBP';acc[c]=(acc[c]||0)+(+t.amount||0);return acc;},{});
+  const linkLabel=t=>{
+    if(!t.linkedDoc)return null;
+    const l={invoice:'Invoice',received:'Received'}[t.linkedDoc.type]||t.linkedDoc.type;
+    return `${l} ${t.linkedDoc.number||''}`.trim();
+  };
+  return(<div className="content">
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
+      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
+      <div style={{width:1,height:24,background:'var(--g200)'}}/>
+      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{mainName}</h2>
+      {filtered.length>0&&<span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{Object.entries(totalsByCurrency).map(([c,amt])=>`${CURR[c]||c}${fmt(amt)}`).join(' · ')}</span>}
+    </div>
+    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search description, reference, account..."/></div><div style={{flex:1}}/>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Account','Description','Linked','Amount'],...filtered.map(t=>[t.date||'',(t.account&&t.account.accountName)||'',t.description||'',linkLabel(t)||'',+t.amount])],`${mainName.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-transactions`)}><Ico n="export"/>Export</Btn>
+    </div>
+    <div className="tcard"><table className="dt">
+      <Cg w={[0.8,1.6,2.2,1,0.9,0.6]}/>
+      <thead><tr><th>Date</th><th>Account</th><th>Description</th><th>Linked</th><th className="tar">Amount</th><th>Actions</th></tr></thead>
+      <tbody>{filtered.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:filtered.map(t=>{
+        const curSym=CURR[(t.account&&t.account.currency)]||'£';
+        return(
+        <tr key={t.id}>
+          <td style={{color:'var(--g500)',fontSize:12}}>{t.date}</td>
+          <td>{(t.account&&t.account.accountName)||'—'}</td>
+          <td>{t.description||'—'}</td>
+          <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
+          <td className="tar" style={{fontWeight:600}}>{curSym}{fmt(+t.amount)}</td>
+          <td><div className="aw"><button className="ab" onClick={()=>{const{account,...raw}=t;onEdit(raw);}}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(t)}><Ico n="trash"/></button></div></td>
+        </tr>
+        );
+      })}</tbody>
+    </table></div>
+  </div>);
 }
 function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,onAddBank,onEditBank,onDeleteBank,onSetDefaultBank}){
   const[c,setC]=useState(()=>({...DEF_CO,...init}));
@@ -492,8 +611,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,on
     {id:'company',icon:'settings',label:'Company Information'},
     {id:'pdf',icon:'dl',label:'PDF Templates'},
     {id:'numbering',icon:'hash',label:'Document Numbering'},
-    {id:'bank',icon:'card',label:'Bank Details'},
-    {id:'users',icon:'customers',label:'Users'}
+    {id:'bank',icon:'card',label:'Bank Details'}
   ];
   
   return(<div className="content" style={{padding:0,display:'flex',height:'calc(100vh - 54px)'}}>
@@ -518,7 +636,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,on
     
     {/* Right Content */}
     <div style={{flex:1,overflowY:'auto',paddingTop:70}}>
-      <div style={{padding:32,maxWidth:activeMenu==='users'?'100%':'700'}}>
+      <div style={{padding:32,maxWidth:700}}>
         
         {/* Company Information */}
         {activeMenu==='company'&&(<>
@@ -677,18 +795,6 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,on
             </div>
           ))}
         </>)}
-        
-        {/* Users → System Management */}
-        {activeMenu==='users'&&(
-          <div style={{padding:40,background:'var(--g50)',borderRadius:12,textAlign:'center'}}>
-            <div style={{fontSize:36,marginBottom:12}}>⚙️</div>
-            <div style={{fontSize:16,fontWeight:700,color:'var(--g800)',marginBottom:8}}>User Management</div>
-            <div style={{fontSize:13,color:'var(--g500)',marginBottom:20,lineHeight:1.6}}>Adding, editing and portal access permissions for users<br/>are now managed centrally from the System Management section.</div>
-            <p style={{fontSize:12,color:'var(--g400)'}}>You can switch to "System Management" from the portal menu in the sidebar.</p>
-          </div>
-        )}
-
-        {/* Signature */}
 
       </div>
     </div>
@@ -710,9 +816,12 @@ function BankAccountModal({bank,onSave,onCancel}){
         <Fld label="BIC"><input value={b.bic||''} onChange={e=>s('bic',e.target.value)} className="fi"/></Fld>
       </div>
       <div style={{marginBottom:12}}><Fld label="IBAN"><input value={b.iban||''} onChange={e=>s('iban',e.target.value)} className="fi"/></Fld></div>
-      <div className="fg g2" style={{marginBottom:16}}>
+      <div className="fg g2" style={{marginBottom:12}}>
         <Fld label="Currency"><select value={b.currency||'GBP'} onChange={e=>s('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld>
         <Fld label="Opening Balance"><input type="number" value={b.openingBalance||''} onChange={e=>s('openingBalance',e.target.value)} className="fi" placeholder="0.00" step=".01"/></Fld>
+      </div>
+      <div style={{marginBottom:16}}>
+        <Fld label="Opening Balance Date"><input type="date" value={b.openingBalanceDate||''} onChange={e=>s('openingBalanceDate',e.target.value)} className="fi"/></Fld>
       </div>
       <div style={{marginBottom:16}}>
         <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,cursor:'pointer'}}>
@@ -730,6 +839,9 @@ function BankAccountModal({bank,onSave,onCancel}){
 
 function OffBankAccounts({banks,accountBalance,onOpen,onEdit,onDelete,onSetDefault}){
   return(<div className="content">
+    <div className="fbar"><div style={{flex:1}}/>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Account Name','Account Number','IBAN','BIC','Currency','Balance','Default'],...banks.map(b=>[b.accountName||'',b.accountNumber||'',b.iban||'',b.bic||'',b.currency||'',accountBalance(b),b.isDefault?'Yes':'No'])],'bank-accounts')}><Ico n="export"/>Export</Btn>
+    </div>
     {banks.length===0?(
       <div className="tcard"><div className="empty"><Ico n="bank" size={40}/><div className="empty-t">No bank accounts yet</div><div className="empty-s">Add a bank account to start tracking transactions</div></div></div>
     ):(
@@ -763,8 +875,14 @@ function OffBankLedger({account,transactions,onBack,onNew,onEdit,onDelete}){
   const[dateTo,setDateTo]=useState('');
   const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo}));
 
-  const sorted=[...transactions].sort((a,b)=>a.date===b.date?0:(a.date<b.date?-1:1));
-  let running=+(account.openingBalance||0);
+  const openingEntry={id:'__opening__',date:account.openingBalanceDate||'',description:'Opening Balance',category:null,reference:'',linkedDoc:null,type:'in',amount:+(account.openingBalance||0),isOpening:true};
+  const sorted=[openingEntry,...transactions].sort((a,b)=>{
+    if(a.date!==b.date)return a.date<b.date?-1:1;
+    if(a.isOpening)return -1;
+    if(b.isOpening)return 1;
+    return 0;
+  });
+  let running=0;
   const withBalance=sorted.map(t=>{
     running+=t.type==='in'?+t.amount:-t.amount;
     return{...t,balance:running};
@@ -776,8 +894,8 @@ function OffBankLedger({account,transactions,onBack,onNew,onEdit,onDelete}){
     if(dateTo&&t.date>dateTo)return false;
     return true;
   });
-  const totalIn=filtered.reduce((s,t)=>s+(t.type==='in'?+t.amount:0),0);
-  const totalOut=filtered.reduce((s,t)=>s+(t.type==='out'?+t.amount:0),0);
+  const totalIn=filtered.filter(t=>!t.isOpening).reduce((s,t)=>s+(t.type==='in'?+t.amount:0),0);
+  const totalOut=filtered.filter(t=>!t.isOpening).reduce((s,t)=>s+(t.type==='out'?+t.amount:0),0);
   const curSym=CURR[account.currency]||'£';
 
   const linkLabel=t=>{
@@ -791,7 +909,7 @@ function OffBankLedger({account,transactions,onBack,onNew,onEdit,onDelete}){
       <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
       <div style={{width:1,height:24,background:'var(--g200)'}}/>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{account.accountName||'Bank Account'}</h2>
-      <span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{curSym}{fmt(running)}</span>
+      <span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>Current: {curSym}{fmt(running)}</span>
       <div style={{flex:1}}/>
       <Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>New Transaction</Btn>
     </div>
@@ -801,36 +919,42 @@ function OffBankLedger({account,transactions,onBack,onNew,onEdit,onDelete}){
       <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
       <div style={{flex:1}}/>
       {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>In: {curSym}{fmt(totalIn)} · Out: {curSym}{fmt(totalOut)}</span>}
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.description||'',t.category||'',linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>Export</Btn>
     </div>
     <div className="tcard"><table className="dt">
-      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Linked</th><th className="tar">In</th><th className="tar">Out</th><th className="tar">Balance</th><th></th></tr></thead>
+      <Cg w={[0.8,2.2,1,1,0.9,0.9,0.9,0.6]}/>
+      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Linked</th><th className="tar">In</th><th className="tar">Out</th><th className="tar">Balance</th><th>Actions</th></tr></thead>
       <tbody>{filtered.length===0?<tr><td colSpan={8}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(t=>(
         <tr key={t.id}>
-          <td style={{color:'var(--g500)',fontSize:12}}>{t.date}</td>
-          <td>{t.description||'—'}</td>
+          <td style={{color:'var(--g500)',fontSize:12}}>{t.date||'—'}</td>
+          <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{t.description||'—'}</td>
           <td>{t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
           <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
           <td className="tar" style={{color:'var(--green)'}}>{t.type==='in'?curSym+fmt(+t.amount):''}</td>
           <td className="tar" style={{color:'var(--red)'}}>{t.type==='out'?curSym+fmt(+t.amount):''}</td>
           <td className="tar" style={{fontWeight:600}}>{curSym}{fmt(t.balance)}</td>
-          <td><div className="aw"><button className="ab" onClick={()=>{const{balance,...raw}=t;onEdit(raw);}}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(t)}><Ico n="trash"/></button></div></td>
+          <td>{!t.isOpening&&<div className="aw"><button className="ab" onClick={()=>{const{balance,...raw}=t;onEdit(raw);}}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(t)}><Ico n="trash"/></button></div>}</td>
         </tr>
       ))}</tbody>
     </table><Pagination total={filtered.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
 }
 
-function OffBankTxForm({tx:init,account,cats,invoices,receivedInvoices,expenses,onSave,onCancel}){
+function OffBankTxForm({tx:init,account,cats,incomeCats,invoices,receivedInvoices,onSave,onCancel,dirtyRef}){
   const[t,setT]=useState(init);
   const s=(k,v)=>setT(d=>({...d,[k]:v}));
+  const _initStr=useRef(JSON.stringify(init));
+  const _isDirty=()=>JSON.stringify(t)!==_initStr.current;
+  const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+  if(dirtyRef)dirtyRef.current=_isDirty;
   const isNew=!init.id;
   const linkType=t.linkedDoc?t.linkedDoc.type:'';
   const curSym=CURR[account.currency]||'£';
+  const catList=t.type==='out'?cats:incomeCats;
 
   const docOptions=(type)=>{
     if(type==='invoice')return invoices.map(d=>({id:d.id,number:d.number,label:`${d.number} — ${(d.client&&d.client.name)||'—'} — ${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))} (${d.date})`,amount:dt(d.items||[]),txType:'in'}));
     if(type==='received')return receivedInvoices.map(d=>({id:d.id,number:d.number,label:`${d.number} — ${d.supplier||'—'} — ${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))} (${d.date})`,amount:dt(d.items||[]),txType:'out'}));
-    if(type==='expense')return expenses.map(d=>({id:d.id,number:d.reference||'',label:`${d.description||d.supplier||'Expense'} — ${CURR[d.currency]||'£'}${fmt(+(d.amount||0))} (${d.date})`,amount:+(d.amount||0),txType:'out'}));
     return [];
   };
 
@@ -846,13 +970,20 @@ function OffBankTxForm({tx:init,account,cats,invoices,receivedInvoices,expenses,
       return next;
     });
   };
+  const trySave=()=>{
+    if(account.openingBalanceDate&&t.date<account.openingBalanceDate){
+      alert(`This transaction is dated before the account's Opening Balance date (${account.openingBalanceDate}). Pick a later date.`);
+      return;
+    }
+    onSave(t);
+  };
 
   return(<div className="content"><div className="fw" style={{maxWidth:680}}>
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
+      <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{t.id?'Edit Transaction':'New Transaction'}</h2>
       <div style={{flex:1}}/>
-      <Btn v="bp bsm" onClick={()=>onSave(t)}>Save</Btn>
+      <Btn v="bp bsm" onClick={trySave}>Save</Btn>
     </div>
     <div className="fc"><div className="fct">Transaction Details ({account.accountName||'Account'} · {curSym})</div>
       <div className="fg g3">
@@ -861,7 +992,7 @@ function OffBankTxForm({tx:init,account,cats,invoices,receivedInvoices,expenses,
         <Fld label="Amount"><input type="number" value={t.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
       </div>
       <div className="fg g2" style={{marginTop:12}}>
-        <Fld label="Category"><select value={t.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">— Select —</option>{cats.map(c=><option key={c.id||c} value={c.name||c}>{c.name||c}</option>)}</select></Fld>
+        <Fld label="Category"><select value={t.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">— Select —</option>{groupCats(catList).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select></Fld>
         <Fld label="Reference"><input value={t.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Ref No"/></Fld>
       </div>
       <div className="fg g1" style={{marginTop:12}}>
@@ -875,7 +1006,6 @@ function OffBankTxForm({tx:init,account,cats,invoices,receivedInvoices,expenses,
             <option value="">— None —</option>
             <option value="invoice">Invoice</option>
             <option value="received">Received Invoice</option>
-            <option value="expense">Expense</option>
           </select>
         </Fld>
         {linkType&&<Fld label="Document">
@@ -886,6 +1016,6 @@ function OffBankTxForm({tx:init,account,cats,invoices,receivedInvoices,expenses,
         </Fld>}
       </div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(t)}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={trySave}>Save</Btn></div>
   </div></div>);
 }

@@ -136,6 +136,36 @@ const TEMPLATES={
 };
 const RCATS=['General','Materials','Equipment','Services','Utilities','Rent','Other'];
 const EXP_CATS_DEF=['Travel','Accommodation','Meals','Personnel','Office Supplies','Utilities','Professional Services','Other'];
+const INCOME_CATS_DEF=['Product Sales','Service Income','Consulting','Interest','Other Income'];
+const groupCats=cats=>{
+  const mains=cats.filter(c=>!c.parentId);
+  return mains.map(m=>({main:m,children:cats.filter(c=>c.parentId===m.id)}));
+};
+
+// Maps a spreadsheet header cell to a known line-item field, so bulk item import
+// works regardless of column order and tolerates a few common header spellings.
+const IMPORT_HEADER_MAP={
+  item:['item code','item','code','sku','item no','item number'],
+  desc:['description','desc','name','item name','item description'],
+  brand:['brand'],
+  model:['model'],
+  category:['category','cat'],
+  qty:['qty','quantity'],
+  unit:['unit','uom','units'],
+  price:['unit price','price','sale price','unitprice','sales price'],
+  date:['date'],
+  amount:['amount','total'],
+  currency:['currency','ccy'],
+  reference:['reference','receipt no','receipt number','ref'],
+  project:['project'],
+  employee:['employee','spent by','staff','employee name'],
+  notes:['notes','note','remarks']
+};
+const IMPORT_HEADER_ALIASES=h=>{
+  const norm=String(h||'').toLowerCase().trim();
+  for(const key in IMPORT_HEADER_MAP){if(IMPORT_HEADER_MAP[key].includes(norm))return key;}
+  return null;
+};
 
 // --- SVG ICONS ---
 const I={
@@ -150,6 +180,7 @@ const I={
   received:<svg viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>,
   project:<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>,
   expense:<svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+  income:<svg viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
   settings:<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
   user:<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
   bank:<svg viewBox="0 0 24 24"><line x1="3" y1="21" x2="21" y2="21"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="5 6 12 3 19 6"/><line x1="4" y1="10" x2="4" y2="21"/><line x1="20" y1="10" x2="20" y2="21"/><line x1="8" y1="14" x2="8" y2="17"/><line x1="12" y1="14" x2="12" y2="17"/><line x1="16" y1="14" x2="16" y2="17"/></svg>,
@@ -179,11 +210,58 @@ const I={
   tag:<svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
   hash:<svg viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>,
   card:<svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>,
+  shield:<svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6z"/></svg>,
 };
 const Ico=({n,size=13,style={}})=>{const s={width:size,height:size,stroke:'currentColor',fill:'none',strokeWidth:1.75,strokeLinecap:'round',strokeLinejoin:'round',flexShrink:0,...style};return React.cloneElement(I[n]||I.dash,{style:s,viewBox:'0 0 24 24'});};
+// Renders a <colgroup> for a table.dt from relative column weights (proportional to max expected content length),
+// so column widths stay fixed and predictable instead of the browser rebalancing them per row's content.
+const Cg=({w})=>{const sum=w.reduce((a,b)=>a+b,0);return <colgroup>{w.map((x,i)=><col key={i} style={{width:(x/sum*100)+'%'}}/>)}</colgroup>;};
 const Badge=({s})=>{const m=SM[s]||SM.draft;return <span className={`bdg ${m.c}`}>{m.l}</span>;};
 const Btn=({v='bp',onClick,children,style={},...p})=><button className={`btn ${v}`} onClick={onClick} style={style} {...p}>{children}</button>;
 const Fld=({label,children})=><div className="fld"><label>{label}</label>{children}</div>;
+
+// Global confirm dialog, mounted on its own React root outside the main app tree.
+// Portal/Operational/Official forms are nested inside their parent component's render body,
+// so a confirm dialog whose visibility lived in that parent's state would re-render the parent
+// on open/close — which recreates the nested form's identity and remounts it, silently
+// discarding whatever the user was mid-edit on. Keeping this dialog's state fully outside that
+// tree means opening/closing it never touches AppOperational/AppOfficial's render at all.
+// Call askUnsaved() (or the generic askGlobalConfirm(msg)) from anywhere; both return a Promise<boolean>.
+function GlobalConfirmDialog(){
+  const[state,setState]=useState(null);
+  useEffect(()=>{
+    window.__askGlobalConfirm=msg=>new Promise(resolve=>{
+      window.__globalConfirmResolve=resolve;
+      setState({msg});
+    });
+  },[]);
+  if(!state)return null;
+  const close=result=>{
+    setState(null);
+    const resolve=window.__globalConfirmResolve;
+    window.__globalConfirmResolve=null;
+    resolve&&resolve(result);
+  };
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>close(false)}>
+      <div style={{background:'#fff',borderRadius:12,padding:'28px 32px',minWidth:320,maxWidth:440,boxShadow:'0 8px 40px rgba(0,0,0,.18)',display:'flex',flexDirection:'column',gap:20}} onClick={e=>e.stopPropagation()}>
+        <p style={{margin:0,fontSize:14.5,lineHeight:1.6,color:'var(--g700)',fontWeight:500}}>{state.msg}</p>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+          <button style={{padding:'7px 20px',borderRadius:7,border:'1.5px solid var(--g200)',background:'#fff',color:'var(--g600)',fontSize:13,fontWeight:500,cursor:'pointer'}} onClick={()=>close(false)}>Cancel</button>
+          <button style={{padding:'7px 20px',borderRadius:7,border:'none',background:'var(--gm-600)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={()=>close(true)}>Leave without saving</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+(function mountGlobalConfirmDialog(){
+  const el=document.createElement('div');
+  el.id='global-confirm-root';
+  document.body.appendChild(el);
+  ReactDOM.createRoot(el).render(<GlobalConfirmDialog/>);
+})();
+const askGlobalConfirm=msg=>window.__askGlobalConfirm(msg);
+const askUnsaved=()=>askGlobalConfirm('You have unsaved changes. Leave without saving?');
 
 // Toast helper
 function useToast(){const[t,setT]=useState('');const show=m=>{setT(m);setTimeout(()=>setT(''),2500)};return[t,show];}

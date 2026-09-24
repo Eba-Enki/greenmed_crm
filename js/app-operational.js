@@ -24,6 +24,26 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const[confirmDlg,setConfirmDlg]=useState(null);
   const askConfirm=(msg,onYes)=>setConfirmDlg({msg,onYes});
   const[showDocForm,setShowDocForm]=useState(false);const[docToEdit,setDocToEdit]=useState(null);
+  // Set by whichever form is currently mounted (see each form's "dirtyCheckRef.current=..." line);
+  // reset to null right before render so a non-form view never carries a stale checker over.
+  // Uses the global (portal-mounted) confirm dialog, not the local askConfirm modal: askConfirm's
+  // state lives in this component, so opening/closing it would re-render AppOperational — and
+  // since these forms are nested function declarations, any re-render of AppOperational recreates
+  // their identity and remounts them, silently wiping the very changes the user chose to keep.
+  // The global dialog's state lives outside this tree entirely, so "stay" truly leaves the form untouched.
+  const dirtyCheckRef=useRef(null);
+  const goGuarded=(v,from)=>{
+    if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)go(v,from);});
+    else go(v,from);
+  };
+  const guardedPortalSwitch=p=>{
+    if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)onPortalSwitch(p);});
+    else onPortalSwitch(p);
+  };
+  const guardedLogout=()=>{
+    if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)onLogout();});
+    else onLogout();
+  };
 
   useEffect(()=>{
     const load=k=>LS.get(ns+k);
@@ -58,7 +78,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sPO=d=>save('po',setPurchaseOrders,d);
   const sRI=d=>save('ri',setReceivedInvoices,d);
   const sPP=(id,price)=>{const next={...purchasePrices,[id]:price};setPurchasePrices(next);LS.set(ns+'pp',next);};
-  const poolItems=salesQuotes.filter(q=>q.status==='sent').flatMap(q=>(q.items||[]).filter(it=>it.desc).map(it=>({id:q.id+'_'+(it.id||''),projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',qty:it.qty,unit:it.unit||'',price:it.price,purchasePrice:purchasePrices[q.id+'_'+(it.id||'')]||'',quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''})));
+  const poolItems=salesQuotes.filter(q=>q.status!=='draft').flatMap(q=>(q.items||[]).filter(it=>it.desc).map(it=>({id:q.id+'_'+(it.id||''),projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',qty:it.qty,unit:it.unit||'',price:it.price,purchasePrice:purchasePrices[q.id+'_'+(it.id||'')]||'',quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''})));
   const sExp=d=>save('exp',setExpenses,d);
   const sExpCats=d=>save('expcat',setExpCats,d);
   const sProj=d=>save('proj',setProjects,d);
@@ -287,8 +307,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   };
 
   // ── EXPENSE ──
-  const mkExpense=()=>({id:null,date:td(),category:'',description:'',amount:'',currency:'GBP',supplier:'',reference:'',project:'',notes:''});
-  const handleSaveExp=e=>{const fresh=!e.id;const saved=fresh?{...e,id:uid()}:e;sExp(fresh?[...expenses,saved]:expenses.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('expenses');};
+  const mkExpense=()=>({id:null,date:td(),category:'',description:'',amount:'',currency:'GBP',reference:'',project:'',employee:'',notes:''});
+  const saveExpense=e=>{const fresh=!e.id;const saved=fresh?{...e,id:uid()}:e;sExp(fresh?[...expenses,saved]:expenses.map(x=>x.id===saved.id?saved:x));};
+  const handleSaveExp=e=>{saveExpense(e);showToast('Saved ✓');go('expenses');};
+  const handleSaveExpAndNew=e=>{saveExpense(e);showToast('Saved ✓ — ready for the next one');};
 
   // ── CUSTOMER ──
   const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('customers');};
@@ -300,6 +322,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
     const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
     const[expandedGroups,setExpandedGroups]=useState(new Set());
+    const[quickView,setQuickView]=useState(null);
+    const[remTip,setRemTip]=useState(null);
     const hasFilter=fs.q||fs.s||fs.dateFrom||fs.dateTo;
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const toggleGroup=(base)=>{setExpandedGroups(prev=>{const next=new Set(prev);if(next.has(base))next.delete(base);else next.add(base);return next;});};
@@ -347,14 +371,15 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {sortedGroups.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">No quotations yet</div></div></div>:(
         <div className="tcard"><table className="dt">
+          <Cg w={[0.8,1,1,2,0.9,1.3,0.9]}/>
           <thead><tr>
-            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>Quote No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date {sortConfig.key==='date'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer {sortConfig.key==='customer'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>Quote No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project {sortConfig.key==='project'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer {sortConfig.key==='customer'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th className="tar" onClick={()=>handleSort('total')} style={{cursor:'pointer',userSelect:'none'}}>Total {sortConfig.key==='total'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th className="tac">Actions</th>
             <th className="tac" onClick={()=>handleSort('status')} style={{cursor:'pointer',userSelect:'none'}}>Status {sortConfig.key==='status'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th></th>
           </tr></thead>
           <tbody>{sortedGroups.slice((pg-1)*ps,pg*ps).map(({base,revs,latest})=>{
             const history=revs.slice(1);
@@ -363,66 +388,72 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             const remaining=getQuoteRemainingItems(latest);
             const remAmt=dt(remaining.map(i=>({...i,qty:i.remainingQty})));
             return(<React.Fragment key={base}>
-              <tr style={{fontStyle:latest.status==='passive'?'italic':'normal'}}>
+              <tr style={{fontStyle:latest.status==='passive'?'italic':'normal',cursor:'pointer'}} onClick={()=>setQuickView(latest)}>
+                <td style={{color:'var(--g500)',fontSize:12}}>{latest.date}</td>
                 <td>
                   <div style={{display:'flex',alignItems:'center',gap:5}}>
                     {hasHistory
-                      ?<button onClick={()=>toggleGroup(base)} style={{background:'none',border:'none',cursor:'pointer',padding:'2px',color:'var(--g400)',display:'flex',alignItems:'center',flexShrink:0}}>
+                      ?<button onClick={e=>{e.stopPropagation();toggleGroup(base);}} style={{background:'none',border:'none',cursor:'pointer',padding:'2px',color:'var(--g400)',display:'flex',alignItems:'center',flexShrink:0}}>
                           <svg style={{width:12,height:12,transition:'transform .15s',transform:expanded?'rotate(90deg)':'rotate(0deg)',stroke:'currentColor',fill:'none',strokeWidth:2}} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
                         </button>
                       :<span style={{width:16,flexShrink:0}}/>
                     }
                     <span style={{fontFamily:'Inter',fontSize:11}}>{latest.number}</span>
-                    {latest.rev>0&&<span className="rev-badge">R{String(latest.rev).padStart(2,'0')}</span>}
-                    {latest.locked&&<span className="locked-badge"><Ico n="lock" size={10}/>Locked</span>}
+                    {latest.locked&&<span className="locked-badge" title="Locked"><Ico n="lock" size={10}/></span>}
                     {hasHistory&&<span style={{fontSize:10,color:'var(--g400)',background:'var(--g100)',padding:'1px 6px',borderRadius:8,flexShrink:0}}>{history.length} rev</span>}
                   </div>
                 </td>
-                <td style={{color:'var(--g500)',fontSize:12}}>{latest.date}</td>
-                <td>{(latest.client&&latest.client.company)?latest.client.company:'—'}</td>
                 <td style={{color:'var(--g500)',fontSize:12}}>{latest.project||'—'}</td>
+                <td>{(latest.client&&latest.client.company)?latest.client.company:'—'}</td>
                 <td className="tar">
-                  {CURR[latest.currency]||'£'}{fmt(dt(latest.items))}
-                  {latest.status==='approved'&&remaining.length>0&&<div style={{fontSize:10,color:'var(--amber)',marginTop:1}}>Rem: £{fmt(remAmt)}</div>}
+                  <div style={{display:'flex',alignItems:'center'}}>
+                    <span style={{width:18,display:'inline-flex',flexShrink:0}}>
+                      {latest.status==='approved'&&remaining.length>0&&
+                        <span
+                          onMouseEnter={e=>{const r=e.currentTarget.getBoundingClientRect();setRemTip({text:`Remaining to invoice: £${fmt(remAmt)}`,x:r.left+r.width/2,y:r.top});}}
+                          onMouseLeave={()=>setRemTip(null)}
+                          style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:15,height:15,borderRadius:'50%',background:'var(--amberl)',color:'var(--amber)',fontSize:10,fontWeight:700,fontStyle:'italic',cursor:'default'}}
+                        >i</span>
+                      }
+                    </span>
+                    <span style={{flex:1,textAlign:'right'}}>{CURR[latest.currency]||'£'}{fmt(dt(latest.items))}</span>
+                  </div>
                 </td>
+                <td className="tac">{latest.status==='draft'&&<button className="ab" onClick={e=>{e.stopPropagation();handleMarkAsSent(latest);}}>Mark as Sent</button>}</td>
                 <td className="tac"><Badge s={latest.status}/></td>
-                <td><div className="aw">
-                  <button className="ab" title="Preview" onClick={()=>{setCur(latest);go('sales_quote_preview');}}><Ico n="eye"/></button>
-                  <button className="ab" title="Download PDF" onClick={()=>savePDF(latest,co,'sales_quote')}><Ico n="dl"/></button>
-                  {latest.status==='draft'&&<button className="ab" title="Edit" onClick={()=>{setCur(latest);go('sales_quote_form');}}><Ico n="edit"/></button>}
-                  {latest.status==='draft'&&<button className="ab" title="Mark as Sent" onClick={()=>handleMarkAsSent(latest)}><Ico n="send"/></button>}
-                  {latest.status==='sent'&&<button className="ab" title="Approve" onClick={()=>handleApproveQuote(latest)}><Ico n="check"/></button>}
-                  {latest.status==='sent'&&<button className="ab" title="Revise" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/></button>}
-                  {(latest.status==='approved'||latest.status==='locked')&&<button className="ab" title="Revise" onClick={()=>handleNewRevision(latest)}><Ico n="rev"/></button>}
-                  {latest.status==='approved'&&remaining.length>0&&<button className="ab" title="Create Invoice" onClick={()=>{setCur(mkSalesInvoice(latest));go('sales_invoice_form');}}><Ico n="invoice"/></button>}
-                  <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this quotation?',()=>{deleteSQ(latest.id);showToast('Deleted');})}><Ico n="trash"/></button>
-                </div></td>
               </tr>
               {expanded&&history.map(q=>(
-                <tr key={q.id} style={{background:'var(--g50)',fontStyle:'italic'}}>
+                <tr key={q.id} style={{background:'var(--g50)',fontStyle:'italic',cursor:'pointer'}} onClick={()=>setQuickView(q)}>
+                  <td style={{fontSize:12}}>{q.date}</td>
                   <td>
                     <div style={{display:'flex',alignItems:'center',gap:5,paddingLeft:22}}>
                       <span style={{color:'var(--g300)',fontSize:13,lineHeight:1}}>└</span>
                       <span style={{fontFamily:'Inter',fontSize:11}}>{q.number}</span>
-                      {q.rev>0&&<span className="rev-badge">R{String(q.rev).padStart(2,'0')}</span>}
                     </div>
                   </td>
-                  <td style={{fontSize:12}}>{q.date}</td>
-                  <td style={{fontSize:12}}>{(q.client&&q.client.company)||'—'}</td>
                   <td style={{fontSize:12}}>{q.project||'—'}</td>
+                  <td style={{fontSize:12}}>{(q.client&&q.client.company)||'—'}</td>
                   <td className="tar" style={{fontSize:12}}>{CURR[q.currency]||'£'}{fmt(dt(q.items))}</td>
+                  <td></td>
                   <td className="tac"><Badge s={q.status}/></td>
-                  <td><div className="aw">
-                    <button className="ab" title="Preview" onClick={()=>{setCur(q);go('sales_quote_preview');}}><Ico n="eye"/></button>
-                    <button className="ab" title="Download PDF" onClick={()=>savePDF(q,co,'sales_quote')}><Ico n="dl"/></button>
-                    <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this revision?',()=>{deleteSQ(q.id);showToast('Deleted');})}><Ico n="trash"/></button>
-                  </div></td>
                 </tr>
               ))}
             </React.Fragment>);
           })}</tbody>
         </table><Pagination total={sortedGroups.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
+      {quickView&&(()=>{
+        const remaining=getQuoteRemainingItems(quickView);
+        const extraActions=[];
+        if(quickView.status==='sent')extraActions.push({label:'Approve',onClick:()=>{handleApproveQuote(quickView);setQuickView(null);}});
+        if(['sent','approved','locked'].includes(quickView.status))extraActions.push({label:'Revise',onClick:()=>{setQuickView(null);handleNewRevision(quickView);}});
+        if(quickView.status==='approved'&&remaining.length>0)extraActions.push({label:'Create Invoice',onClick:()=>{setQuickView(null);setCur(mkSalesInvoice(quickView));go('sales_invoice_form');}});
+        return(<DocQuickModal doc={quickView} co={co} docType="sales_quote" onClose={()=>setQuickView(null)}
+          onEdit={quickView.status==='draft'?()=>{setQuickView(null);setCur(quickView);go('sales_quote_form');}:null}
+          onDelete={()=>askConfirm('Delete this quotation?',()=>{deleteSQ(quickView.id);showToast('Deleted');setQuickView(null);})}
+          extraActions={extraActions}/>);
+      })()}
+      {remTip&&<div style={{position:'fixed',left:remTip.x,top:remTip.y-10,transform:'translateX(-50%) translateY(-100%)',background:'#1e293b',color:'#f1f5f9',padding:'8px 12px',borderRadius:9,maxWidth:280,width:'max-content',fontSize:12.5,lineHeight:1.5,zIndex:99999,pointerEvents:'none',boxShadow:'0 8px 24px rgba(0,0,0,.28)',wordBreak:'break-word'}}>{remTip.text}<div style={{position:'absolute',top:'100%',left:'50%',transform:'translateX(-50%)',border:'6px solid transparent',borderTopColor:'#1e293b'}}/></div>}
     </div>);
   }
 
@@ -434,6 +465,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[priceWarnings,setPriceWarnings]=useState({});
     const[poolTip,setPoolTip]=useState(null);
     const[collapsed,setCollapsed]=useState({details:false,billTo:false,shipTo:false,items:false,notes:false});
+    // Local toast (not the shared app-level one): the shared showToast lives in AppOperational,
+    // so calling it here would re-render AppOperational and remount this form with a fresh
+    // function identity — silently discarding the items/columnSettings just set below.
+    const[importMsg,showImportMsg]=useToast();
     
     const toggleSection=(section)=>setCollapsed(prev=>({...prev,[section]:!prev[section]}));
     const set=(p,v)=>setQ(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
@@ -442,17 +477,15 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const isLocked=q.locked;
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...q,items})!==_initStr.current;
-    const _handleCancel=()=>{if(!isLocked&&_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
+    const _handleCancel=()=>{if(!isLocked&&_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=()=>!isLocked&&_isDirty();
     
     // Check Product Pool for price history (fuzzy: normalization + token overlap)
     const _norm=s=>s.toLowerCase().replace(/[\-\(\)\[\],\.\/\\:;'"]/g,' ').replace(/\s+/g,' ').trim();
-    const checkPriceHistory=(itemId,description)=>{
-      if(!description||description.trim()===''){
-        setPriceWarnings(prev=>{const n={...prev};delete n[itemId];return n;});
-        return;
-      }
+    const findPoolMatches=(description)=>{
+      if(!description||description.trim()==='')return[];
       const descNorm=_norm(description);
-      const matches=poolItems.filter(p=>{
+      return poolItems.filter(p=>{
         if(!p.name||p.quoteId===q.id)return false;
         const pNorm=_norm(p.name);
         if(pNorm===descNorm)return true;
@@ -461,68 +494,61 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const shorter=t1.length<=t2.length?t1:t2;
         const longer=t1.length>t2.length?t1:t2;
         return shorter.length>0&&shorter.filter(t=>longer.includes(t)).length/shorter.length>=0.6;
-      }).slice(0,3);
-      if(matches.length>0){
-        setPriceWarnings(prev=>({...prev,[itemId]:matches.map(m=>({price:m.price,quoteNum:m.quoteNum,date:m.date,matchedName:m.name}))}));
-      }else{
-        setPriceWarnings(prev=>{const n={...prev};delete n[itemId];return n;});
-      }
+      }).slice(0,3).map(m=>({price:m.price,quoteNum:m.quoteNum,date:m.date,matchedName:m.name}));
+    };
+    const checkPriceHistory=(itemId,description)=>{
+      const matches=findPoolMatches(description);
+      if(matches.length>0)setPriceWarnings(prev=>({...prev,[itemId]:matches}));
+      else setPriceWarnings(prev=>{const n={...prev};delete n[itemId];return n;});
     };
     
     // Excel/CSV Import Handler
     const handleFileImport=(e)=>{
       const file=e.target.files[0];
       if(!file)return;
+      const isCSV=file.name.toLowerCase().endsWith('.csv');
 
       const reader=new FileReader();
       reader.onload=(evt)=>{
         try{
-          let rows=[];
-
-          if(file.name.toLowerCase().endsWith('.csv')){
-            const text=evt.target.result;
-            rows=text.split('\n').map(line=>line.split(',').map(cell=>cell.trim())).filter(r=>r.length>0);
-          }else{
-            const wb=XLSX.read(evt.target.result,{type:'binary'});
-            const ws=wb.Sheets[wb.SheetNames[0]];
-            rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-          }
+          const wb=XLSX.read(evt.target.result,{type:isCSV?'string':'binary'});
+          const ws=wb.Sheets[wb.SheetNames[0]];
+          const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
 
           if(!rows||rows.length===0){
             alert('No data found in file');
             return;
           }
 
-          let startRow=0;
-          if(rows[0]&&rows[0].length>=2){
-            const firstCell=String(rows[0][0]||'').toLowerCase();
-            const secondCell=String(rows[0][1]||'').toLowerCase();
-            if(firstCell.includes('item')||firstCell.includes('code')||
-               secondCell.includes('desc')||secondCell.includes('name')){
-              startRow=1;
-            }
+          // Map columns by header name (order-independent) instead of fixed position,
+          // so the sheet can freely include/omit Brand, Model, Category, Total, etc.
+          const headerMap=rows[0].map(h=>IMPORT_HEADER_ALIASES(h));
+          if(!headerMap.includes('desc')){
+            alert('Could not find a "Description" column in the first row. Use "Download Template" to get the expected headers.');
+            return;
           }
 
           const imported=[];
-          for(let i=startRow;i<rows.length;i++){
+          let anyBrand=false,anyModel=false,anyCategory=false;
+          for(let i=1;i<rows.length;i++){
             const row=rows[i];
-            if(!row||row.length<2)continue;
-
-            const item=String(row[0]||'').trim();
-            const desc=String(row[1]||'').trim();
-
-            if(!item&&!desc)continue;
-
+            if(!row||row.every(c=>String(c||'').trim()===''))continue;
+            const obj={};
+            headerMap.forEach((key,idx)=>{if(key)obj[key]=String(row[idx]??'').trim();});
+            if(!obj.item&&!obj.desc)continue;
+            if(obj.brand)anyBrand=true;
+            if(obj.model)anyModel=true;
+            if(obj.category)anyCategory=true;
             imported.push({
               id:uid(),
-              item:item,
-              desc:desc,
-              qty:row[2]?String(row[2]).trim():'1',
-              unit:row[3]?String(row[3]).trim():'',
-              price:row[4]?String(row[4]).trim():'0',
-              brand:'',
-              model:'',
-              category:'',
+              item:obj.item||'',
+              desc:obj.desc||'',
+              qty:obj.qty||'1',
+              unit:obj.unit||'',
+              price:obj.price||'0',
+              brand:obj.brand||'',
+              model:obj.model||'',
+              category:obj.category||'',
               invoicedQty:0
             });
           }
@@ -532,29 +558,50 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             return;
           }
 
+          // Sheet may include Brand/Model/Category without the user having ticked those
+          // column checkboxes yet — turn them on so the imported data is actually visible.
+          // Never turns a column off; manual toggling still works normally afterwards.
+          if(anyBrand||anyModel||anyCategory){
+            setColumnSettings(cs=>({brand:cs.brand||anyBrand,model:cs.model||anyModel,category:cs.category||anyCategory}));
+          }
+
           const currentItems=items.filter(it=>it.item||it.desc||(it.price&&it.price!=='0'));
-          const newItems=[...currentItems,...imported];
-          setItems(newItems);
-          showToast(`✓ ${imported.length} items imported`);
-          
+          setItems([...currentItems,...imported]);
+
+          // Bulk Product Pool price-history check (the per-row onBlur check never fires on import)
+          const newWarnings={};
+          let matchCount=0;
+          imported.forEach(it=>{
+            const matches=findPoolMatches(it.desc);
+            if(matches.length>0){matchCount++;newWarnings[it.id]=matches;}
+          });
+          if(matchCount>0)setPriceWarnings(prev=>({...prev,...newWarnings}));
+
+          showImportMsg(matchCount>0
+            ?`✓ ${imported.length} items imported — ${matchCount} match previous pricing, check the highlighted rows`
+            :`✓ ${imported.length} items imported`);
+
         }catch(err){
           console.error('Import error:', err);
           alert('Import error: '+err.message);
         }
       };
-      
+
       reader.onerror=(err)=>{
         console.error('File read error:', err);
         alert('Failed to read file');
       };
-      
-      if(file.name.toLowerCase().endsWith('.csv')){
-        reader.readAsText(file);
-      }else{
-        reader.readAsBinaryString(file);
-      }
-      
+
+      if(isCSV)reader.readAsText(file);
+      else reader.readAsBinaryString(file);
+
       e.target.value='';
+    };
+    const downloadImportTemplate=()=>{
+      exportExcel([
+        ['Item Code','Description','Brand','Model','Category','Qty','Unit','Unit Price','Total'],
+        ['ITM-001','Example item description','Acme','X100','General',1,'pcs',0,0]
+      ],'quote-import-template');
     };
     
     return(<div className="content"><div className="fw">
@@ -675,16 +722,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               </label>
             </div>}
             {!isLocked&&<div style={{display:'flex',gap:6,alignItems:'center'}}>
-              <label style={{cursor:'pointer'}}>
-                <Btn v="bgh bsm" onClick={()=>fileRef.current&&fileRef.current.click()}>
-                  <Ico n="upload"/>Import Excel/CSV
-                </Btn>
-                <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}} onChange={handleFileImport}/>
-              </label>
+              <Btn v="bgh bsm" onClick={downloadImportTemplate}><Ico n="dl"/>Download Template</Btn>
+              <Btn v="bgh bsm" onClick={()=>fileRef.current&&fileRef.current.click()}><Ico n="upload"/>Import Excel/CSV</Btn>
+              <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}} onChange={handleFileImport}/>
             </div>}
           </div>
         </div>
-        {items.some(it=>it._inPool)&&<div className="alert-warn" style={{marginBottom:12}}><Ico n="warn" size={14}/><div className="alert-warn-text">Red rows: item exists in project pool (matched by Description only). Previous price shown in tooltip.</div></div>}
+        {importMsg&&<div style={{background:'var(--greenl)',color:'var(--green)',border:'1px solid rgba(59,109,17,.25)',borderRadius:7,padding:'7px 12px',fontSize:12,fontWeight:600,marginBottom:10}}>{importMsg}</div>}
         <div className="iw">
           <table className="ie" style={{tableLayout:'auto'}}>
             <thead><tr>
@@ -706,10 +750,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               // Duplicate check: ONLY by description
               const isDup=items.filter((x,i)=>i!==idx&&x.desc&&it.desc&&x.desc.toLowerCase().trim()===it.desc.toLowerCase().trim()).length>0;
               const warnings=priceWarnings[it.id]||[];
+              const flagged=isDup||warnings.length>0;
               return(<React.Fragment key={it.id}>
-                <tr className={it._inPool||isDup?'row-warn':''}>
-                <td title={it._inPool?`Previously used. Prev price: ${it._prevPrice||'N/A'}`:(isDup?'Duplicate item (same description)':'')}><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder="Item code..." readOnly={isLocked} style={(it._inPool||isDup)?{color:'var(--amber)',fontWeight:600}:{}}/></td>
-                <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} onBlur={e=>checkPriceHistory(it.id,e.target.value)} placeholder="Description..." readOnly={isLocked} style={(it._inPool||isDup)?{color:'var(--amber)',fontWeight:600}:{}}/></td>
+                <tr className={flagged?'row-warn':''}>
+                <td title={isDup?'Duplicate item (same description)':(warnings.length>0?'Previously quoted — see price history below':'')}><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder="Item code..." readOnly={isLocked} style={flagged?{color:'var(--amber)',fontWeight:600}:{}}/></td>
+                <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} onBlur={e=>checkPriceHistory(it.id,e.target.value)} placeholder="Description..." readOnly={isLocked} style={flagged?{color:'var(--amber)',fontWeight:600}:{}}/></td>
                 {columnSettings.brand&&<td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder="Brand..." readOnly={isLocked}/></td>}
                 {columnSettings.model&&<td><input value={it.model||''} onChange={e=>si(it.id,'model',e.target.value)} placeholder="Model..." readOnly={isLocked}/></td>}
                 {columnSettings.category&&<td><input value={it.category||''} onChange={e=>si(it.id,'category',e.target.value)} placeholder="Category..." readOnly={isLocked}/></td>}
@@ -769,7 +814,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const savedInv={...inv,items};
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...inv,items})!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
+    const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=_isDirty;
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
@@ -873,6 +919,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function SalesInvoicesList(){
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
     const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
+    const[quickView,setQuickView]=useState(null);
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const handleSort=(key)=>{
       setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
@@ -912,36 +959,35 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="invoice" size={38}/><div className="empty-t">No sales invoices yet</div><div className="empty-s">Approve a quotation and convert it to invoice</div></div></div>:(
         <div className="tcard"><table className="dt">
+          <Cg w={[0.8,1,1,2,0.9,1.3,0.9]}/>
           <thead><tr>
-            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>Invoice No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date {sortConfig.key==='date'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer {sortConfig.key==='customer'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>Invoice No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th onClick={()=>handleSort('quote')} style={{cursor:'pointer',userSelect:'none'}}>From Quote {sortConfig.key==='quote'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer {sortConfig.key==='customer'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th className="tar" onClick={()=>handleSort('total')} style={{cursor:'pointer',userSelect:'none'}}>Total {sortConfig.key==='total'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th className="tac">Actions</th>
             <th className="tac" onClick={()=>handleSort('status')} style={{cursor:'pointer',userSelect:'none'}}>Status {sortConfig.key==='status'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th></th>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
-            <tr key={d.id}>
-              <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number}</span></td>
+            <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+              <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number}</span></td>
+              <td>{d.quoteNum?<span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{d.quoteNum}</span>:'—'}</td>
               <td>
                 {(d&&d.client&&d.client.company)?d.client.company:'—'}
               </td>
-              <td>{d.quoteNum?<span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{d.quoteNum}</span>:'—'}</td>
               <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items))}</td>
+              <td className="tac">{d.status==='draft'&&<button className="ab" onClick={e=>{e.stopPropagation();handleMarkInvoiceAsSent(d);}}>Mark as Sent</button>}</td>
               <td className="tac"><Badge s={d.status}/></td>
-              <td><div className="aw">
-                <button className="ab" title="Preview" onClick={()=>{setCur(d);go('sales_invoice_preview');}}><Ico n="eye"/></button>
-                <button className="ab" title="Download PDF" onClick={()=>savePDF(d,co,'invoice')}><Ico n="dl"/></button>
-                <button className="ab" title="Edit" onClick={()=>{if(d.status==='sent'){askConfirm('This invoice has been marked as sent. Edit anyway?',()=>{setCur(d);go('sales_invoice_edit');});}else{setCur(d);go('sales_invoice_edit');}}}><Ico n="edit"/></button>
-                {d.status==='draft'&&<button className="ab" title="Mark as Sent" onClick={()=>handleMarkInvoiceAsSent(d)}><Ico n="send"/></button>}
-                <button className="ab danger" title="Delete" onClick={()=>askConfirm('Delete this invoice?',()=>{sSI(salesInvoices.filter(x=>x.id!==d.id));showToast('Deleted');})}><Ico n="trash"/></button>
-              </div></td>
             </tr>
           ))}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
+      {quickView&&<DocQuickModal doc={quickView} co={co} docType="invoice" onClose={()=>setQuickView(null)}
+        onEdit={()=>{const openEdit=()=>{setQuickView(null);setCur(quickView);go('sales_invoice_edit');};if(quickView.status==='sent'){askConfirm('This invoice has been marked as sent. Edit anyway?',openEdit);}else{openEdit();}}}
+        onDelete={()=>askConfirm('Delete this invoice?',()=>{sSI(salesInvoices.filter(x=>x.id!==quickView.id));showToast('Deleted');setQuickView(null);})}
+        extraActions={[]}/>}
     </div>);
   }
 
@@ -949,6 +995,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function ProcurementList({type,items,title}){
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
     const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
+    const[quickView,setQuickView]=useState(null);
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const handleSort=(key)=>{
       setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
@@ -988,22 +1035,22 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isRI?'received':'po'} size={38}/><div className="empty-t">No {lbl.toLowerCase()}s yet</div></div></div>:(
         <div className="tcard"><table className="dt">
+          <Cg w={isRI?[0.8,1,1,2,0.9,0.9,0.9]:[0.8,1,1,2,0.9,0.9]}/>
           <thead><tr>
-            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date {sortConfig.key==='date'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('supplier')} style={{cursor:'pointer',userSelect:'none'}}>Supplier {sortConfig.key==='supplier'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project {sortConfig.key==='project'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <th onClick={()=>handleSort('supplier')} style={{cursor:'pointer',userSelect:'none'}}>Supplier {sortConfig.key==='supplier'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th className="tar" onClick={()=>handleSort('total')} style={{cursor:'pointer',userSelect:'none'}}>Total {sortConfig.key==='total'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
             <th className="tac">{isPQ?'Linked To':'Linked From'}</th>
             {isRI&&<th className="tac">Status</th>}
-            <th></th>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
-            <tr key={d.id}>
-              <td><span className="dn">{d.number||'—'}</span></td>
+            <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
-              <td style={{color:'var(--g800)'}}>{d.supplierCompany||'—'}</td>
+              <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
+              <td style={{color:'var(--g800)'}}>{d.supplierCompany||'—'}</td>
               <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items||[]))}</td>
               <td className="tac">
                 {isPQ&&(d.linkedPO?linkChip('→',d.linkedPO.number):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
@@ -1011,19 +1058,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 {isRI&&(d.poNum?linkChip('←',d.poNum):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
               </td>
               {isRI&&<td className="tac"><Badge s={d.status||'unpaid'}/></td>}
-              <td><div className="aw">
-                <button className="ab" title="Preview" onClick={()=>{setCur(d);go(isPQ?'pq_preview':isPO?'po_preview':'ri_preview');}}><Ico n="eye"/></button>
-                <button className="ab" title="Download PDF" onClick={()=>savePDF(d,co,isPO?'po':isRI?'invoice':'quote')}><Ico n="dl"/></button>
-                <button className="ab" title="Edit" onClick={()=>{setCur(d);go(isPQ?'pq_form':isPO?'po_form':'ri_form');}}><Ico n="edit"/></button>
-                {isPQ&&!d.linkedPO&&<button className="ab" title="Convert to Purchase Order" onClick={()=>handleConvertPQtoPO(d)}><Ico n="convert"/></button>}
-                {isPO&&!d.linkedRI&&<button className="ab" title="Create Received Invoice" onClick={()=>handleConvertPOtoRI(d)}><Ico n="invoice"/></button>}
-                {isRI&&d.status==='unpaid'&&<button className="ab" title="Mark as Paid" onClick={()=>{sRI(receivedInvoices.map(x=>x.id===d.id?{...x,status:'paid'}:x));showToast('Marked as paid');}}><Ico n="check"/></button>}
-                <button className="ab danger" title="Delete" onClick={()=>askConfirm(`Delete this ${lbl.toLowerCase()}?`,()=>{isPQ?deletePQ(d.id):isPO?deletePO(d.id):deleteRI(d.id);showToast('Deleted');})}><Ico n="trash"/></button>
-              </div></td>
             </tr>
           ))}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
+      {quickView&&(()=>{
+        const extraActions=[];
+        if(isPQ&&!quickView.linkedPO)extraActions.push({label:'Convert to Purchase Order',onClick:()=>{setQuickView(null);handleConvertPQtoPO(quickView);}});
+        if(isPO&&!quickView.linkedRI)extraActions.push({label:'Create Received Invoice',onClick:()=>{setQuickView(null);handleConvertPOtoRI(quickView);}});
+        if(isRI&&quickView.status==='unpaid')extraActions.push({label:'Mark as Paid',onClick:()=>{sRI(receivedInvoices.map(x=>x.id===quickView.id?{...x,status:'paid'}:x));showToast('Marked as paid');setQuickView(null);}});
+        return(<DocQuickModal doc={quickView} co={co} docType={isPO?'po':isRI?'invoice':'quote'} onClose={()=>setQuickView(null)}
+          onEdit={()=>{setQuickView(null);setCur(quickView);go(isPQ?'pq_form':isPO?'po_form':'ri_form');}}
+          onDelete={()=>askConfirm(`Delete this ${lbl.toLowerCase()}?`,()=>{isPQ?deletePQ(quickView.id):isPO?deletePO(quickView.id):deleteRI(quickView.id);showToast('Deleted');setQuickView(null);})}
+          extraActions={extraActions}/>);
+      })()}
     </div>);
   }
 
@@ -1034,7 +1082,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const set=(p,v)=>setDoc(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...doc,items})!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
+    const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=_isDirty;
     const isPQ=docType==='pq',isPO=docType==='po',isRI=docType==='ri';
     const lbl=isPQ?'Received Quote':isPO?'Purchase Order':'Received Invoice';
     const supplierLocked=(isPO&&!!doc.pqId)||(isRI&&!!doc.poId);
@@ -1197,16 +1246,16 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {[{lbl:'Revenue',val:`£${fmt(revenue)}`,sub:`${pI.length} invoices`,cls:'sc-green'},{lbl:'PO Costs',val:`£${fmt(poTotal)}`,sub:`${pPO.length} orders`,cls:'sc-blue'},{lbl:'Expenses',val:`£${fmt(expTotal)}`,sub:`${pExp.length} items`,cls:'sc-purple'},{lbl:'Net',val:`£${fmt(revenue-poTotal-expTotal)}`,sub:'revenue - costs',cls:revenue-poTotal-expTotal>=0?'sc-teal':'sc-red'}].map(s=><div key={s.lbl} className={`stat-card ${s.cls}`}><div className="stat-val">{s.val}</div><div className="stat-lbl">{s.lbl}</div><div className="stat-sub">{s.sub}</div></div>)}
       </div>
       {/* Sections */}
-      {[{title:'Sales Quotations',items:pQ,cols:['Quote No','Date','Total','Status'],vals:d=>[d.number,d.date,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
-        {title:'Sales Invoices',items:pI,cols:['Invoice No','Date','Total','Status'],vals:d=>[d.number,d.date,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
-        {title:'Purchase Orders',items:pPO,cols:['PO No','Date','Supplier','Total','Status'],vals:d=>[d.number,d.date,d.supplier,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
-        {title:'Expenses',items:pExp,cols:['Date','Category','Description','Amount'],vals:e=>[e.date,e.category,e.description,`${CURR[e.currency]||'£'}${fmt(+(e.amount||0))}`]},
-      ].map(({title,items,cols,vals})=>(
+      {[{title:'Sales Quotations',items:pQ,cols:['Quote No','Date','Total','Status'],w:[1,0.8,0.9,0.9],vals:d=>[d.number,d.date,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
+        {title:'Sales Invoices',items:pI,cols:['Invoice No','Date','Total','Status'],w:[1,0.8,0.9,0.9],vals:d=>[d.number,d.date,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
+        {title:'Purchase Orders',items:pPO,cols:['PO No','Date','Supplier','Total','Status'],w:[1,0.8,2,0.9,0.9],vals:d=>[d.number,d.date,d.supplier,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
+        {title:'Expenses',items:pExp,cols:['Date','Category','Description','Amount'],w:[0.8,1,2,0.9],vals:e=>[e.date,e.category,e.description,`${CURR[e.currency]||'£'}${fmt(+(e.amount||0))}`]},
+      ].map(({title,items,cols,w,vals})=>(
         <div key={title} style={{marginBottom:16}}>
           <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}><div className="tcard-hdr-t">{title} ({items.length})</div></div>
           <div className="tcard">
             {items.length===0?<div style={{padding:'16px 18px',color:'var(--g400)',fontSize:13}}>None</div>:
-            <table className="dt"><thead><tr>{cols.map(c=><th key={c}>{c}</th>)}</tr></thead>
+            <table className="dt"><Cg w={w}/><thead><tr>{cols.map(c=><th key={c}>{c}</th>)}</tr></thead>
             <tbody>{items.map((d,i)=><tr key={d.id||i}>{vals(d).map((v,j)=><td key={j} style={{fontWeight:j===0?600:400,color:j===0?'var(--g900)':'var(--g600)'}}>{v}</td>)}</tr>)}</tbody></table>}
           </div>
         </div>
@@ -1219,7 +1268,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[p,setP]=useState(init);const s=(k,v)=>setP(d=>({...d,[k]:v}));
     const _initStr=useRef(JSON.stringify(init));
     const _isDirty=()=>JSON.stringify(p)!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
+    const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=_isDirty;
     return(<div className="content"><div className="fw" style={{maxWidth:640}}>
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
       <div className="fc"><div className="fct">Project Details</div>
@@ -1290,6 +1340,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">Pool is empty</div><div className="empty-s">Mark quotations as Sent to populate the pool</div></div></div>:(
         <div className="tcard"><table className="dt">
+          <Cg w={[1,2,0.6,0.9,0.9,1,0.8,1,2,0.6]}/>
           <thead><tr>
             <th onClick={()=>handleSort('code')} style={{cursor:'pointer',userSelect:'none'}}>Code{sh('code')}</th>
             <th onClick={()=>handleSort('name')} style={{cursor:'pointer',userSelect:'none'}}>Description{sh('name')}</th>
@@ -1300,7 +1351,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date{sh('date')}</th>
             <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project{sh('project')}</th>
             <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer{sh('customer')}</th>
-            <th></th>
+            <th>Actions</th>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map((p,i)=>{
             const isDup=sorted.some((x,j)=>j!==i&&x.customer===p.customer&&x.name.toLowerCase().trim()===p.name.toLowerCase().trim());
@@ -1347,7 +1398,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[fs,setFs]=useState({q:'',cat:'',p:'',dateFrom:'',dateTo:''});
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const filtered=expenses.filter(e=>{
-      if(fs.q&&![e.description,e.supplier].some(x=>(x||'').toLowerCase().includes(fs.q.toLowerCase())))return false;
+      if(fs.q&&![e.description,e.employee].some(x=>(x||'').toLowerCase().includes(fs.q.toLowerCase())))return false;
       if(fs.cat&&e.category!==fs.cat)return false;
       if(fs.p&&e.project!==fs.p)return false;
       if(fs.dateFrom&&e.date<fs.dateFrom)return false;
@@ -1369,16 +1420,18 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
         {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>Total: £{fmt(total)}</span>}
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Category','Description','Supplier','Reference','Amount','Currency','Project'],...filtered.map(e=>[e.date,e.category,e.description,e.supplier,e.reference,e.amount,e.currency,e.project])],'expenses')}><Ico n="export"/>Export</Btn>
+        <Btn v="bgh bsm" onClick={()=>go('exp_import')}><Ico n="upload"/>Import Excel</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...filtered.map(e=>[e.date,e.employee,e.category,e.description,e.reference,e.amount,e.currency,e.project])],'expenses')}><Ico n="export"/>Export</Btn>
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">No expenses yet</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Supplier</th><th>Project</th><th className="tar">Amount</th><th></th></tr></thead>
+          <Cg w={[0.8,1.2,1,2.4,1.2,0.9,0.6]}/>
+          <thead><tr><th>Date</th><th>Employee</th><th>Category</th><th>Description</th><th>Project</th><th className="tar">Amount</th><th>Actions</th></tr></thead>
           <tbody>{[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id}>
             <td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td>
+            <td style={{color:'var(--g700)'}}>{e.employee||'—'}</td>
             <td>{e.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{e.category}</span>:'—'}</td>
             <td style={{fontWeight:500,color:'var(--g800)'}}>{e.description||'—'}</td>
-            <td style={{color:'var(--g600)'}}>{e.supplier||'—'}</td>
             <td style={{color:'var(--g500)',fontSize:12}}>{e.project||'—'}</td>
             <td className="tar" style={{fontWeight:700}}>{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td>
             <td><div className="aw">
@@ -1391,29 +1444,168 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     </div>);
   }
 
-  function ExpenseForm({exp:init,onSave,onCancel}){
-    const[e,setE]=useState(init);const s=(k,v)=>setE(d=>({...d,[k]:v}));
-    const _initStr=useRef(JSON.stringify(init));
-    const _isDirty=()=>JSON.stringify(e)!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
-    const allCats=expCats.map(c=>typeof c==='string'?{id:c,name:c}:c);
-    return(<div className="content"><div className="fw" style={{maxWidth:660}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
-      <div className="fc"><div className="fct">Expense Details</div>
-        <div className="fg g3"><Fld label="Date"><input type="date" value={e.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label="Amount"><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label="Currency"><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
-        <div className="fg g3" style={{marginTop:12}}>
-          <Fld label="Category"><select value={e.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">— Select —</option>{allCats.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select></Fld>
-          <Fld label="Description"><input value={e.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="What was this for?"/></Fld>
-          <Fld label="Supplier"><input value={e.supplier||''} onChange={x=>s('supplier',x.target.value)} className="fi" placeholder="Paid to..."/></Fld>
-        </div>
-        <div className="fg g2" style={{marginTop:12}}>
-          <Fld label="Reference"><input value={e.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Receipt No"/></Fld>
-          <Fld label="Project"><select value={e.project||''} onChange={x=>s('project',x.target.value)} className="fi"><option value="">— None —</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}</select></Fld>
-        </div>
-        <div style={{marginTop:12}}><Fld label="Notes"><textarea value={e.notes||''} onChange={x=>s('notes',x.target.value)} rows={2} className="fi"/></Fld></div>
+  // Bulk Expense Import — staff (often abroad) send a monthly expense sheet; this previews
+  // the parsed rows (category/project matched against existing lists, likely duplicates
+  // pre-unchecked) so nothing posts to the ledger without a look, then commits on demand.
+  function ExpenseImportView(){
+    const[rows,setRows]=useState(null);
+    const fileRef=useRef();
+    const allCatNames=expCats.map(c=>typeof c==='string'?c:c.name);
+    const allEmployeeNames=(LS.get('gm_users')||[]).map(u=>`${u.firstName||''} ${u.lastName||''}`.trim()||u.username).filter(Boolean);
+    dirtyCheckRef.current=()=>!!(rows&&rows.length>0);
+
+    const handleFile=(ev)=>{
+      const file=ev.target.files[0];
+      if(!file)return;
+      const isCSV=file.name.toLowerCase().endsWith('.csv');
+      const reader=new FileReader();
+      reader.onload=evt=>{
+        try{
+          const wb=XLSX.read(evt.target.result,{type:isCSV?'string':'binary'});
+          const ws=wb.Sheets[wb.SheetNames[0]];
+          const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+          if(!raw||raw.length===0){alert('No data found in file');return;}
+          const headerMap=raw[0].map(h=>IMPORT_HEADER_ALIASES(h));
+          if(!headerMap.includes('amount')&&!headerMap.includes('desc')){
+            alert('Could not find Amount/Description columns in the first row. Use "Download Template" to get the expected headers.');
+            return;
+          }
+          const parsed=[];
+          for(let i=1;i<raw.length;i++){
+            const row=raw[i];
+            if(!row||row.every(c=>String(c||'').trim()===''))continue;
+            const obj={};
+            headerMap.forEach((key,idx)=>{if(key)obj[key]=String(row[idx]??'').trim();});
+            if(!obj.amount&&!obj.desc)continue;
+            const catMatch=allCatNames.find(c=>c.toLowerCase()===(obj.category||'').toLowerCase());
+            const projMatch=projects.find(p=>p.name.toLowerCase()===(obj.project||'').toLowerCase());
+            const empMatch=allEmployeeNames.find(n=>n.toLowerCase()===(obj.employee||'').toLowerCase());
+            const curOk=Object.keys(CURR).includes((obj.currency||'').toUpperCase());
+            const isDup=expenses.some(x=>x.date===obj.date&&String(+x.amount||0)===String(+obj.amount||0)&&(x.description||'').toLowerCase().trim()===(obj.desc||'').toLowerCase().trim());
+            parsed.push({
+              _rid:uid(),
+              date:obj.date||td(),
+              employee:empMatch||'',
+              category:catMatch||'',
+              description:obj.desc||'',
+              reference:obj.reference||'',
+              amount:obj.amount||'',
+              currency:curOk?obj.currency.toUpperCase():'GBP',
+              project:projMatch?projMatch.name:'',
+              notes:obj.notes||'',
+              _include:!isDup,
+              _dup:isDup,
+              _catUnmatched:!!obj.category&&!catMatch,
+              _projUnmatched:!!obj.project&&!projMatch,
+              _empUnmatched:!!obj.employee&&!empMatch,
+            });
+          }
+          if(parsed.length===0){alert('No valid rows found');return;}
+          setRows(parsed);
+        }catch(err){
+          console.error('Import error:',err);
+          alert('Import error: '+err.message);
+        }
+      };
+      reader.onerror=()=>alert('Failed to read file');
+      if(isCSV)reader.readAsText(file);else reader.readAsBinaryString(file);
+      ev.target.value='';
+    };
+
+    const updateRow=(rid,field,val)=>setRows(rs=>rs.map(r=>r._rid===rid?{...r,[field]:val}:r));
+    const toggleInclude=rid=>setRows(rs=>rs.map(r=>r._rid===rid?{...r,_include:!r._include}:r));
+    const includedCount=rows?rows.filter(r=>r._include).length:0;
+
+    const handleCommit=()=>{
+      const toImport=rows.filter(r=>r._include);
+      const invalid=toImport.filter(r=>!r.amount||isNaN(+r.amount)||+r.amount<=0);
+      if(invalid.length>0){alert(`${invalid.length} selected row(s) have a missing/invalid amount. Fix or uncheck them first.`);return;}
+      const newExpenses=toImport.map(r=>({id:uid(),date:r.date||td(),employee:r.employee,category:r.category,description:r.description,reference:r.reference,amount:r.amount,currency:r.currency,project:r.project,notes:r.notes}));
+      sExp([...expenses,...newExpenses]);
+      showToast(`✓ ${newExpenses.length} expenses imported`);
+      go('expenses');
+    };
+
+    const downloadTemplate=()=>exportExcel([
+      ['Date','Employee','Category','Description','Reference','Amount','Currency','Project','Notes'],
+      [td(),'Jane Doe','Travel','Taxi to airport','R-1234',24.5,'GBP','','']
+    ],'expense-import-template');
+
+    return(<div className="content">
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
+        <button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>Back</button>
+        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>Import Expenses</h2>
+        <div style={{flex:1}}/>
+        <Btn v="bgh bsm" onClick={downloadTemplate}><Ico n="dl"/>Download Template</Btn>
+        <Btn v="bgh bsm" onClick={()=>fileRef.current&&fileRef.current.click()}><Ico n="upload"/>Choose File</Btn>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}} onChange={handleFile}/>
       </div>
-      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
-    </div></div>);
+
+      {!rows&&<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">No file selected yet</div><div className="empty-s">Download the template, fill it in, then choose the file to preview before importing.</div></div></div>}
+
+      {rows&&(<>
+        <div style={{display:'flex',gap:14,alignItems:'center',marginBottom:12,fontSize:12.5,color:'var(--g600)',flexWrap:'wrap'}}>
+          <span>{rows.length} rows parsed</span>
+          <span>·</span>
+          <span style={{fontWeight:700,color:'var(--gm-500)'}}>{includedCount} selected to import</span>
+          {rows.some(r=>r._dup)&&<span style={{color:'var(--amber)'}}>· {rows.filter(r=>r._dup).length} possible duplicate(s) unchecked automatically</span>}
+        </div>
+        <div className="tcard" style={{overflowX:'auto'}}>
+          <table className="ie" style={{tableLayout:'auto',minWidth:1100}}>
+            <thead><tr>
+              <th style={{width:'3%'}}></th>
+              <th style={{width:'8%',textAlign:'left'}}>Date</th>
+              <th style={{width:'12%',textAlign:'left'}}>Employee</th>
+              <th style={{width:'11%',textAlign:'left'}}>Category</th>
+              <th style={{width:'24%',textAlign:'left'}}>Description</th>
+              <th style={{width:'10%',textAlign:'left'}}>Reference</th>
+              <th style={{width:'8%',textAlign:'right'}}>Amount</th>
+              <th style={{width:'6%',textAlign:'left'}}>Ccy</th>
+              <th style={{width:'13%',textAlign:'left'}}>Project</th>
+              <th style={{width:'5%'}}></th>
+            </tr></thead>
+            <tbody>{rows.map(r=>{
+              const invalidAmount=!r.amount||isNaN(+r.amount)||+r.amount<=0;
+              return(
+              <tr key={r._rid} style={{background:r._dup?'#fff7ed':(invalidAmount&&r._include?'#fef2f2':undefined)}}>
+                <td style={{textAlign:'center'}}><input type="checkbox" checked={r._include} onChange={()=>toggleInclude(r._rid)}/></td>
+                <td><input type="date" value={r.date} onChange={x=>updateRow(r._rid,'date',x.target.value)} style={{width:'100%'}}/></td>
+                <td>
+                  <select value={r.employee} onChange={x=>updateRow(r._rid,'employee',x.target.value)} style={{width:'100%',...(r._empUnmatched?{border:'1.5px solid var(--amber)'}:{})}}>
+                    <option value="">— Select —</option>
+                    {allEmployeeNames.map(n=><option key={n} value={n}>{n}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select value={r.category} onChange={x=>updateRow(r._rid,'category',x.target.value)} style={{width:'100%',...(r._catUnmatched?{border:'1.5px solid var(--amber)'}:{})}}>
+                    <option value="">— Select —</option>
+                    {allCatNames.map(c=><option key={c} value={c}>{c}</option>)}
+                  </select>
+                </td>
+                <td><input value={r.description} onChange={x=>updateRow(r._rid,'description',x.target.value)} style={{width:'100%'}}/></td>
+                <td><input value={r.reference} onChange={x=>updateRow(r._rid,'reference',x.target.value)} style={{width:'100%'}}/></td>
+                <td><input type="number" value={r.amount} onChange={x=>updateRow(r._rid,'amount',x.target.value)} style={{width:'100%',textAlign:'right',...(invalidAmount?{border:'1.5px solid var(--red)'}:{})}}/></td>
+                <td>
+                  <select value={r.currency} onChange={x=>updateRow(r._rid,'currency',x.target.value)} style={{width:'100%'}}>
+                    {Object.keys(CURR).map(c=><option key={c} value={c}>{c}</option>)}
+                  </select>
+                </td>
+                <td>
+                  <select value={r.project} onChange={x=>updateRow(r._rid,'project',x.target.value)} style={{width:'100%',...(r._projUnmatched?{border:'1.5px solid var(--amber)'}:{})}}>
+                    <option value="">— None —</option>
+                    {projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
+                  </select>
+                </td>
+                <td style={{textAlign:'center'}}>{r._dup&&<span title="Looks like it might already exist in Expenses">⚠</span>}</td>
+              </tr>);
+            })}</tbody>
+          </table>
+        </div>
+        <div style={{display:'flex',justifyContent:'flex-end',marginTop:16}}>
+          <Btn v="bp bsm" onClick={handleCommit} disabled={includedCount===0}>Import {includedCount} Expense{includedCount===1?'':'s'}</Btn>
+        </div>
+      </>)}
+    </div>);
   }
 
   function ExpCatsView(){
@@ -1438,7 +1630,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">No customers yet</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+          <Cg w={[2,1.4,1.8,1,0.6]}/>
+          <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Actions</th></tr></thead>
           <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
             <td style={{fontWeight:500}}>{c.company||'—'}</td>
             <td>{c.contact||'—'}</td>
@@ -1458,7 +1651,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[c,setC]=useState(init);const s=(k,v)=>setC(d=>({...d,[k]:v}));
     const _initStr=useRef(JSON.stringify(init));
     const _isDirty=()=>JSON.stringify(c)!==_initStr.current;
-    const _handleCancel=()=>{if(_isDirty()){askConfirm('You have unsaved changes. Leave without saving?',onCancel);}else onCancel();};
+    const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=_isDirty;
     return(<div className="content"><div className="fw" style={{maxWidth:600}}>
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
       <div className="fc"><div className="fct">Customer Info</div>
@@ -1487,13 +1681,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
       {documents.length>0&&(
         <div className="tcard"><table className="dt">
+          <Cg w={[0.4,2.2,1,0.8,0.9,0.6]}/>
           <thead><tr>
-            <th style={{width:60,textAlign:'center'}}>#</th>
+            <th style={{textAlign:'center'}}>#</th>
             <th>Document Name</th>
             <th>Category</th>
             <th>Type</th>
             <th>Upload Date</th>
-            <th></th>
+            <th>Actions</th>
           </tr></thead>
           <tbody>{documents.slice((pg-1)*ps,pg*ps).map((d,idx)=><tr key={d.id}>
             <td style={{textAlign:'center',color:'var(--g500)',fontSize:13,fontWeight:600}}>{idx+1}</td>
@@ -1619,8 +1814,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {id:'company',icon:'settings',label:'Company Information'},
       {id:'pdf',icon:'dl',label:'PDF Templates'},
       {id:'numbering',icon:'hash',label:'Document Numbering'},
-      {id:'bank',icon:'card',label:'Bank Details'},
-      {id:'users',icon:'user',label:'Users'}
+      {id:'bank',icon:'card',label:'Bank Details'}
     ];
     
     return(<div className="content" style={{padding:0,display:'flex',height:'calc(100vh - 54px)'}}>
@@ -1645,7 +1839,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       
       {/* Right Content */}
       <div style={{flex:1,overflowY:'auto',paddingTop:70}}>
-        <div style={{padding:32,maxWidth:activeMenu==='users'?'100%':'700'}}>
+        <div style={{padding:32,maxWidth:700}}>
           
           {/* Company Information */}
           {activeMenu==='company'&&(<>
@@ -1823,17 +2017,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               </div>
             </div>)}
           </>)}
-          
-          {/* Users → System Management */}
-          {activeMenu==='users'&&(
-            <div style={{padding:40,background:'var(--g50)',borderRadius:12,textAlign:'center'}}>
-              <div style={{fontSize:36,marginBottom:12}}>⚙️</div>
-              <div style={{fontSize:16,fontWeight:700,color:'var(--g800)',marginBottom:8}}>User Management</div>
-              <div style={{fontSize:13,color:'var(--g500)',marginBottom:20,lineHeight:1.6}}>Adding, editing and portal access permissions for users<br/>are now managed centrally from the System Management section.</div>
-              <p style={{fontSize:12,color:'var(--g400)'}}>You can switch to "System Management" from the portal menu in the sidebar.</p>
-            </div>
-          )}
-          
+
         </div>
       </div>
     </div>);
@@ -1858,7 +2042,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return(<div className="content">
       <div style={{marginBottom:28}}>
         <div style={{fontSize:22,fontWeight:800,color:'var(--g900)',marginBottom:4,letterSpacing:'-0.5px'}}>Dashboard</div>
-        <div style={{fontSize:13,color:'var(--g500)',fontWeight:500}}>Operational Account</div>
+        <div style={{fontSize:13,color:'var(--g500)',fontWeight:500}}>Sales & Procurement Account</div>
       </div>
       
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:18,marginBottom:28}}>
@@ -1968,27 +2152,31 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   const titles={home:'Dashboard',sales_quotes:'Sales Quotations',sales_invoices:'Sales Invoices',purchase_quotes:'Received Quotes',purchase_orders:'Purchase Orders',received_invoices:'Received Invoices',projects:'Projects',proj_detail:(cur&&cur.name)||'Project',product_pool:'Product Pool',expenses:'Expenses',customers:'Customers',documents:'Documents',settings:'Settings',exp_cats:'Expense Categories'};
 
+  dirtyCheckRef.current=null;
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <div className="sidebar no-print">
-        <div className="sb-brand" onClick={()=>go('home')}>
-          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">Operations</div></div>
+        <div className="sb-brand" onClick={()=>goGuarded('home')}>
+          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">Sales & Procurement</div></div>
         </div>
-        <PortalDropdown session={session} onPortalSwitch={onPortalSwitch} onLogout={onLogout} onOpenProfile={onOpenProfile}/>
+        <PortalDropdown session={session} onPortalSwitch={guardedPortalSwitch} onLogout={guardedLogout} onOpenProfile={onOpenProfile}/>
         <div style={{flex:1,overflow:'auto',padding:'6px 0'}}>
           {SB.map((it,i)=>{
             if(it.group)return <div key={i} className="sb-group">{it.group}</div>;
             if(it.div)return <div key={i} style={{height:1,background:'rgba(255,255,255,.06)',margin:'4px 10px'}}/>;
-            return <div key={it.k} className={`sb-item${(view===it.k||view===it.k+'_form'||view===it.k+'_preview')?' active':''}`} onClick={()=>go(it.k)}><Ico n={it.ico} size={13}/><span className="lbl">{it.lbl}</span></div>;
+            return <div key={it.k} className={`sb-item${(view===it.k||view===it.k+'_form'||view===it.k+'_preview')?' active':''}`} onClick={()=>goGuarded(it.k)}><Ico n={it.ico} size={13}/><span className="lbl">{it.lbl}</span></div>;
           })}
         </div>
-        <div className="sb-footer">
-          <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>Profile</span></button>
-          <button className="sb-footer-btn" onClick={onLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
+        <div className="sb-pinned">
+          <SystemManagementLink session={session} onPortalSwitch={guardedPortalSwitch}/>
+          <div className="sb-footer">
+            <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>{`${session.firstName||''} ${session.lastName||''}`.trim()||session.username}</span></button>
+            <button className="sb-footer-btn" onClick={guardedLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
+          </div>
         </div>
       </div>
       <div className="main">
-        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats'].includes(view)&&
+        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
           <div className="topbar no-print">
             <h1 className="topbar-title">{titles[view]||''}</h1>
             <div style={{flex:1}}/>
@@ -2026,8 +2214,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {view==='ri_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRI} onCancel={()=>go('received_invoices')}/>}
         {view==='received_invoice_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRIFromPO} onCancel={()=>go('purchase_orders')}/>}
         {view==='proj_form'&&cur&&<ProjectForm proj={cur} onSave={handleSaveProj} onCancel={()=>go('projects')}/>}
-        {view==='exp_form'&&cur&&<ExpenseForm exp={cur} onSave={handleSaveExp} onCancel={()=>go('expenses')}/>}
+        {view==='exp_form'&&cur&&<ExpenseForm exp={cur} expCats={expCats} projects={projects} mkExpense={mkExpense} onSave={handleSaveExp} onSaveAndNew={handleSaveExpAndNew} onCancel={()=>go('expenses')} dirtyRef={dirtyCheckRef}/>}
         {view==='exp_cats'&&<ExpCatsView/>}
+        {view==='exp_import'&&<ExpenseImportView/>}
         {view==='cust_form'&&cur&&<CustomerForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('customers')}/>}
         {/* PREVIEWS */}
         {view==='sales_quote_preview'&&cur&&<Preview doc={cur} co={co} docType="sales_quote" onBack={()=>go(prev)} onEdit={()=>{go('sales_quote_form','sales_quote_preview');}}/>}
@@ -2048,4 +2237,46 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>}
     </div>
   );
+}
+
+// Top-level (not nested in AppOperational) so that saving — which updates the shared expenses
+// array and therefore re-renders AppOperational — re-renders this form in place instead of
+// remounting it; a nested version would reset its local state (and "Save & New"'s fresh blank
+// row) on every save, since AppOperational recreating a nested function component each render
+// gives React a new component identity to mount.
+function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,onCancel,dirtyRef}){
+  const[e,setE]=useState(init);const s=(k,v)=>setE(d=>({...d,[k]:v}));
+  const _initStr=useRef(JSON.stringify(init));
+  const _isDirty=()=>JSON.stringify(e)!==_initStr.current;
+  const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+  if(dirtyRef)dirtyRef.current=_isDirty;
+  const dateRef=useRef(null);
+  const handleSaveAndNew=()=>{
+    if(!e.amount){alert('Amount is required');return;}
+    onSaveAndNew(e);
+    const fresh=mkExpense();
+    setE(fresh);
+    _initStr.current=JSON.stringify(fresh);
+    dateRef.current&&dateRef.current.focus();
+  };
+  const allCats=expCats.map(c=>typeof c==='string'?{id:c,name:c}:c);
+  const userNames=(LS.get('gm_users')||[]).map(u=>`${u.firstName||''} ${u.lastName||''}`.trim()||u.username).filter(Boolean);
+  const employeeOptions=Array.from(new Set([...userNames,...(e.employee?[e.employee]:[])]));
+  return(<div className="content"><div className="fw">
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>Save & New</Btn>}<Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
+    <div className="fc"><div className="fct">Expense Details</div>
+      <div className="fg g3"><Fld label="Date"><input ref={dateRef} type="date" value={e.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label="Amount"><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label="Currency"><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
+      <div className="fg g3" style={{marginTop:12,gridTemplateColumns:'1fr 2fr 1fr'}}>
+        <Fld label="Category"><select value={e.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">— Select —</option>{allCats.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select></Fld>
+        <Fld label="Description"><input value={e.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="What was this for?"/></Fld>
+        <Fld label="Employee"><select value={e.employee||''} onChange={x=>s('employee',x.target.value)} className="fi"><option value="">— Select —</option>{employeeOptions.map(n=><option key={n} value={n}>{n}</option>)}</select></Fld>
+      </div>
+      <div className="fg g2" style={{marginTop:12}}>
+        <Fld label="Reference"><input value={e.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Receipt No"/></Fld>
+        <Fld label="Project"><select value={e.project||''} onChange={x=>s('project',x.target.value)} className="fi"><option value="">— None —</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}</select></Fld>
+      </div>
+      <div style={{marginTop:12}}><Fld label="Notes"><textarea value={e.notes||''} onChange={x=>s('notes',x.target.value)} rows={2} className="fi"/></Fld></div>
+    </div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>Save & New</Btn>}<Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
+  </div></div>);
 }

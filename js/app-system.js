@@ -72,7 +72,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
           <div className="fct">Portal Permissions</div>
           <p style={{fontSize:13,color:'var(--g500)',marginBottom:16,padding:'0 16px'}}>If "No Access" is selected, the user cannot access that portal.</p>
           <div className="fg g2" style={{padding:'0 16px 16px'}}>
-            {[['off','Official — Finance & Accounting'],['ops','Operational — Sales & Procurement']].map(([key,label])=>(
+            {[['off','Official — Finance & Accounting'],['ops','Sales & Procurement']].map(([key,label])=>(
               <Fld key={key} label={label}>
                 <select value={portals[key]||''} onChange={e=>sp(key,e.target.value||null)} className="fi">
                   <option value="">— No Access —</option>
@@ -102,7 +102,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
   // USERS LIST
   // ==========================
   const ROLE_COLOR={Admin:'var(--purple)',Manager:'var(--blue)',User:'var(--gm-500)'};
-  const PORTAL_LABEL={off:'Official',ops:'Operational'};
+  const PORTAL_LABEL={off:'Official',ops:'Sales & Procurement'};
 
   const renderUsers=()=>(
     <div className="content">
@@ -114,13 +114,14 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
       </div>
       <div className="tcard">
         <table className="dt">
+          <Cg w={[0.4,1.6,1.1,1.6,0.9,1.4,0.9,0.7]}/>
           <thead><tr>
-            <th style={{width:32}}>#</th>
+            <th>#</th>
             <th>Full Name</th>
             <th>Username</th>
             <th>Email</th>
             <th>Official</th>
-            <th>Operational</th>
+            <th>Sales & Procurement</th>
             <th>Status</th>
             <th>Actions</th>
           </tr></thead>
@@ -164,9 +165,12 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
             <Ico n="customers" size={15}/><span>Users</span>
           </button>
         </div>
-        <div className="sb-footer">
-          <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>Profile</span></button>
-          <button className="sb-footer-btn" onClick={onLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
+        <div className="sb-pinned">
+          <SystemManagementLink session={session} onPortalSwitch={onPortalSwitch}/>
+          <div className="sb-footer">
+            <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>{`${session.firstName||''} ${session.lastName||''}`.trim()||session.username}</span></button>
+            <button className="sb-footer-btn" onClick={onLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
+          </div>
         </div>
       </div>
 
