@@ -58,12 +58,63 @@ const genPQNum=()=>''; // manual
 const genPONum=n=>`PO-${padN(n)}`;
 const genProjNum=n=>`PRJ-${padN(n)}`;
 
+// ── Server sync (PHP API in /api) ──
+// localStorage stays the working copy; these keys are loaded from the server after login
+// and every write to them is pushed back. Must match the key lists in api/_bootstrap.php.
+const API_BASE='api/';
+const SYNC_JSON_KEYS=['gm_users',
+  'off_i','off_q','off_p','off_r','off_pr','off_cust','off_banktx','off_expcat','off_incomecat','off_co','off_cnt',
+  'ops_cust','ops_proj','ops_sq','ops_si','ops_pq','ops_po','ops_ri','ops_exp','ops_expcat','ops_docs','ops_co','ops_cnt','ops_pp'];
+const SYNC_RAW_KEYS=['gm_logo','gm_signature'];
+const isSyncKey=k=>SYNC_JSON_KEYS.includes(k)||SYNC_RAW_KEYS.includes(k);
+const apiCall=async(path,opts={})=>{
+  const r=await fetch(API_BASE+path,{credentials:'same-origin',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok){const e=new Error(j.error||('HTTP '+r.status));e.status=r.status;throw e;}
+  return j;
+};
+const Sync={
+  timers:{},
+  // Debounced so rapid successive saves of one key send a single request with the latest value.
+  push(k){
+    if(!isSyncKey(k))return;
+    clearTimeout(this.timers[k]);
+    this.timers[k]=setTimeout(()=>this.send(k),300);
+  },
+  send(k,keepalive=false){
+    delete this.timers[k];
+    let raw=null;try{raw=localStorage.getItem(k);}catch{}
+    const value=SYNC_RAW_KEYS.includes(k)?raw:(raw?JSON.parse(raw):null);
+    return apiCall('data.php?key='+encodeURIComponent(k),{method:'PUT',keepalive,body:JSON.stringify({value})})
+      .catch(e=>{
+        console.warn('Sync failed:',k,e.message);
+        window.dispatchEvent(new CustomEvent(e.status===401?'sync-unauthorized':'sync-error',{detail:{key:k,message:e.message}}));
+      });
+  },
+  flush(){Object.keys(this.timers).forEach(k=>{clearTimeout(this.timers[k]);this.send(k,true);});},
+  // Replaces the local copy of every synced key with the server's data.
+  async pull(){
+    const{data}=await apiCall('data.php');
+    [...SYNC_JSON_KEYS,...SYNC_RAW_KEYS].forEach(k=>{
+      const v=data[k];
+      try{
+        if(v===null||v===undefined)localStorage.removeItem(k);
+        else localStorage.setItem(k,SYNC_RAW_KEYS.includes(k)?v:JSON.stringify(v));
+      }catch(e){console.warn('Sync pull failed:',k,e.name);}
+    });
+    window.dispatchEvent(new CustomEvent('logo-changed',{detail:{logo:data.gm_logo||''}}));
+    window.dispatchEvent(new CustomEvent('signature-changed',{detail:{signature:data.gm_signature||''}}));
+  },
+  clearLocal(){[...SYNC_JSON_KEYS,...SYNC_RAW_KEYS].forEach(k=>{try{localStorage.removeItem(k);}catch{}});}
+};
+window.addEventListener('beforeunload',()=>Sync.flush());
+
 const LS={
   get:k=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch{return null}},
-  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){console.warn('LS.set failed:',k,e.name);}},
+  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));Sync.push(k);}catch(e){console.warn('LS.set failed:',k,e.name);}},
   getRaw:k=>{try{return localStorage.getItem(k)||null}catch{return null}},
-  setRaw:(k,v)=>{try{localStorage.setItem(k,v);}catch(e){console.warn('LS.setRaw failed:',k,e.name);}},
-  del:k=>{try{localStorage.removeItem(k)}catch{}}
+  setRaw:(k,v)=>{try{localStorage.setItem(k,v);Sync.push(k);}catch(e){console.warn('LS.setRaw failed:',k,e.name);}},
+  del:k=>{try{localStorage.removeItem(k);Sync.push(k);}catch{}}
 };
 const hashPassword=async p=>{const d=new TextEncoder().encode(p+'gm_salt_2025');const b=await crypto.subtle.digest('SHA-256',d);return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');};
 
@@ -94,6 +145,7 @@ const setLogo=v=>{
   try{
     if(v){localStorage.setItem(LOGO_KEY,v);}
     else{localStorage.removeItem(LOGO_KEY);}
+    Sync.push(LOGO_KEY);
     // Notify all components that logo changed
     window.dispatchEvent(new CustomEvent('logo-changed',{detail:{logo:v||''}}));
   }catch(e){console.warn('setLogo failed:',e.name,e.message);}
@@ -116,6 +168,7 @@ const setSignature=v=>{
   try{
     if(v){localStorage.setItem(SIGNATURE_KEY,v);}
     else{localStorage.removeItem(SIGNATURE_KEY);}
+    Sync.push(SIGNATURE_KEY);
     window.dispatchEvent(new CustomEvent('signature-changed',{detail:{signature:v||''}}));
   }catch(e){console.warn('setSignature failed:',e.name,e.message);}
 };

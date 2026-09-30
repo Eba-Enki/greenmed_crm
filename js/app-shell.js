@@ -13,6 +13,9 @@ function LoginScreen({onLogin}){
     if(!username||!password){setError('Username and password required');return;}
     setLoading(true);setError('');
     try{
+      try{await apiCall('login.php',{method:'POST',body:JSON.stringify({username,password})});}
+      catch(e){setError(e.status===401?'Incorrect username or password':'Server error: '+e.message);setLoading(false);return;}
+      await Sync.pull();
       migrateToGlobalUsers();
       let users=LS.get('gm_users')||[];
       if(users.length===0){
@@ -215,11 +218,26 @@ function App(){
   const[pendingPortals,setPendingPortals]=useState([]);
   const[profileOpen,setProfileOpen]=useState(false);
 
+  const[syncError,setSyncError]=useState('');
+
   useEffect(()=>{
-    migrateToGlobalUsers();
     const saved=getSession();
-    if(saved){setSessionState(saved);setStep('app');}
-    else setStep('login');
+    if(!saved){setStep('login');return;}
+    // Refresh local data from the server; a 401 means the server session has expired.
+    Sync.pull()
+      .then(()=>{setSessionState(saved);setStep('app');})
+      .catch(e=>{
+        if(e.status===401){clearSession();Sync.clearLocal();setStep('login');}
+        else{setSyncError('Could not load data from the server: '+e.message);setSessionState(saved);setStep('app');}
+      });
+  },[]);
+
+  useEffect(()=>{
+    const onUnauthorized=()=>{clearSession();Sync.clearLocal();setSessionState(null);setStep('login');};
+    const onError=e=>setSyncError('Changes could not be saved to the server ('+e.detail.message+'). Check your connection before continuing.');
+    window.addEventListener('sync-unauthorized',onUnauthorized);
+    window.addEventListener('sync-error',onError);
+    return()=>{window.removeEventListener('sync-unauthorized',onUnauthorized);window.removeEventListener('sync-error',onError);};
   },[]);
 
   const doSelectPortal=(user,portal)=>{
@@ -246,7 +264,11 @@ function App(){
     setSession(newSess);setSessionState(newSess);
   };
 
-  const handleLogout=()=>{clearSession();setSessionState(null);setPendingUser(null);setStep('login');};
+  const handleLogout=()=>{
+    Sync.flush();
+    apiCall('logout.php',{method:'POST',keepalive:true}).catch(()=>{});
+    clearSession();Sync.clearLocal();setSessionState(null);setPendingUser(null);setStep('login');
+  };
   const handleSessionUpdate=newSess=>{setSessionState(newSess);};
 
   if(step==='loading')return null;
@@ -267,6 +289,10 @@ function App(){
       {session.activePortal==='ops'&&<AppOperational {...portalProps}/>}
       {session.activePortal==='system'&&<AppSystem {...portalProps}/>}
       {profileOpen&&<ProfileModal session={session} onClose={()=>setProfileOpen(false)} onUpdate={handleSessionUpdate}/>}
+      {syncError&&<div role="alert" style={{position:'fixed',left:16,right:16,bottom:16,zIndex:9999,display:'flex',alignItems:'center',gap:12,background:'#fff',border:'1.5px solid rgba(192,57,43,.35)',borderRadius:10,padding:'12px 16px',boxShadow:'0 8px 28px rgba(26,42,10,.12)',color:'var(--red)',fontSize:13,fontWeight:500}}>
+        <span style={{flex:1}}>{syncError}</span>
+        <button onClick={()=>setSyncError('')} style={{border:'none',background:'transparent',color:'var(--g600)',cursor:'pointer',fontSize:13,fontWeight:600}}>Dismiss</button>
+      </div>}
     </>
   );
 }

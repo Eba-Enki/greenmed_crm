@@ -1,0 +1,6 @@
+Options -Indexes
+
+# config.php, config.sample.php and _bootstrap.php are include-only
+<FilesMatch "^(config|_)">
+  Require all denied
+</FilesMatch>
