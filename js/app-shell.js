@@ -70,7 +70,7 @@ function PortalSelectScreen({user,portals,onSelect}){
     <div className="acc-screen">
       <div className="ps-wrap">
         <img src={logo||LOGO} className="ps-logo" alt="Green Med Ltd"/>
-        <h2 className="ps-title">Green Med Ltd</h2>
+        {!logo&&<h2 className="ps-title">Green Med Ltd</h2>}{/* an uploaded logo already carries the name */}
         <p className="ps-sub">Please select the portal you want to use</p>
         <div className="ps-cards">
           {list.map(p=>{
