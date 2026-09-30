@@ -32,6 +32,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // their identity and remounts them, silently wiping the very changes the user chose to keep.
   // The global dialog's state lives outside this tree entirely, so "stay" truly leaves the form untouched.
   const dirtyCheckRef=useRef(null);
+  // OpsSettings keeps its draft here: like the forms above it is a nested function declaration,
+  // so any re-render of AppOperational remounts it and would otherwise reset unsaved edits.
+  const settingsDraftRef=useRef(null);
   const goGuarded=(v,from)=>{
     if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)go(v,from);});
     else go(v,from);
@@ -1277,20 +1280,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       onSave(norm);
     };
     const custPick=customers.filter(c=>{const t=c.type||'customer';return t==='customer'||t==='both';});
-    return(<div className="content"><div className="fw" style={{maxWidth:640}}>
+    return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
       <div className="fc"><div className="fct">Project Details</div>
-        <div className="fg g2"><Fld label="Project No"><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label="Project Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
-        <div className="fg g3" style={{marginTop:12}}>
+        <div className="fg g-no-name"><Fld label="Project No"><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label="Project Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
+        <div className="fg g-2-1-1" style={{marginTop:12}}>
           <Fld label="Client"><select value={p.clientId||''} onChange={e=>{s('clientId',e.target.value);const c=custPick.find(x=>x.id===e.target.value);if(c)s('client',c.company||c.contact||'');}} className="fi"><option value="">— Select customer —</option>{custPick.map(c=><option key={c.id} value={c.id}>{c.company||c.contact||''}</option>)}</select></Fld>
           <Fld label="Start Date"><input type="date" value={p.startDate||td()} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld>
           <Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld>
         </div>
-        <div className="fg g2" style={{marginTop:12}}>
+        <div className="fg g-budget" style={{marginTop:12}}>
           <Fld label="Budget"><input type="number" value={p.budget||''} onChange={e=>s('budget',e.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
           <Fld label="Budget Currency"><select value={p.currency||'GBP'} onChange={e=>s('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld>
         </div>
-        <div style={{marginTop:12}}><Fld label="Description"><textarea value={p.desc||''} onChange={e=>s('desc',e.target.value)} rows={2} className="fi"/></Fld></div>
+        <div style={{marginTop:12}}><Fld label="Description"><textarea value={p.desc||''} onChange={e=>s('desc',e.target.value)} rows={3} className="fi"/></Fld></div>
       </div>
       <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
     </div></div>);
@@ -1675,14 +1678,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(dup&&!(await askDuplicateOk('customer',nameVal)))return;
       onSave(norm);
     };
-    return(<div className="content"><div className="fw" style={{maxWidth:600}}>
+    return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
       <div className="fc"><div className="fct">Customer Info</div>
-        <div className="fg g2"><Fld label="Company Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
-        <div className="fg g2" style={{marginTop:12}}><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
-        <div style={{marginTop:12}}><Fld label="Relationship"><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">Customer</option><option value="supplier">Supplier</option><option value="both">Both</option></select></Fld></div>
-        <div style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
-        <div style={{marginTop:12}}><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
+        <div className="fg g-2-1"><Fld label="Company Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Relationship"><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">Customer</option><option value="supplier">Supplier</option><option value="both">Both</option></select></Fld></div>
+        <div className="fg g3" style={{marginTop:12}}><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
+        <div className="fg g2" style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={4} className="fi"/></Fld></div>
       </div>
       <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
     </div></div>);
@@ -1784,267 +1785,217 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   }
 
   function OpsSettings(){
-    const[c,setC]=useState(()=>{
+    const fromCo=()=>{
       const merged={...DEF_CO,...co};
       if(!merged.banks||merged.banks.length===0){
-        if(merged.accountName||merged.accountNumber||merged.iban||merged.bic){
-          merged.banks=[{id:uid(),accountName:merged.accountName||'',accountNumber:merged.accountNumber||'',iban:merged.iban||'',bic:merged.bic||'',isDefault:true}];
-        }else{
-          merged.banks=[];
-        }
+        merged.banks=(merged.accountName||merged.accountNumber||merged.iban||merged.bic)
+          ?[{id:uid(),accountName:merged.accountName||'',accountNumber:merged.accountNumber||'',iban:merged.iban||'',bic:merged.bic||'',currency:'GBP',isDefault:true}]
+          :[];
       }
       return merged;
-    });
-    const s=(k,v)=>setC(d=>({...d,[k]:v}));
+    };
+    // The draft lives in settingsDraftRef so it survives remounts of this nested component.
+    const[c,setC]=useState(()=>settingsDraftRef.current||fromCo());
+    const draft=()=>settingsDraftRef.current||c;
+    const update=next=>{settingsDraftRef.current=next;setC(next);};
+    const s=(k,v)=>update({...draft(),[k]:v});
     const[activeMenu,setActiveMenu]=useState(()=>LS.get(ns+'settingsMenu')||'company');
     const[numLocked,setNumLocked]=useState(true);
     const[editingBank,setEditingBank]=useState(null);
-    
-    const handleLogoUpload=(e)=>{
-      const f=e.target.files[0];
+    const logoInput=useRef(null);const sigInput=useRef(null);
+
+    // Logo, signature and banks save immediately; everything else waits for Save.
+    const unsavedFields=d=>{const{banks,logo,signature,...rest}=d;return JSON.stringify(rest);};
+    dirtyCheckRef.current=()=>unsavedFields(c)!==unsavedFields({...DEF_CO,...co});
+
+    const saveAll=()=>{
+      const cNorm={...c,name:toTitleCase(c.name),address:toSentenceCase(c.address),email:(c.email||'').trim().toLowerCase()};
+      const{logo,signature,...coWithoutLogoAndSig}=cNorm;
+      setLogo(logo||'');setSignature(signature||'');
+      settingsDraftRef.current=null;
+      setCo(cNorm);LS.set(ns+'co',coWithoutLogoAndSig);showToast('Saved ✓');go('home');
+    };
+
+    const readImage=(e,typeRe,typeMsg,apply)=>{
+      const f=e.target.files[0];e.target.value='';
       if(!f)return;
-      if(!f.type.startsWith('image/')){alert('Please select an image file');return;}
-      const r=new FileReader();
-      r.onload=()=>{const data=r.result;setLogo(data);s('logo',data);};
-      r.readAsDataURL(f);
+      if(!typeRe.test(f.type)){alert(typeMsg);return;}
+      const r=new FileReader();r.onload=()=>apply(r.result);r.readAsDataURL(f);
     };
-    
-    // Bank operations
-    const addBank=()=>{
-      setEditingBank({id:uid(),accountName:'',accountNumber:'',iban:'',bic:'',isDefault:false});
+
+    // Bank changes are written straight to storage, so no separate Save is needed.
+    const persistBanks=banks=>{
+      update({...draft(),banks});
+      LS.set(ns+'co',{...(LS.get(ns+'co')||{}),banks});
+      setCo(x=>({...x,banks}));
     };
-    const saveBank=(bankIn)=>{
-      const bank={...bankIn,accountName:toTitleCase(bankIn.accountName),iban:(bankIn.iban||'').trim().toUpperCase(),bic:(bankIn.bic||'').trim().toUpperCase()};
-      const banks=c.banks||[];
-      const idx=banks.findIndex(b=>b.id===bank.id);
-      if(idx>=0){
-        banks[idx]=bank;
-      }else{
-        if(bank.isDefault)banks.forEach(b=>b.isDefault=false);
-        banks.push(bank);
-      }
-      s('banks',[...banks]);
+    const saveBank=b=>{
+      const bank={...b,accountName:toTitleCase(b.accountName),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase(),currency:b.currency||'GBP'};
+      const list=draft().banks||[];
+      let banks=list.some(x=>x.id===bank.id)?list.map(x=>x.id===bank.id?bank:x):[...list,bank];
+      if(bank.isDefault)banks=banks.map(x=>({...x,isDefault:x.id===bank.id}));
       setEditingBank(null);
+      persistBanks(banks);
+      showToast('Bank account saved');
     };
-    const deleteBank=(id)=>{
-      askConfirm('Delete this bank account?',()=>{const banks=(c.banks||[]).filter(b=>b.id!==id);s('banks',banks);});
-    };
-    const setDefaultBank=(id)=>{
-      const banks=(c.banks||[]).map(b=>({...b,isDefault:b.id===id}));
-      s('banks',banks);
-    };
-    
+    const deleteBank=id=>askGlobalConfirm('Delete this bank account?',{confirmLabel:'Delete'}).then(ok=>{
+      if(ok)persistBanks((draft().banks||[]).filter(b=>b.id!==id));
+    });
+    const setDefaultBank=id=>persistBanks((draft().banks||[]).map(b=>({...b,isDefault:b.id===id})));
+    const eb=(k,v)=>setEditingBank(x=>({...x,[k]:v}));
+    const isNewBank=editingBank&&!(c.banks||[]).some(b=>b.id===editingBank.id);
+
     const menuItems=[
-      {id:'company',icon:'settings',label:'Company Information'},
+      {id:'company',icon:'settings',label:'Company'},
       {id:'pdf',icon:'dl',label:'PDF Templates'},
-      {id:'numbering',icon:'hash',label:'Document Numbering'},
+      {id:'numbering',icon:'hash',label:'Numbering'},
       {id:'bank',icon:'card',label:'Bank Details'}
     ];
-    
-    return(<div className="content" style={{padding:0,display:'flex',height:'calc(100vh - 54px)'}}>
-      {/* Back Button & Title Bar */}
-      <div style={{position:'absolute',top:0,left:0,right:0,background:'var(--g50)',borderBottom:'1px solid var(--g200)',padding:'12px 24px',display:'flex',alignItems:'center',gap:10,zIndex:10}}>
-        <button onClick={()=>go('home')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back" size={14}/>Back to Dashboard</button>
-        <h2 style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginLeft:10}}>Settings</h2>
-        <div style={{flex:1}}/>
-        <Btn v="bp bsm" onClick={()=>{const cNorm={...c,name:toTitleCase(c.name),address:toSentenceCase(c.address),email:(c.email||'').trim().toLowerCase()};const{logo,signature,...coWithoutLogoAndSig}=cNorm;setLogo(logo||'');setSignature(signature||'');setCo(cNorm);LS.set(ns+'co',coWithoutLogoAndSig);showToast('Saved ✓');go('home');}}>Save</Btn>
-      </div>
-      
-      {/* Left Menu */}
-      <div style={{width:280,background:'var(--white)',borderRight:'1px solid var(--g200)',paddingTop:70,flexShrink:0}}>
-        <div style={{padding:'8px 16px',fontSize:10,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:4}}>Settings</div>
-        {menuItems.map(m=>(
-          <div key={m.id} onClick={()=>{setActiveMenu(m.id);LS.set(ns+'settingsMenu',m.id);}} style={{padding:'10px 16px',margin:'2px 8px',borderRadius:8,cursor:'pointer',display:'flex',alignItems:'center',gap:10,background:activeMenu===m.id?'var(--g100)':'transparent',color:activeMenu===m.id?'var(--g900)':'var(--g600)',fontWeight:activeMenu===m.id?600:500,fontSize:13,transition:'background 0.15s,border-color 0.15s,box-shadow 0.15s,color 0.15s,transform 0.15s'}}>
-            <Ico n={m.icon} size={16}/>
-            <span>{m.label}</span>
-          </div>
-        ))}
-      </div>
-      
-      {/* Right Content */}
-      <div style={{flex:1,overflowY:'auto',paddingTop:70}}>
-        <div style={{padding:32,maxWidth:700}}>
-          
-          {/* Company Information */}
-          {activeMenu==='company'&&(<>
-            <div style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:20}}>Company Information</div>
-            <div className="fc">
-              <div style={{marginBottom:12}}><Fld label="Company Name"><input value={c.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
-              <div style={{marginBottom:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld></div>
-              <div className="fg g2"><Fld label="Email"><input value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
-              <div style={{marginTop:16}}>
-                <Fld label="Company Logo">
-                  <input type="file" accept="image/*" onChange={handleLogoUpload} className="fi" style={{padding:'8px'}}/>
-                  {c.logo&&<div style={{marginTop:8,padding:12,background:'var(--g50)',borderRadius:8,display:'flex',alignItems:'center',gap:12}}>
-                    <img src={c.logo} alt="Logo" style={{maxWidth:120,maxHeight:60,objectFit:'contain'}}/>
-                    <button onClick={()=>{setLogo('');s('logo','');}} style={{padding:'4px 10px',background:'var(--red)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>Remove</button>
-                  </div>}
-                </Fld>
-              </div>
-              <div style={{marginTop:16}}>
-                <Fld label="Signature">
-                  <input type="file" accept="image/png,image/jpeg,image/jpg" onChange={(e)=>{
-                    const f=e.target.files[0];
-                    if(!f)return;
-                    if(!f.type.match(/^image\/(png|jpeg|jpg)$/)){alert('Please select a PNG or JPG file');return;}
-                    const r=new FileReader();
-                    r.onload=()=>{
-                      const data=r.result;
-                      setSignature(data);
-                      s('signature',data);
-                    };
-                    r.readAsDataURL(f);
-                  }} className="fi" style={{padding:'8px'}}/>
-                  {c.signature&&<div style={{marginTop:8,padding:12,background:'var(--g50)',borderRadius:8,display:'flex',alignItems:'center',gap:12}}>
-                    <img src={c.signature} alt="Signature" style={{maxWidth:120,maxHeight:60,objectFit:'contain'}}/>
-                    <button onClick={()=>{setSignature('');s('signature','');}} style={{padding:'4px 10px',background:'var(--red)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>Remove</button>
-                  </div>}
-                </Fld>
-              </div>
-            </div>
-          </>)}
-          
-          {/* PDF Templates */}
-          {activeMenu==='pdf'&&(<>
-            <div style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:20}}>PDF Templates</div>
-            <div style={{marginBottom:16,fontSize:13,color:'var(--g600)'}}>Select a template for your invoices and quotations</div>
-            
-            {Object.values(TEMPLATES).map(tpl=>(
-              <div key={tpl.id} onClick={()=>s('selectedTemplate',tpl.id)} style={{background:'var(--white)',border:c.selectedTemplate===tpl.id?'2px solid var(--gm-400)':'1px solid var(--g200)',borderRadius:10,padding:20,marginBottom:12,cursor:'pointer',transition:'background 0.15s,border-color 0.15s,box-shadow 0.15s,color 0.15s,transform 0.15s',position:'relative'}}>
-                {c.selectedTemplate===tpl.id&&<div style={{position:'absolute',top:12,right:12,background:'var(--gm-400)',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:700}}>ACTIVE</div>}
-                <div style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginBottom:6}}>{tpl.name}</div>
-                <div style={{fontSize:12,color:'var(--g600)'}}>{tpl.description}</div>
-              </div>
-            ))}
-          </>)}
-          
-          {/* Document Numbering */}
-          {activeMenu==='numbering'&&(<>
-            <div style={{display:'flex',alignItems:'center',marginBottom:20}}>
-              <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>Document Numbering</div>
-              <div style={{flex:1}}/>
-              {numLocked?
-                <Btn v="bgh bsm" onClick={()=>setNumLocked(false)}><Ico n="edit" size={13}/>Edit</Btn>:
-                <Btn v="bp bsm" onClick={()=>setNumLocked(true)}><Ico n="check" size={13}/>Done</Btn>
-              }
-            </div>
-            <div style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,overflow:'hidden'}}>
-              {/* Sales Quotation */}
-              <div style={{padding:'16px 20px',borderBottom:'1px solid var(--g200)',display:'flex',alignItems:'center',gap:16}}>
-                <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>1</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>Sales Quotation</div>
-                  <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Prefix</div>
-                      <input value={c.sqPfx||'SQ'} onChange={e=>s('sqPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Start Number</div>
-                      <input type="number" value={c.sqStart||'1'} onChange={e=>s('sqStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Sales Invoice */}
-              <div style={{padding:'16px 20px',borderBottom:'1px solid var(--g200)',display:'flex',alignItems:'center',gap:16}}>
-                <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>2</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>Sales Invoice</div>
-                  <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Prefix</div>
-                      <input value={c.siPfx||'SI'} onChange={e=>s('siPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Start Number</div>
-                      <input type="number" value={c.siStart||'1'} onChange={e=>s('siStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Purchase Order */}
-              <div style={{padding:'16px 20px',display:'flex',alignItems:'center',gap:16}}>
-                <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>3</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>Purchase Order</div>
-                  <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Prefix</div>
-                      <input value={c.poPfx||'PO'} onChange={e=>s('poPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
-                    </div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Start Number</div>
-                      <input type="number" value={c.poStart||'1'} onChange={e=>s('poStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>)}
-          
-          {/* Bank Details */}
-          {activeMenu==='bank'&&(<>
-            <div style={{display:'flex',alignItems:'center',marginBottom:20}}>
-              <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>Bank Details</div>
-              <div style={{flex:1}}/>
-              <Btn v="bp bsm" onClick={addBank}><Ico n="plus" size={13}/>Add Bank</Btn>
-            </div>
-            
-            {/* Bank List */}
-            {(!c.banks||c.banks.length===0)&&!editingBank&&(
-              <div style={{padding:40,background:'var(--g50)',borderRadius:12,textAlign:'center',color:'var(--g500)',fontSize:13}}>
-                <div style={{fontSize:40,marginBottom:12}}>🏦</div>
-                <div style={{fontWeight:600,marginBottom:6}}>No Bank Accounts</div>
-                <div>Add your first bank account to start.</div>
-              </div>
-            )}
-            
-            {(c.banks||[]).map(bank=>(
-              <div key={bank.id} style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,padding:20,marginBottom:12}}>
-                <div style={{display:'flex',alignItems:'center',marginBottom:12}}>
-                  <div style={{fontSize:14,fontWeight:700,color:'var(--g900)'}}>{bank.accountName||'Unnamed Account'}</div>
-                  {bank.isDefault&&<span style={{marginLeft:8,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,background:'var(--greenl)',color:'var(--green)'}}>DEFAULT</span>}
-                  <div style={{flex:1}}/>
-                  <div style={{display:'flex',gap:6}}>
-                    {!bank.isDefault&&<button onClick={()=>setDefaultBank(bank.id)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,background:'var(--g100)',border:'none',borderRadius:6,cursor:'pointer',color:'var(--g700)'}}>Set Default</button>}
-                    <button onClick={()=>setEditingBank(bank)} className="ab"><Ico n="edit"/></button>
-                    <button onClick={()=>deleteBank(bank.id)} className="ab danger"><Ico n="trash"/></button>
-                  </div>
-                </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,fontSize:12,color:'var(--g600)'}}>
-                  <div><span style={{fontWeight:600}}>Account Number:</span> {bank.accountNumber||'—'}</div>
-                  <div><span style={{fontWeight:600}}>IBAN:</span> {bank.iban||'—'}</div>
-                  <div><span style={{fontWeight:600}}>BIC:</span> {bank.bic||'—'}</div>
-                </div>
-              </div>
-            ))}
-            
-            {/* Bank Form Modal */}
-            {editingBank&&(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setEditingBank(null)}>
-              <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:500,maxWidth:'90vw'}}>
-                <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{editingBank.accountName?'Edit Bank Account':'New Bank Account'}</div>
-                <div style={{marginBottom:12}}><Fld label="Account Name"><input value={editingBank.accountName||''} onChange={e=>setEditingBank({...editingBank,accountName:e.target.value})} className="fi"/></Fld></div>
-                <div style={{marginBottom:12}}><Fld label="Account Number"><input value={editingBank.accountNumber||''} onChange={e=>setEditingBank({...editingBank,accountNumber:e.target.value})} className="fi"/></Fld></div>
-                <div style={{marginBottom:12}}><Fld label="IBAN"><input value={editingBank.iban||''} onChange={e=>setEditingBank({...editingBank,iban:e.target.value})} className="fi"/></Fld></div>
-                <div style={{marginBottom:12}}><Fld label="BIC"><input value={editingBank.bic||''} onChange={e=>setEditingBank({...editingBank,bic:e.target.value})} className="fi"/></Fld></div>
-                <div style={{marginBottom:16}}>
-                  <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,cursor:'pointer'}}>
-                    <input type="checkbox" checked={editingBank.isDefault||false} onChange={e=>setEditingBank({...editingBank,isDefault:e.target.checked})}/>
-                    <span>Set as default bank account</span>
-                  </label>
-                </div>
-                <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-                  <Btn v="bgh bsm" onClick={()=>setEditingBank(null)}>Cancel</Btn>
-                  <Btn v="bp bsm" onClick={()=>saveBank(editingBank)}>Save</Btn>
-                </div>
-              </div>
-            </div>)}
-          </>)}
+    const numRows=[['sq','Sales Quotation','SQ'],['si','Sales Invoice','SI'],['po','Purchase Order','PO']];
 
+    const assetCard=(label,hint,src,accept,inputRef,onPick,onRemove)=>(
+      <div className="st-asset">
+        <div className="st-asset-lbl">{label}</div>
+        <div className="st-asset-preview">{src?<img src={src} alt={label}/>:<span>No {label.toLowerCase()} uploaded</span>}</div>
+        <div className="st-asset-actions">
+          <Btn v="bgh bsm" onClick={()=>inputRef.current.click()}><Ico n="upload" size={13}/>{src?'Replace':'Upload'}</Btn>
+          {src&&<button className="st-remove" onClick={onRemove}>Remove</button>}
+          <input ref={inputRef} type="file" accept={accept} onChange={onPick} hidden/>
+        </div>
+        <div className="st-asset-hint">{hint}</div>
+      </div>
+    );
+
+    return(<div className="content"><div className="fw st-wrap">
+      <div className="st-sticky">
+        <div className="st-head">
+          <button className="st-back" onClick={()=>goGuarded('home')}><Ico n="back" size={14}/>Back to Dashboard</button>
+          <div style={{flex:1}}/>
+          <Btn v="bp bsm" onClick={saveAll}><Ico n="check" size={13}/>Save</Btn>
+        </div>
+        <div className="st-tabs" role="tablist">
+          {menuItems.map(m=>(
+            <button key={m.id} role="tab" aria-selected={activeMenu===m.id} className={`st-tab${activeMenu===m.id?' active':''}`} onClick={()=>{setActiveMenu(m.id);LS.set(ns+'settingsMenu',m.id);}}>
+              <Ico n={m.icon} size={15}/>{m.label}
+            </button>
+          ))}
         </div>
       </div>
-    </div>);
+
+      {/* Company Information */}
+      {activeMenu==='company'&&(<>
+        <div className="fc"><div className="fct">Company Information</div>
+          <div className="fg g2">
+            <div className="fg">
+              <Fld label="Company Name"><input value={c.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld>
+              <Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld>
+            </div>
+            <div className="fg" style={{alignContent:'start'}}>
+              <Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi" placeholder="info@company.com"/></Fld>
+              <Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi" placeholder="+44 20 0000 0000"/></Fld>
+            </div>
+          </div>
+        </div>
+        <div className="fc"><div className="fct">Branding</div>
+          <div className="fg g2">
+            {assetCard('Logo','PNG, JPG or SVG. Shown in the sidebar and on documents. Saved immediately.',c.logo,'image/*',logoInput,
+              e=>readImage(e,/^image\//,'Please select an image file',d=>{setLogo(d);s('logo',d);}),
+              ()=>{setLogo('');s('logo','');})}
+            {assetCard('Signature','PNG or JPG, ideally with a transparent background. Saved immediately.',c.signature,'image/png,image/jpeg',sigInput,
+              e=>readImage(e,/^image\/(png|jpeg|jpg)$/,'Please select a PNG or JPG file',d=>{setSignature(d);s('signature',d);}),
+              ()=>{setSignature('');s('signature','');})}
+          </div>
+        </div>
+      </>)}
+
+      {/* PDF Templates */}
+      {activeMenu==='pdf'&&(<div className="fc"><div className="fct">PDF Templates</div>
+        <p className="st-note">Select a template for your invoices and quotations.</p>
+        <div className="st-tpl-grid">
+          {Object.values(TEMPLATES).map(tpl=>(
+            <button key={tpl.id} className={`st-tpl${c.selectedTemplate===tpl.id?' active':''}`} onClick={()=>s('selectedTemplate',tpl.id)} aria-pressed={c.selectedTemplate===tpl.id}>
+              <span className="st-tpl-top"><span className="st-tpl-name">{tpl.name}</span>{c.selectedTemplate===tpl.id&&<span className="st-tpl-badge"><Ico n="check" size={11}/>Active</span>}</span>
+              <span className="st-tpl-desc">{tpl.description}</span>
+            </button>
+          ))}
+        </div>
+      </div>)}
+
+      {/* Document Numbering */}
+      {activeMenu==='numbering'&&(<div className="fc">
+        <div className="st-fct-row"><div className="fct">Document Numbering</div>
+          {numLocked?<Btn v="bgh bsm" onClick={()=>setNumLocked(false)}><Ico n="edit" size={13}/>Edit</Btn>:<Btn v="bp bsm" onClick={()=>setNumLocked(true)}><Ico n="check" size={13}/>Done</Btn>}
+        </div>
+        <table className="st-num">
+          <thead><tr><th>Document</th><th>Prefix</th><th>Start Number</th></tr></thead>
+          <tbody>
+            {numRows.map(([k,label,def])=>(
+              <tr key={k}>
+                <td className="st-num-doc">{label}</td>
+                <td><input value={c[k+'Pfx']||def} onChange={e=>s(k+'Pfx',e.target.value.toUpperCase())} className="fi" readOnly={numLocked}/></td>
+                <td><input type="number" value={c[k+'Start']||'1'} onChange={e=>s(k+'Start',e.target.value)} className="fi" min="1" readOnly={numLocked}/></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>)}
+
+      {/* Bank Details */}
+      {activeMenu==='bank'&&(<div className="fc">
+        <div className="st-fct-row"><div className="fct">Bank Details</div>
+          <Btn v="bp bsm" onClick={()=>setEditingBank({id:uid(),accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',isDefault:!(c.banks||[]).length})}><Ico n="plus" size={13}/>Add Bank</Btn>
+        </div>
+        {(!c.banks||c.banks.length===0)&&(
+          <div className="st-empty">
+            <span className="st-empty-ico"><Ico n="bank" size={22}/></span>
+            <div className="st-empty-t">No bank accounts</div>
+            <div>Add your first bank account to show it on invoices.</div>
+          </div>
+        )}
+        <div className="st-banks">
+          {(c.banks||[]).map(bank=>(
+            <div key={bank.id} className={`st-bank${bank.isDefault?' default':''}`}>
+              <div className="st-bank-head">
+                <span className="st-bank-name">{bank.accountName||'Unnamed Account'}</span>
+                <span className="st-cur">{bank.currency||'GBP'}</span>
+                {bank.isDefault&&<span className="st-default">Default</span>}
+                <div style={{flex:1}}/>
+                {!bank.isDefault&&<button className="st-link" onClick={()=>setDefaultBank(bank.id)}>Set default</button>}
+                <button onClick={()=>setEditingBank(bank)} className="ab" title="Edit" aria-label="Edit"><Ico n="edit"/></button>
+                <button onClick={()=>deleteBank(bank.id)} className="ab danger" title="Delete" aria-label="Delete"><Ico n="trash"/></button>
+              </div>
+              <dl className="st-bank-grid">
+                <div><dt>Account Number</dt><dd>{bank.accountNumber||'—'}</dd></div>
+                <div><dt>IBAN</dt><dd>{bank.iban||'—'}</dd></div>
+                <div><dt>BIC</dt><dd>{bank.bic||'—'}</dd></div>
+              </dl>
+            </div>
+          ))}
+        </div>
+      </div>)}
+
+      {editingBank&&(<div className="st-modal-bg" onClick={()=>setEditingBank(null)}>
+        <div className="st-modal" onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true">
+          <div className="st-modal-t">{isNewBank?'New Bank Account':'Edit Bank Account'}</div>
+          <div className="fg">
+            <Fld label="Account Name"><input value={editingBank.accountName||''} onChange={e=>eb('accountName',e.target.value)} className="fi" autoFocus/></Fld>
+            <div className="fg g-2-1">
+              <Fld label="Account Number"><input value={editingBank.accountNumber||''} onChange={e=>eb('accountNumber',e.target.value)} className="fi"/></Fld>
+              <Fld label="Currency"><select value={editingBank.currency||'GBP'} onChange={e=>eb('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([k,v])=><option key={k} value={k}>{k} ({v})</option>)}</select></Fld>
+            </div>
+            <div className="fg g-2-1">
+              <Fld label="IBAN"><input value={editingBank.iban||''} onChange={e=>eb('iban',e.target.value)} className="fi"/></Fld>
+              <Fld label="BIC"><input value={editingBank.bic||''} onChange={e=>eb('bic',e.target.value)} className="fi"/></Fld>
+            </div>
+            <label className="st-check"><input type="checkbox" checked={editingBank.isDefault||false} onChange={e=>eb('isDefault',e.target.checked)}/><span>Set as default bank account</span></label>
+          </div>
+          <div className="fact" style={{marginTop:18}}>
+            <Btn v="bgh bsm" onClick={()=>setEditingBank(null)}>Cancel</Btn>
+            <Btn v="bp bsm" onClick={()=>saveBank(editingBank)}>Save</Btn>
+          </div>
+        </div>
+      </div>)}
+    </div></div>);
   }
 
   function Dashboard(){
@@ -2179,6 +2130,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const titles={home:'Dashboard',sales_quotes:'Sales Quotations',sales_invoices:'Sales Invoices',purchase_quotes:'Received Quotes',purchase_orders:'Purchase Orders',received_invoices:'Received Invoices',projects:'Projects',proj_detail:(cur&&cur.name)||'Project',product_pool:'Product Pool',expenses:'Expenses',customers:'Customers',documents:'Documents',settings:'Settings',exp_cats:'Expense Categories'};
 
   dirtyCheckRef.current=null;
+  if(view!=='settings')settingsDraftRef.current=null;
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <div className="sidebar no-print">
