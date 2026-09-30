@@ -110,6 +110,45 @@ button.sb-item{border-top:0;border-right:0;border-bottom:0;background:transparen
 .ps-sys{margin-top:30px;display:flex;align-items:center;gap:6px;background:transparent;border:1px solid var(--g300);border-radius:6px;padding:7px 18px;font-size:12px;color:var(--g500);cursor:pointer;transition:background .15s,color .15s,border-color .15s}
 .ps-sys:hover{background:#fff;color:var(--g800);border-color:var(--g400)}
 .ps-sys:active{background:var(--g100)}
+/* SYSTEM MANAGEMENT PAGE */
+.sys-page{min-height:100vh;width:100%;background:#f0f2f5}
+.sys-bar{height:64px;background:#fff;border-bottom:1px solid var(--g200);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100}
+.sys-brand{display:flex;align-items:center;gap:14px}
+.sys-brand img{height:40px;width:auto;display:block}
+.sys-brand span{font-size:15px;font-weight:700;color:var(--g900);letter-spacing:-.01em}
+.sys-bar-right{display:flex;align-items:center;gap:10px}
+.sys-me{background:none;border:none;font-size:12.5px;color:var(--g400);cursor:pointer;padding:4px 6px;border-radius:6px;transition:color .15s,background .15s}
+.sys-me:hover{color:var(--g700);background:var(--g100)}
+.sys-me:active{background:var(--g200)}
+.sys-logout{background:#fff;border:1px solid var(--g300);border-radius:6px;padding:6px 11px;font-size:12.5px;font-weight:500;color:var(--g700);cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.sys-logout:hover{background:var(--redl);border-color:#f5c2bd;color:var(--red)}
+.sys-logout:active{background:#f9d9d5}
+.sys-wrap{max-width:724px;margin:0 auto;padding:36px 16px 48px}
+.sys-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:22px}
+.sys-h2{font-size:18px;font-weight:700;color:var(--g900);letter-spacing:-.01em}
+.sys-sub{font-size:12px;color:var(--g400);margin-top:6px}
+.sys-card{background:#fff;border:1px solid var(--g200);border-radius:8px;padding:18px 16px;display:flex;align-items:center;gap:12px;margin-bottom:10px;box-shadow:0 1px 2px rgba(26,42,10,.03);transition:border-color .15s,box-shadow .15s}
+.sys-card:hover{border-color:var(--g300);box-shadow:0 4px 14px rgba(26,42,10,.06)}
+.sys-card.inactive{opacity:.65}
+.sys-empty{justify-content:center;color:var(--g400);font-size:13px}
+.sys-avatar{width:36px;height:36px;border-radius:50%;background:#eef2f6;color:var(--g500);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sys-info{flex:1;min-width:0}
+.sys-name{font-size:13px;font-weight:600;color:var(--g900);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.sys-uname{font-family:ui-monospace,Consolas,monospace;font-size:11px;font-weight:400;color:var(--g400)}
+.sys-tags{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:8px}
+.sys-role{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:12px;margin-right:12px}
+.sys-role::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.sys-role.r-admin{background:var(--greenl);color:var(--gm-600)}
+.sys-role.r-manager{background:var(--amberl);color:var(--amber)}
+.sys-role.r-user{background:var(--bluel);color:#2f78aa}
+.sys-role.r-none,.sys-role.r-inactive{background:var(--g100);color:var(--g500)}
+.sys-chip{font-size:10px;color:var(--g500);border:1px solid var(--g300);border-radius:10px;padding:1px 7px;background:#fff}
+.sys-actions{display:flex;gap:6px;flex-shrink:0}
+.sys-ab{width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid var(--g300);border-radius:5px;color:var(--gm-500);cursor:pointer;transition:background .15s,border-color .15s,color .15s,transform .15s}
+.sys-ab:hover{background:var(--greenl);border-color:var(--gm-300)}
+.sys-ab.danger{color:var(--red)}
+.sys-ab.danger:hover{background:var(--redl);border-color:#f5c2bd}
+.sys-ab:active{transform:scale(.92)}
 
 /* MAIN */
 .main{margin-left:var(--sidebar);width:calc(100% - var(--sidebar));min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden}

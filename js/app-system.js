@@ -43,7 +43,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
     const roleOpts=['','User','Manager','Admin'];
 
     return(
-      <div className="content"><div className="fw">
+      <div>
         <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12}}>
           <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
           <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
@@ -94,7 +94,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
           <Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn>
           <Btn v="bp bsm" onClick={handleSave} disabled={!u.username||(init.id?false:!u.password)}>Save</Btn>
         </div>
-      </div></div>
+      </div>
     );
   }
 
@@ -108,83 +108,67 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
   // ==========================
   // USERS LIST
   // ==========================
-  const ROLE_COLOR={Admin:'var(--purple)',Manager:'var(--blue)',User:'var(--gm-500)'};
-  const PORTAL_LABEL={off:'Official',ops:'Sales & Procurement'};
+  const ROLE_RANK={User:1,Manager:2,Admin:3};
+  const ROLE_CLS={Admin:'r-admin',Manager:'r-manager',User:'r-user'};
+  const PORTAL_LABEL={off:'Official',ops:'Sales'};
+  const topRole=u=>Object.values(u.portals||{}).filter(Boolean).sort((x,y)=>(ROLE_RANK[y]||0)-(ROLE_RANK[x]||0))[0];
+  const fullName=u=>[u.firstName,u.lastName].filter(Boolean).join(' ');
 
   const renderUsers=()=>(
-    <div className="content">
-      <div className="sec-hdr">
-        <h2 className="sec-title">Users</h2>
+    <>
+      <div className="sys-head">
+        <div>
+          <h2 className="sys-h2">Users</h2>
+          <p className="sys-sub">Access and permissions for all portals</p>
+        </div>
         <Btn v="bp bsm" onClick={()=>{setCur({id:null,username:'',password:'',firstName:'',lastName:'',email:'',active:true,createdAt:td(),portals:{off:null,ops:null}});setView('user_form');}}>
           <Ico n="plus" size={13}/>New User
         </Btn>
       </div>
-      <div className="tcard">
-        <table className="dt">
-          <Cg w={[0.4,1.6,1.1,1.6,0.9,1.4,0.9,0.7]}/>
-          <thead><tr>
-            <th>#</th>
-            <th>Full Name</th>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Official</th>
-            <th>Sales & Procurement</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr></thead>
-          <tbody>
-            {users.length===0&&<tr><td colSpan={8} className="empty">No users yet</td></tr>}
-            {users.map((u,i)=>(
-              <tr key={u.id}>
-                <td className="dn">{i+1}</td>
-                <td><span style={{fontWeight:600}}>{[u.firstName,u.lastName].filter(Boolean).join(' ')||'—'}</span></td>
-                <td style={{fontFamily:'monospace',fontSize:13}}>{u.username}</td>
-                <td style={{color:'var(--g500)',fontSize:13}}>{u.email||'—'}</td>
-                <td>{u.portals?.off?<span style={{fontSize:12,fontWeight:700,color:ROLE_COLOR[u.portals.off]||'var(--g600)',background:`${ROLE_COLOR[u.portals.off]||'var(--g600)'}18`,padding:'2px 8px',borderRadius:20}}>{u.portals.off}</span>:<span style={{color:'var(--g300)',fontSize:12}}>—</span>}</td>
-                <td>{u.portals?.ops?<span style={{fontSize:12,fontWeight:700,color:ROLE_COLOR[u.portals.ops]||'var(--g600)',background:`${ROLE_COLOR[u.portals.ops]||'var(--g600)'}18`,padding:'2px 8px',borderRadius:20}}>{u.portals.ops}</span>:<span style={{color:'var(--g300)',fontSize:12}}>—</span>}</td>
-                <td><span className={`bdg ${u.active?'b-active':'b-passive'}`}>{u.active?'Active':'Inactive'}</span></td>
-                <td>
-                  <div style={{display:'flex',gap:4}}>
-                    <button className="ab" onClick={()=>{setCur(u);setView('user_form');}} title="Edit"><Ico n="edit"/></button>
-                    <button className="ab danger" onClick={()=>askConfirm(`Do you want to delete user "${u.username}"?`,()=>{saveUsers(users.filter(x=>x.id!==u.id));showToast('User deleted');})} title="Delete"><Ico n="trash"/></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      {users.length===0&&<div className="sys-card sys-empty">No users yet</div>}
+      {users.map(u=>{
+        const role=topRole(u);
+        const name=fullName(u)||u.username;
+        return(
+          <div key={u.id} className={`sys-card${u.active?'':' inactive'}`}>
+            <span className="sys-avatar">{(name[0]||'?').toUpperCase()}</span>
+            <div className="sys-info">
+              <div className="sys-name">{name}<span className="sys-uname">@{u.username}</span></div>
+              <div className="sys-tags">
+                {role?<span className={`sys-role ${ROLE_CLS[role]||''}`}>{role}</span>:<span className="sys-role r-none">No Access</span>}
+                {!u.active&&<span className="sys-role r-inactive">Inactive</span>}
+                {Object.entries(PORTAL_LABEL).filter(([k])=>u.portals?.[k]).map(([k,l])=><span key={k} className="sys-chip" title={u.portals[k]}>{l}</span>)}
+              </div>
+            </div>
+            <div className="sys-actions">
+              <button className="sys-ab" onClick={()=>{setCur(u);setView('user_form');}} title="Edit" aria-label="Edit"><Ico n="edit" size={13}/></button>
+              {u.id!==session.userId&&<button className="sys-ab danger" onClick={()=>askConfirm(`Do you want to delete user "${u.username}"?`,()=>{saveUsers(users.filter(x=>x.id!==u.id));showToast('User deleted');})} title="Delete" aria-label="Delete"><Ico n="trash" size={13}/></button>}
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 
-  return(
-    <div style={{display:'flex',width:'100%',minHeight:'100vh'}}>
-      {/* SIDEBAR */}
-      <div className="sidebar no-print">
-        <div className="sb-brand" style={{cursor:'default'}}>
-          <img src={getLogo()||LOGO} alt=""/>
-          <div><div className="sb-brand-sub" style={{fontSize:11,color:'var(--g400)'}}>System Management</div></div>
-        </div>
-        <PortalDropdown session={session} onPortalSwitch={onPortalSwitch} onLogout={onLogout} onOpenProfile={onOpenProfile}/>
-        <div style={{flex:1,overflow:'auto',padding:'12px 0'}}>
-          <div className="sb-group">Management</div>
-          <button className={`sb-item${view==='users'||view==='user_form'?' active':''}`} onClick={()=>setView('users')}>
-            <Ico n="customers" size={15}/><span>Users</span>
-          </button>
-        </div>
-        <div className="sb-pinned">
-          <SidebarUserFooter session={session} onOpenProfile={onOpenProfile} onLogout={onLogout}/>
-        </div>
-      </div>
+  const displayName=`${session.firstName||''} ${session.lastName||''}`.trim()||session.username;
 
-      {/* MAIN */}
-      <div className="main">
-        <div className="topbar no-print">
-          <h1 className="topbar-title">{view==='user_form'?(cur?.id?'Edit User':'New User'):'Users'}</h1>
+  return(
+    <div className="sys-page">
+      <header className="sys-bar no-print">
+        <div className="sys-brand">
+          <img src={getLogo()||LOGO} alt="Green Med Ltd"/>
+          <span>System Management</span>
         </div>
+        <div className="sys-bar-right">
+          <button className="sys-me" onClick={onOpenProfile} title="Profile">{displayName}</button>
+          <button className="sys-logout" onClick={onLogout}>Log Out</button>
+        </div>
+      </header>
+
+      <main className="sys-wrap">
         {view==='users'&&renderUsers()}
         {view==='user_form'&&cur&&<SysUserForm user={cur} onSave={handleSaveUser} onCancel={()=>{setView('users');setCur(null);}}/>}
-      </div>
+      </main>
 
       {toast&&<div className="toast">{toast}</div>}
       {confirmDlg&&(
