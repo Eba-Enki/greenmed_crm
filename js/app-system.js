@@ -173,11 +173,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
           </button>
         </div>
         <div className="sb-pinned">
-          <SystemManagementLink session={session} onPortalSwitch={onPortalSwitch}/>
-          <div className="sb-footer">
-            <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>{`${session.firstName||''} ${session.lastName||''}`.trim()||session.username}</span></button>
-            <button className="sb-footer-btn" onClick={onLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
-          </div>
+          <SidebarUserFooter session={session} onOpenProfile={onOpenProfile} onLogout={onLogout}/>
         </div>
       </div>
 

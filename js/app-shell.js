@@ -70,31 +70,41 @@ function LoginScreen({onLogin}){
 }
 
 // ==========================
-// PORTAL PICKER MODAL
+// PORTAL SELECT SCREEN
 // ==========================
 const PORTAL_INFO={
-  off:{label:'Official',desc:'Finance, invoicing and accounting',color:'var(--gm-400)'},
-  ops:{label:'Sales & Procurement',desc:'Sales, procurement and project management',color:'var(--gm-600)'},
-  system:{label:'System Management',desc:'User and system management',color:'var(--g700)'}
+  off:{label:'Official',desc:'Finance, invoicing and accounting',color:'var(--gm-400)',ico:'bank'},
+  ops:{label:'Sales & Procurement',desc:'Sales, procurement and project management',color:'var(--gm-600)',ico:'income'},
+  system:{label:'System Management',desc:'User and system management',color:'var(--g700)',ico:'shield'}
 };
 
-function PortalPickerModal({portals,onSelect}){
+const isAdminUser=u=>Object.values((u&&u.portals)||{}).includes('Admin');
+
+function PortalSelectScreen({user,portals,onSelect}){
+  const logo=useLogo();
+  const list=portals.filter(p=>p!=='system');
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{background:'#fff',borderRadius:16,padding:32,maxWidth:440,width:'90%',boxShadow:'0 20px 60px rgba(0,0,0,.2)'}}>
-        <h2 style={{fontSize:20,fontWeight:700,color:'var(--dk)',marginBottom:8,textAlign:'center'}}>Select Portal</h2>
-        <p style={{fontSize:14,color:'var(--g500)',textAlign:'center',marginBottom:24}}>Which portal would you like to sign in to?</p>
-        <div style={{display:'flex',flexDirection:'column',gap:12}}>
-          {portals.map(p=>{
-            const info=PORTAL_INFO[p]||{label:p,desc:'',color:'var(--g600)'};
+    <div className="acc-screen">
+      <div className="ps-wrap">
+        <img src={logo||LOGO} className="ps-logo" alt="Green Med Ltd"/>
+        <h2 className="ps-title">Green Med Ltd</h2>
+        <p className="ps-sub">Please select the portal you want to use</p>
+        <div className="ps-cards">
+          {list.map(p=>{
+            const info=PORTAL_INFO[p]||{label:p,desc:'',ico:'dash'};
             return(
-              <button key={p} onClick={()=>onSelect(p)} style={{padding:'16px 20px',borderRadius:10,border:`2px solid ${info.color}`,background:`${info.color}18`,cursor:'pointer',textAlign:'left',transition:'background .15s',outline:'none'}}>
-                <div style={{fontSize:15,fontWeight:700,color:info.color}}>{info.label}</div>
-                <div style={{fontSize:13,color:'var(--g500)',marginTop:4}}>{info.desc}</div>
+              <button key={p} className={`ps-card ps-${p}`} onClick={()=>onSelect(p)}>
+                <span className="ps-ico"><Ico n={info.ico} size={26}/></span>
+                <span className="ps-name">{info.label}</span>
+                <span className="ps-desc">{info.desc}</span>
+                <span className="ps-go">Enter Portal <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
               </button>
             );
           })}
         </div>
+        {isAdminUser(user)&&(
+          <button className="ps-sys" onClick={()=>onSelect('system')}><Ico n="settings" size={12}/><span>System Management</span></button>
+        )}
       </div>
     </div>
   );
@@ -142,15 +152,20 @@ function PortalDropdown({session,onPortalSwitch}){
 }
 
 // ==========================
-// SYSTEM MANAGEMENT LINK (fixed, admin-only)
+// SIDEBAR USER FOOTER (profile + log out)
 // ==========================
-function SystemManagementLink({session,onPortalSwitch}){
-  const isAdmin=Object.values(session.portals||{}).includes('Admin');
-  if(!isAdmin)return null;
-  const active=session.activePortal==='system';
+function SidebarUserFooter({session,onOpenProfile,onLogout}){
+  const name=`${session.firstName||''} ${session.lastName||''}`.trim()||session.username||'';
   return(
-    <div className={`sb-item sb-sysmgmt${active?' active':''}`} onClick={()=>onPortalSwitch('system')}>
-      <Ico n="shield" size={14}/><span className="lbl">System Management</span>
+    <div className="sb-user">
+      <button className="sb-user-info" onClick={onOpenProfile} title="Profile">
+        <span className="sb-avatar">{(name[0]||'?').toUpperCase()}</span>
+        <span className="sb-user-txt">
+          <span className="sb-user-name">{name}</span>
+          <span className="sb-user-role">{session.activeRole||'User'}</span>
+        </span>
+      </button>
+      <button className="sb-logout" onClick={onLogout} title="Log Out" aria-label="Log Out"><Ico n="logout" size={18}/></button>
     </div>
   );
 }
@@ -241,14 +256,15 @@ function App(){
   },[]);
 
   const doSelectPortal=(user,portal)=>{
-    const role=(user.portals||{})[portal]||'User';
+    const role=portal==='system'?'Admin':(user.portals||{})[portal]||'User';
     const sess={userId:user.id,username:user.username,firstName:user.firstName||'',lastName:user.lastName||'',activePortal:portal,activeRole:role,portals:user.portals||{},loginTime:new Date().toISOString()};
     setSession(sess);setSessionState(sess);setStep('app');
   };
 
   const handleLogin=(user,accessible)=>{
     setPendingUser(user);setPendingPortals(accessible);
-    if(accessible.length===1)doSelectPortal(user,accessible[0]);
+    // Admins always see the portal screen so they can reach System Management.
+    if(accessible.length===1&&!isAdminUser(user))doSelectPortal(user,accessible[0]);
     else setStep('portal-pick');
   };
 
@@ -273,12 +289,7 @@ function App(){
 
   if(step==='loading')return null;
   if(step==='login')return <LoginScreen onLogin={handleLogin}/>;
-  if(step==='portal-pick')return(
-    <>
-      <LoginScreen onLogin={handleLogin}/>
-      <PortalPickerModal portals={pendingPortals} onSelect={handlePortalPick}/>
-    </>
-  );
+  if(step==='portal-pick')return <PortalSelectScreen user={pendingUser} portals={pendingPortals} onSelect={handlePortalPick}/>;
   if(!session)return <LoginScreen onLogin={handleLogin}/>;
 
   const portalProps={session,onPortalSwitch:handlePortalSwitch,onLogout:handleLogout,onSessionUpdate:handleSessionUpdate,onOpenProfile:()=>setProfileOpen(true)};

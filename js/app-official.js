@@ -330,11 +330,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           return <div key={it.k} className={`sb-item${view===it.k?' active':''}`} onClick={()=>goGuarded(it.k)}><Ico n={it.ico} size={14}/><span className="lbl">{it.lbl}</span>{it.cnt>0&&<span className="sb-cnt">{it.cnt}</span>}</div>;
         })}
         <div className="sb-pinned">
-          <SystemManagementLink session={session} onPortalSwitch={guardedPortalSwitch}/>
-          <div className="sb-footer">
-            <button className="sb-footer-btn" onClick={onOpenProfile}><Ico n="user" size={13}/><span>{`${session.firstName||''} ${session.lastName||''}`.trim()||session.username}</span></button>
-            <button className="sb-footer-btn" onClick={guardedLogout}><Ico n="logout" size={13}/><span>Log Out</span></button>
-          </div>
+          <SidebarUserFooter session={session} onOpenProfile={onOpenProfile} onLogout={guardedLogout}/>
         </div>
       </div>
       <div className="main">
