@@ -21,9 +21,10 @@ function LoginScreen({onLogin}){
         LS.set('gm_users',users);
       }
       const hashed=await hashPassword(password);
-      let user=users.find(u=>u.username===username&&u.password===hashed&&u.active);
+      const uname=username.trim().toLowerCase();
+      let user=users.find(u=>(u.username||'').toLowerCase()===uname&&u.password===hashed&&u.active);
       if(!user){
-        const legacy=users.find(u=>u.username===username&&u.password===password&&u.active);
+        const legacy=users.find(u=>(u.username||'').toLowerCase()===uname&&u.password===password&&u.active);
         if(legacy){
           const updated=users.map(u=>u.id===legacy.id?{...u,password:hashed}:u);
           LS.set('gm_users',updated);

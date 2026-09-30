@@ -230,9 +230,9 @@ const Fld=({label,children})=><div className="fld"><label>{label}</label>{childr
 function GlobalConfirmDialog(){
   const[state,setState]=useState(null);
   useEffect(()=>{
-    window.__askGlobalConfirm=msg=>new Promise(resolve=>{
+    window.__askGlobalConfirm=(msg,opts={})=>new Promise(resolve=>{
       window.__globalConfirmResolve=resolve;
-      setState({msg});
+      setState({msg,confirmLabel:opts.confirmLabel||'Leave without saving',cancelLabel:opts.cancelLabel||'Cancel'});
     });
   },[]);
   if(!state)return null;
@@ -247,8 +247,8 @@ function GlobalConfirmDialog(){
       <div style={{background:'#fff',borderRadius:12,padding:'28px 32px',minWidth:320,maxWidth:440,boxShadow:'0 8px 40px rgba(0,0,0,.18)',display:'flex',flexDirection:'column',gap:20}} onClick={e=>e.stopPropagation()}>
         <p style={{margin:0,fontSize:14.5,lineHeight:1.6,color:'var(--g700)',fontWeight:500}}>{state.msg}</p>
         <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-          <button style={{padding:'7px 20px',borderRadius:7,border:'1.5px solid var(--g200)',background:'#fff',color:'var(--g600)',fontSize:13,fontWeight:500,cursor:'pointer'}} onClick={()=>close(false)}>Cancel</button>
-          <button style={{padding:'7px 20px',borderRadius:7,border:'none',background:'var(--gm-600)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={()=>close(true)}>Leave without saving</button>
+          <button style={{padding:'7px 20px',borderRadius:7,border:'1.5px solid var(--g200)',background:'#fff',color:'var(--g600)',fontSize:13,fontWeight:500,cursor:'pointer'}} onClick={()=>close(false)}>{state.cancelLabel}</button>
+          <button style={{padding:'7px 20px',borderRadius:7,border:'none',background:'var(--gm-600)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={()=>close(true)}>{state.confirmLabel}</button>
         </div>
       </div>
     </div>
@@ -260,8 +260,30 @@ function GlobalConfirmDialog(){
   document.body.appendChild(el);
   ReactDOM.createRoot(el).render(<GlobalConfirmDialog/>);
 })();
-const askGlobalConfirm=msg=>window.__askGlobalConfirm(msg);
+const askGlobalConfirm=(msg,opts)=>window.__askGlobalConfirm(msg,opts);
 const askUnsaved=()=>askGlobalConfirm('You have unsaved changes. Leave without saving?');
+// Case-insensitive "does this name already exist" check — "Acme Ltd" and "ACME LTD" read as
+// the same record to a person, so callers use this to warn before quietly creating a near-duplicate.
+const findCaseInsensitiveDup=(list,field,value,excludeId)=>{
+  const v=(value||'').trim().toLowerCase();
+  if(!v)return null;
+  return list.find(x=>x.id!==excludeId&&(x[field]||'').trim().toLowerCase()===v)||null;
+};
+const askDuplicateOk=(kind,name)=>askGlobalConfirm(`A ${kind} named "${name}" already exists. Save anyway?`,{confirmLabel:'Save Anyway'});
+
+// Name/company casing, applied on save (not while typing) so "acme ltd" and "ACME LTD" both
+// end up stored as "Acme Ltd" — keeps lookups, exports and PDFs consistent regardless of input habits.
+const toTitleCase=s=>{
+  const t=(s||'').trim();
+  if(!t)return t;
+  return t.toLowerCase().replace(/(^|[\s\-\/])\S/g,c=>c.toUpperCase());
+};
+// Free-text fields (notes, addresses, descriptions) only get their first letter capitalized —
+// title-casing these would wrongly capitalize every word in a sentence.
+const toSentenceCase=s=>{
+  const t=(s||'').trim();
+  return t?t.charAt(0).toUpperCase()+t.slice(1):t;
+};
 
 // Toast helper
 function useToast(){const[t,setT]=useState('');const show=m=>{setT(m);setTimeout(()=>setT(''),2500)};return[t,show];}

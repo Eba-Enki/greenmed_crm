@@ -28,8 +28,15 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
 
     const handleSave=async()=>{
       if(!u.username){return;}
-      const p=u.password?await hashPassword(u.password):init.password;
-      onSave({...u,password:p});
+      const norm={...u,firstName:toTitleCase(u.firstName),lastName:toTitleCase(u.lastName),email:(u.email||'').trim().toLowerCase(),username:(u.username||'').trim().toLowerCase()};
+      // Login matches usernames case-insensitively, so two accounts differing only by case
+      // would be ambiguous at sign-in — block that outright rather than just warning.
+      if(findCaseInsensitiveDup(users,'username',norm.username,norm.id)){
+        alert(`A user named "${norm.username}" already exists. Usernames must be unique (case doesn't matter).`);
+        return;
+      }
+      const p=norm.password?await hashPassword(norm.password):init.password;
+      onSave({...norm,password:p});
     };
 
     const portals=u.portals||{};

@@ -641,12 +641,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="fc-toggle"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
         </div>
         <div className="fc-body">
-        {customers.length>0&&!isLocked&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('client.company',c.company||'');set('client.contact',c.contact||'');set('client.email',c.email||'');set('client.address',c.address||'');set('client.phone',c.phone||'');}}}>
+        {(()=>{const custPick=customers.filter(c=>{const t=c.type||'customer';return t==='customer'||t==='both';});return custPick.length>0&&!isLocked&&<div style={{marginBottom:12}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=custPick.find(x=>x.id===e.target.value);if(c){set('client.company',c.company||'');set('client.contact',c.contact||'');set('client.email',c.email||'');set('client.address',c.address||'');set('client.phone',c.phone||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
+            {custPick.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
-        </div>}
+        </div>;})()}
         <div className="fg g2">
           <Fld label="Company Name"><input value={(q.client&&q.client.company)||''} onChange={e=>set('client.company',e.target.value)} className="fi" disabled={isLocked}/></Fld>
           <Fld label="Contact Person"><input value={(q.client&&q.client.contact)||''} onChange={e=>set('client.contact',e.target.value)} className="fi" disabled={isLocked}/></Fld>
@@ -838,12 +838,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>
       </div>
       <div className="fc"><div className="fct">Bill To</div>
-        {customers.length>0&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('client.company',c.company||'');set('client.contact',c.contact||'');set('client.email',c.email||'');set('client.address',c.address||'');set('client.phone',c.phone||'');}}}>
+        {(()=>{const custPick=customers.filter(c=>{const t=c.type||'customer';return t==='customer'||t==='both';});return custPick.length>0&&<div style={{marginBottom:12}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=custPick.find(x=>x.id===e.target.value);if(c){set('client.company',c.company||'');set('client.contact',c.contact||'');set('client.email',c.email||'');set('client.address',c.address||'');set('client.phone',c.phone||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
+            {custPick.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
-        </div>}
+        </div>;})()}
         <div className="fg g2">
           <Fld label="Company Name"><input value={(inv.client&&inv.client.company)||''} onChange={e=>set('client.company',e.target.value)} className="fi"/></Fld>
           <Fld label="Contact Person"><input value={(inv.client&&inv.client.contact)||''} onChange={e=>set('client.contact',e.target.value)} className="fi"/></Fld>
@@ -1114,12 +1114,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>
       </div>
       <div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>Vendor / Supplier{supplierLocked&&<span style={{fontSize:11,fontWeight:600,color:'var(--g500)',display:'inline-flex',alignItems:'center',gap:3}}><Ico n="lock" size={11}/>Locked</span>}</div>
-        {!supplierLocked&&customers.length>0&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){set('supplierCompany',c.company||'');set('supplierContact',c.contact||'');set('supplierEmail',c.email||'');set('supplierPhone',c.phone||'');set('supplierAddress',c.address||'');}}}>
+        {(()=>{const supPick=customers.filter(c=>{const t=c.type||'customer';return t==='supplier'||t==='both';});return !supplierLocked&&supPick.length>0&&<div style={{marginBottom:12}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=supPick.find(x=>x.id===e.target.value);if(c){set('supplierCompany',c.company||'');set('supplierContact',c.contact||'');set('supplierEmail',c.email||'');set('supplierPhone',c.phone||'');set('supplierAddress',c.address||'');}}}>
             <option value="">— Quick fill —</option>
-            {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
+            {supPick.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
-        </div>}
+        </div>;})()}
         <div className="fg g2">
           <Fld label="Company Name"><input value={doc.supplierCompany||''} onChange={e=>set('supplierCompany',e.target.value)} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
           <Fld label="Contact Person"><input value={doc.supplierContact||''} onChange={e=>set('supplierContact',e.target.value)} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
@@ -1270,12 +1270,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _isDirty=()=>JSON.stringify(p)!==_initStr.current;
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
+    const handleSave=async()=>{
+      const norm={...p,name:toTitleCase(p.name),client:toTitleCase(p.client),desc:toSentenceCase(p.desc)};
+      const dup=findCaseInsensitiveDup(projects,'name',norm.name,norm.id);
+      if(dup&&!(await askDuplicateOk('project',norm.name)))return;
+      onSave(norm);
+    };
+    const custPick=customers.filter(c=>{const t=c.type||'customer';return t==='customer'||t==='both';});
     return(<div className="content"><div className="fw" style={{maxWidth:640}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
       <div className="fc"><div className="fct">Project Details</div>
         <div className="fg g2"><Fld label="Project No"><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label="Project Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
         <div className="fg g3" style={{marginTop:12}}>
-          <Fld label="Client"><select value={p.clientId||''} onChange={e=>{s('clientId',e.target.value);const c=customers.find(x=>x.id===e.target.value);if(c)s('client',c.company||c.contact||'');}} className="fi"><option value="">— Select customer —</option>{customers.map(c=><option key={c.id} value={c.id}>{c.company||c.contact||''}</option>)}</select></Fld>
+          <Fld label="Client"><select value={p.clientId||''} onChange={e=>{s('clientId',e.target.value);const c=custPick.find(x=>x.id===e.target.value);if(c)s('client',c.company||c.contact||'');}} className="fi"><option value="">— Select customer —</option>{custPick.map(c=><option key={c.id} value={c.id}>{c.company||c.contact||''}</option>)}</select></Fld>
           <Fld label="Start Date"><input type="date" value={p.startDate||td()} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld>
           <Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld>
         </div>
@@ -1285,7 +1292,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>
         <div style={{marginTop:12}}><Fld label="Description"><textarea value={p.desc||''} onChange={e=>s('desc',e.target.value)} rows={2} className="fi"/></Fld></div>
       </div>
-      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
     </div></div>);
   }
 
@@ -1611,7 +1618,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function ExpCatsView(){
     const[cats,setCats]=useState(expCats.map(c=>typeof c==='string'?{id:uid(),name:c}:{...c}));
     const[nm,setNm]=useState('');
-    const add=()=>{if(!nm.trim())return;setCats(x=>[...x,{id:uid(),name:nm.trim()}]);setNm('');};
+    const add=async()=>{
+      const v=toTitleCase(nm);
+      if(!v)return;
+      const dup=findCaseInsensitiveDup(cats,'name',v,null);
+      if(dup&&!(await askDuplicateOk('category',v)))return;
+      setCats(x=>[...x,{id:uid(),name:v}]);setNm('');
+    };
     return(<div className="content"><div className="fw" style={{maxWidth:520}}>
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>Expense Categories</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>{sExpCats(cats);showToast('Saved ✓');go('expenses');}}>Save</Btn></div>
       <div className="fc"><div className="fct">Categories</div>
@@ -1630,13 +1643,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">No customers yet</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[2,1.4,1.8,1,0.6]}/>
-          <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Actions</th></tr></thead>
+          <Cg w={[2,1.4,1.8,1,0.7,0.6]}/>
+          <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Type</th><th>Actions</th></tr></thead>
           <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
             <td style={{fontWeight:500}}>{c.company||'—'}</td>
             <td>{c.contact||'—'}</td>
             <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
             <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
+            <td style={{color:'var(--g600)',fontSize:12}}>{c.type==='supplier'?'Supplier':c.type==='both'?'Customer & Supplier':'Customer'}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(c);go('cust_form');}}><Ico n="edit"/></button>
               <button className="ab danger" onClick={()=>askConfirm(`Delete "${c.company||c.contact}"?`,()=>{sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');})}><Ico n="trash"/></button>
@@ -1653,15 +1667,24 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _isDirty=()=>JSON.stringify(c)!==_initStr.current;
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
+    const handleSave=async()=>{
+      const norm={...c,company:toTitleCase(c.company),contact:toTitleCase(c.contact),email:(c.email||'').trim().toLowerCase(),address:toSentenceCase(c.address),notes:toSentenceCase(c.notes)};
+      const nameField=norm.company?'company':'contact';
+      const nameVal=norm.company||norm.contact;
+      const dup=findCaseInsensitiveDup(customers,nameField,nameVal,norm.id);
+      if(dup&&!(await askDuplicateOk('customer',nameVal)))return;
+      onSave(norm);
+    };
     return(<div className="content"><div className="fw" style={{maxWidth:600}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
       <div className="fc"><div className="fct">Customer Info</div>
         <div className="fg g2"><Fld label="Company Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
         <div className="fg g2" style={{marginTop:12}}><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
+        <div style={{marginTop:12}}><Fld label="Relationship"><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">Customer</option><option value="supplier">Supplier</option><option value="both">Both</option></select></Fld></div>
         <div style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
         <div style={{marginTop:12}}><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
       </div>
-      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
     </div></div>);
   }
 
@@ -1790,7 +1813,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const addBank=()=>{
       setEditingBank({id:uid(),accountName:'',accountNumber:'',iban:'',bic:'',isDefault:false});
     };
-    const saveBank=(bank)=>{
+    const saveBank=(bankIn)=>{
+      const bank={...bankIn,accountName:toTitleCase(bankIn.accountName),iban:(bankIn.iban||'').trim().toUpperCase(),bic:(bankIn.bic||'').trim().toUpperCase()};
       const banks=c.banks||[];
       const idx=banks.findIndex(b=>b.id===bank.id);
       if(idx>=0){
@@ -1823,7 +1847,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <button onClick={()=>go('home')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back" size={14}/>Back to Dashboard</button>
         <h2 style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginLeft:10}}>Settings</h2>
         <div style={{flex:1}}/>
-        <Btn v="bp bsm" onClick={()=>{const{logo,signature,...coWithoutLogoAndSig}=c;setLogo(logo||'');setSignature(signature||'');setCo(c);LS.set(ns+'co',coWithoutLogoAndSig);showToast('Saved ✓');go('home');}}>Save</Btn>
+        <Btn v="bp bsm" onClick={()=>{const cNorm={...c,name:toTitleCase(c.name),address:toSentenceCase(c.address),email:(c.email||'').trim().toLowerCase()};const{logo,signature,...coWithoutLogoAndSig}=cNorm;setLogo(logo||'');setSignature(signature||'');setCo(cNorm);LS.set(ns+'co',coWithoutLogoAndSig);showToast('Saved ✓');go('home');}}>Save</Btn>
       </div>
       
       {/* Left Menu */}
@@ -2188,7 +2212,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {view==='projects'&&<Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>New Project</Btn>}
             {view==='product_pool'&&<Btn v="bex bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Purchase Price','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}><Ico n="export"/>Export Excel</Btn>}
             {view==='expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>Categories</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>New Expense</Btn></div>}
-            {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('cust_form');}}><Ico n="plus"/>New Customer</Btn>}
+            {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('cust_form');}}><Ico n="plus"/>New Customer</Btn>}
             {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>Upload Document</Btn>}
           </div>
         }
@@ -2251,9 +2275,10 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
   const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
   if(dirtyRef)dirtyRef.current=_isDirty;
   const dateRef=useRef(null);
+  const normExp=x=>({...x,description:toSentenceCase(x.description)});
   const handleSaveAndNew=()=>{
     if(!e.amount){alert('Amount is required');return;}
-    onSaveAndNew(e);
+    onSaveAndNew(normExp(e));
     const fresh=mkExpense();
     setE(fresh);
     _initStr.current=JSON.stringify(fresh);
@@ -2263,7 +2288,7 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
   const userNames=(LS.get('gm_users')||[]).map(u=>`${u.firstName||''} ${u.lastName||''}`.trim()||u.username).filter(Boolean);
   const employeeOptions=Array.from(new Set([...userNames,...(e.employee?[e.employee]:[])]));
   return(<div className="content"><div className="fw">
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>Save & New</Btn>}<Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>Save & New</Btn>}<Btn v="bp bsm" onClick={()=>onSave(normExp(e))}>Save</Btn></div>
     <div className="fc"><div className="fct">Expense Details</div>
       <div className="fg g3"><Fld label="Date"><input ref={dateRef} type="date" value={e.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label="Amount"><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label="Currency"><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
       <div className="fg g3" style={{marginTop:12,gridTemplateColumns:'1fr 2fr 1fr'}}>
@@ -2277,6 +2302,6 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
       </div>
       <div style={{marginTop:12}}><Fld label="Notes"><textarea value={e.notes||''} onChange={x=>s('notes',x.target.value)} rows={2} className="fi"/></Fld></div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>Save & New</Btn>}<Btn v="bp bsm" onClick={()=>onSave(e)}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>Save & New</Btn>}<Btn v="bp bsm" onClick={()=>onSave(normExp(e))}>Save</Btn></div>
   </div></div>);
 }

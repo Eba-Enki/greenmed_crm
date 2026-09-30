@@ -206,12 +206,12 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           </div>
         </div>
         <div className="fc"><div className="fct">{isRec||isPO?'Vendor / Supplier':'Bill To'}</div>
-          {customers.length>0&&<div style={{marginBottom:12}}>
-            <select className="fi" style={{maxWidth:320}} onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c){if(isRec||isPO){set('supplier',c.company||c.name);set('supplierAddress',c.address||'');}else{set('client.name',c.company||c.name);set('client.email',c.email||'');set('client.address',c.address||'');}}}}>
-              <option value="">— Quick fill from Customers —</option>
-              {customers.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
+          {(()=>{const pickList=customers.filter(c=>{const t=c.type||'customer';return(isRec||isPO)?(t==='supplier'||t==='both'):(t==='customer'||t==='both');});return pickList.length>0&&<div style={{marginBottom:12}}>
+            <select className="fi" style={{maxWidth:320}} onChange={e=>{const c=pickList.find(x=>x.id===e.target.value);if(c){if(isRec||isPO){set('supplier',c.company||c.name);set('supplierAddress',c.address||'');}else{set('client.name',c.company||c.name);set('client.email',c.email||'');set('client.address',c.address||'');}}}}>
+              <option value="">— Quick fill from {isRec||isPO?'Suppliers':'Customers'} —</option>
+              {pickList.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
             </select>
-          </div>}
+          </div>;})()}
           {(isRec||isPO)?(<div className="fg g2">
             <Fld label="Supplier Name"><input value={doc.supplier||''} onChange={e=>set('supplier',e.target.value)} placeholder="Supplier" className="fi"/></Fld>
             <Fld label="Email"><input value={doc.email||''} onChange={e=>set('email',e.target.value)} placeholder="email@supplier.com" className="fi"/></Fld>
@@ -347,7 +347,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
             {view==='off_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('quote'));go('off_form');}}><Ico n="plus"/>New Quotation</Btn>}
             {view==='off_pos'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('po'));go('off_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
             {view==='off_received'&&<Btn v="bp bsm" onClick={()=>{setCur(mkRec());go('off_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
-            {view==='off_customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('off_custform');}}><Ico n="plus"/>New Customer</Btn>}
+            {view==='off_customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('off_custform');}}><Ico n="plus"/>New Customer</Btn>}
             {view==='off_projects'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}}><Ico n="plus"/>New Project</Btn>}
             {view==='off_expenses'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'out'})}><Ico n="plus"/>New Expense</Btn>}
             {view==='off_incomes'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'in'})}><Ico n="plus"/>New Income</Btn>}
@@ -363,15 +363,15 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_quotes'&&<OffListView type="quote" items={quo}/>}
         {view==='off_pos'&&<OffListView type="po" items={pos}/>}
         {view==='off_received'&&<OffListView type="received" items={rec}/>}
-        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} quo={quo} onNew={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:''});go('off_custform');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}/>}
+        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} quo={quo} onNew={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('off_custform');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}/>}
         {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(`Delete "${p.name}"?`))return;spr(projects.filter(d=>d.id!==p.id));showToast('Deleted');}}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
         {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{setCur(t);go('off_banktx_form');}} onDelete={handleDeleteBankTx}/>}
         {view==='off_form'&&cur&&<SimpleDocForm doc={cur} onSave={d=>{handleSave({...d,type:cur.type});}} onCancel={()=>go(prev)} onPreview={d=>{setCur(d);go('off_preview','off_form');}}/>}
         {view==='off_preview'&&cur&&<Preview doc={cur} co={co} docType={cur.type} onBack={()=>go(prev)} onEdit={()=>go('off_form','off_preview')}/>}
-        {view==='off_custform'&&cur&&<OffCustForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('off_customers')} dirtyRef={dirtyCheckRef}/>}
-        {view==='off_projform'&&cur&&<OffProjForm proj={cur} onSave={handleSavePrj} onCancel={()=>go('off_projects')} dirtyRef={dirtyCheckRef}/>}
+        {view==='off_custform'&&cur&&<OffCustForm cust={cur} customers={customers} onSave={handleSaveCust} onCancel={()=>go('off_customers')} dirtyRef={dirtyCheckRef}/>}
+        {view==='off_projform'&&cur&&<OffProjForm proj={cur} projects={projects} onSave={handleSavePrj} onCancel={()=>go('off_projects')} dirtyRef={dirtyCheckRef}/>}
         {view==='off_bank'&&<OffBankAccounts banks={co.banks||[]} accountBalance={accountBalance} onOpen={b=>{setSelectedBankId(b.id);go('off_bank_detail');}} onEdit={b=>setEditingBank(b)} onDelete={deleteBank} onSetDefault={setDefaultBank}/>}
         {view==='off_bank_detail'&&selectedBank&&<OffBankLedger account={selectedBank} transactions={bankTxForAccount} onBack={()=>go('off_bank')} onNew={()=>{setCur({id:null,accountId:selectedBank.id,date:td(),type:'in',amount:'',category:'',description:'',reference:'',linkedDoc:null});go('off_banktx_form');}} onEdit={t=>{setCur(t);go('off_banktx_form');}} onDelete={handleDeleteBankTx}/>}
         {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
@@ -395,13 +395,14 @@ function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
     </div>
     {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No customers yet</div></div></div>:(
     <div className="tcard"><table className="dt">
-      <Cg w={[2,1.4,1.8,1,0.5,0.6,0.6]}/>
-      <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th className="tac">Inv</th><th className="tac">Quotes</th><th>Actions</th></tr></thead>
+      <Cg w={[2,1.4,1.8,1,0.7,0.5,0.6,0.6]}/>
+      <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Type</th><th className="tac">Inv</th><th className="tac">Quotes</th><th>Actions</th></tr></thead>
       <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
         <td style={{fontWeight:500}}>{c.company||'—'}</td>
         <td>{c.contact||'—'}</td>
         <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
         <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
+        <td style={{color:'var(--g600)',fontSize:12}}>{c.type==='supplier'?'Supplier':c.type==='both'?'Customer & Supplier':'Customer'}</td>
         <td className="tac" style={{color:'var(--green)'}}>{inv.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
         <td className="tac" style={{color:'var(--gm-500)'}}>{quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
         <td><div className="aw"><button className="ab" onClick={()=>onEdit(c)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(c)}><Ico n="trash"/></button></div></td>
@@ -410,21 +411,30 @@ function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
     )}
   </div>);
 }
-function OffCustForm({cust:init,onSave,onCancel,dirtyRef}){
+function OffCustForm({cust:init,customers,onSave,onCancel,dirtyRef}){
   const[c,setC]=useState(init);const s=(k,v)=>setC(d=>({...d,[k]:v}));
   const _initStr=useRef(JSON.stringify(init));
   const _isDirty=()=>JSON.stringify(c)!==_initStr.current;
   const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
   if(dirtyRef)dirtyRef.current=_isDirty;
+  const handleSave=async()=>{
+    const norm={...c,company:toTitleCase(c.company),contact:toTitleCase(c.contact),email:(c.email||'').trim().toLowerCase(),address:toSentenceCase(c.address),notes:toSentenceCase(c.notes)};
+    const nameField=norm.company?'company':'contact';
+    const nameVal=norm.company||norm.contact;
+    const dup=findCaseInsensitiveDup(customers||[],nameField,nameVal,norm.id);
+    if(dup&&!(await askDuplicateOk('customer',nameVal)))return;
+    onSave(norm);
+  };
   return(<div className="content"><div className="fw" style={{maxWidth:640}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
     <div className="fc"><div className="fct">Customer Info</div>
       <div className="fg g2"><Fld label="Company Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
+      <div style={{marginTop:12}}><Fld label="Relationship"><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">Customer</option><option value="supplier">Supplier</option><option value="both">Both</option></select></Fld></div>
       <div style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
       <div style={{marginTop:12}}><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
   </div></div>);
 }
 function OffProjects({projects,onNew,onEdit,onDelete}){
@@ -441,20 +451,26 @@ function OffProjects({projects,onNew,onEdit,onDelete}){
     </table><Pagination total={projects.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
 }
-function OffProjForm({proj:init,onSave,onCancel,dirtyRef}){
+function OffProjForm({proj:init,projects,onSave,onCancel,dirtyRef}){
   const[p,setP]=useState(init);const s=(k,v)=>setP(d=>({...d,[k]:v}));
   const _initStr=useRef(JSON.stringify(init));
   const _isDirty=()=>JSON.stringify(p)!==_initStr.current;
   const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
   if(dirtyRef)dirtyRef.current=_isDirty;
+  const handleSave=async()=>{
+    const norm={...p,name:toTitleCase(p.name),client:toTitleCase(p.client),desc:toSentenceCase(p.desc)};
+    const dup=findCaseInsensitiveDup(projects||[],'name',norm.name,norm.id);
+    if(dup&&!(await askDuplicateOk('project',norm.name)))return;
+    onSave(norm);
+  };
   return(<div className="content"><div className="fw" style={{maxWidth:580}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
     <div className="fc"><div className="fct">Project Details</div>
       <div className="fg g2"><Fld label="Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder="Project name"/></Fld><Fld label="Client"><input value={p.client||''} onChange={e=>s('client',e.target.value)} className="fi" placeholder="Client"/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label="Start Date"><input type="date" value={p.startDate||td()} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld><Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld></div>
       <div style={{marginTop:12}}><Fld label="Description"><textarea value={p.desc||''} onChange={e=>s('desc',e.target.value)} rows={2} className="fi"/></Fld></div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(p)}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
   </div></div>);
 }
 function CategoryList({cats,direction,bankTx,banks,onOpen,onEdit,onDelete}){
@@ -539,7 +555,12 @@ function CategoryModal({cat,cats,onSave,onCancel}){
       </>)}
       <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
         <Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn>
-        <Btn v="bp bsm" disabled={!canSave} onClick={()=>{if(!canSave)return;onSave({id:cat.id,direction:cat.direction,name:name.trim(),code:code.trim(),parentId:mode==='sub'?parentId:null});}}>Save</Btn>
+        <Btn v="bp bsm" disabled={!canSave} onClick={async()=>{
+          if(!canSave)return;
+          const dup=findCaseInsensitiveDup(cats,'name',name,cat.id);
+          if(dup&&!(await askDuplicateOk('category',name.trim())))return;
+          onSave({id:cat.id,direction:cat.direction,name:toTitleCase(name),code:code.trim(),parentId:mode==='sub'?parentId:null});
+        }}>Save</Btn>
       </div>
     </div>
   </div>);
@@ -593,6 +614,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,on
   const[activeMenu,setActiveMenu]=useState(()=>LS.get(ns+'settingsMenu')||'company');
   const[numLocked,setNumLocked]=useState(true);
   const[uPg,setUPg]=useState(1);const[uPs,setUPs]=useState(25);
+  const handleSave=()=>onSave({...c,name:toTitleCase(c.name),address:toSentenceCase(c.address),email:(c.email||'').trim().toLowerCase()});
 
   const handleLogoUpload=(e)=>{
     const f=e.target.files[0];
@@ -620,9 +642,9 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,on
       <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back" size={14}/>Back to Dashboard</button>
       <h2 style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginLeft:10}}>Settings</h2>
       <div style={{flex:1}}/>
-      <Btn v="bp bsm" onClick={()=>onSave(c)}>Save</Btn>
+      <Btn v="bp bsm" onClick={handleSave}>Save</Btn>
     </div>
-    
+
     {/* Left Menu */}
     <div style={{width:280,background:'var(--white)',borderRight:'1px solid var(--g200)',paddingTop:70,flexShrink:0}}>
       <div style={{padding:'8px 16px',fontSize:10,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:4}}>Settings</div>
@@ -831,7 +853,7 @@ function BankAccountModal({bank,onSave,onCancel}){
       </div>
       <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
         <Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn>
-        <Btn v="bp bsm" onClick={()=>onSave({...b,id:b.id||uid()})}>Save</Btn>
+        <Btn v="bp bsm" onClick={()=>onSave({...b,id:b.id||uid(),accountName:toTitleCase(b.accountName),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase()})}>Save</Btn>
       </div>
     </div>
   </div>);
@@ -975,7 +997,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,invoices,receivedInvoice
       alert(`This transaction is dated before the account's Opening Balance date (${account.openingBalanceDate}). Pick a later date.`);
       return;
     }
-    onSave(t);
+    onSave({...t,description:toSentenceCase(t.description)});
   };
 
   return(<div className="content"><div className="fw" style={{maxWidth:680}}>
