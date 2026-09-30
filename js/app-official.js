@@ -620,7 +620,7 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
   const totalsByCurrency=filtered.reduce((acc,t)=>{const c=(t.account&&t.account.currency)||'GBP';acc[c]=(acc[c]||0)+(+t.amount||0);return acc;},{});
   const linkLabel=t=>{
     if(!t.linkedDoc)return null;
-    const l={invoice:'Invoice',received:'Received'}[t.linkedDoc.type]||t.linkedDoc.type;
+    const l={invoice:'Invoice',received:'Supplier Inv.'}[t.linkedDoc.type]||t.linkedDoc.type;
     return `${l} ${t.linkedDoc.number||''}`.trim();
   };
   return(<div className="content">
@@ -979,7 +979,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
     if(t.fxLeg==='fee')return 'FX fee';
     if(t.fx){const o=fxOther(t);return `${t.type==='out'?'To':'From'} ${(o&&o.accountName)||t.fx[t.type==='out'?'toCurrency':'fromCurrency']}`;}
     if(!t.linkedDoc)return null;
-    const l={invoice:'Invoice',received:'Received',expense:'Expense'}[t.linkedDoc.type]||t.linkedDoc.type;
+    const l={invoice:'Invoice',received:'Supplier Inv.',expense:'Expense'}[t.linkedDoc.type]||t.linkedDoc.type;
     return `${l} ${t.linkedDoc.number||''}`.trim();
   };
 
