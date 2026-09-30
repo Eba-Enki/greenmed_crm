@@ -48,9 +48,10 @@ Deploy işlemi yalnızca değişen dosyaları yükler. Sunucudaki `.ftp-deploy-s
 | Dosya | Görevi |
 |---|---|
 | `_bootstrap.php` | Veritabanı bağlantısı (PDO), oturum ayarları, izin verilen anahtar listeleri |
-| `login.php` | `POST {username, password}`: kullanıcıyı `gm_users` kayıtlarına göre doğrular ve sunucuda oturum açar |
+| `login.php` | `POST {username, password}`: kullanıcıyı `gm_users` kayıtlarına göre doğrular, sunucuda oturum açar ve kullanıcıyı (şifre hash'i olmadan) döner |
+| `users.php` | `POST {action}`: kullanıcı ekleme/düzenleme/silme (yalnızca Admin) ve herkesin kendi profilini/şifresini değiştirmesi. Şifreler burada hash'lenir |
 | `logout.php` | `POST`: oturumu kapatır |
-| `data.php` | `GET`: bütün verileri getirir. `PUT ?key=...`: tek bir anahtarı kaydeder. `POST`: toplu içe aktarma (yalnızca Admin) |
+| `data.php` | `GET`: bütün verileri getirir (`gm_users` şifre hash'leri olmadan). `PUT ?key=...`: tek bir anahtarı kaydeder (`gm_users` hariç). `POST`: toplu içe aktarma (yalnızca Admin, `gm_users` hariç) |
 | `.htaccess` | `config.php` ve `_bootstrap.php` dosyalarına dışarıdan erişimi engeller (403) |
 | `config.php` | **Yalnızca sunucuda bulunur.** Git'e girmez, deploy tarafından yüklenmez veya silinmez. |
 
@@ -80,6 +81,7 @@ Kod: `js/utils.js` (`Sync`, `apiCall`) ve `js/app-shell.js`.
 
 - **Giriş:** Kullanıcı adı ve şifre önce `login.php` ile sunucuda doğrulanır. Ardından bütün veriler sunucudan çekilip localStorage'a yazılır.
 - **Kaydetme:** Senkron edilen bir anahtar `LS.set`, `setLogo` veya `setSignature` ile değiştiğinde, değer 300 ms sonra `PUT data.php` ile sunucuya gönderilir.
+- **Kullanıcılar:** `gm_users` yalnızca sunucudan okunur, `data.php` ile yazılmaz. Kullanıcı değişiklikleri `usersApi()` üzerinden `users.php`'ye gider.
 - **Sayfa yenileme:** Oturum açıksa veriler sunucudan tekrar yüklenir. Sunucu oturumu sona ermişse login ekranı açılır ve localStorage temizlenir.
 - **Hata:** Bir kayıt sunucuya yazılamazsa ekranın altında kırmızı bir uyarı çıkar.
 - **Çıkış:** Sunucudaki oturum kapatılır ve senkron edilen veriler tarayıcıdan silinir.
@@ -129,13 +131,13 @@ console.table(Object.fromEntries(Object.entries(d).map(([k,v])=>[k,Array.isArray
 await apiCall('data.php',{method:'POST',body:JSON.stringify({data: YAPIŞTIR })}); location.reload();
 ```
 
-> İçe aktarma kullanıcı listesini (`gm_users`) de değiştirir. Bundan sonra eski sitedeki kullanıcı adları ve şifreler geçerli olur; bootstrap admin hesabı listeden çıkar.
+> İçe aktarma kullanıcı listesini (`gm_users`) değiştirmez. Kullanıcılar System Management ekranından eklenmelidir.
 
 ## 7. Bilinen sınırlamalar
 
 - **Aynı anda düzenleme:** Uygulama her seferinde listenin tamamını kaydeder. Aynı listeyi (örneğin müşteriler) iki kişi aynı anda düzenlerse son kaydeden kazanır ve diğerinin değişikliği kaybolabilir.
-- **Yetkiler:** Rol ve portal yetkileri yalnızca uygulama içinde kontrol edilir. Giriş yapmış her kullanıcı API üzerinden bütün verileri okuyup yazabilir. Toplu içe aktarma ise sunucu tarafında Admin'e kısıtlıdır.
-- **Şifre saklama:** Şifreler sabit bir tuzla (salt) SHA-256 olarak saklanır. Bu yöntem uygulamanın eski yapısından geliyor ve bcrypt kadar güçlü değildir.
+- **Yetkiler:** Kullanıcı yönetimi ve toplu içe aktarma sunucu tarafında Admin'e kısıtlıdır. Diğer rol ve portal yetkileri yalnızca uygulama içinde kontrol edilir; giriş yapmış her kullanıcı API üzerinden iş verilerini (müşteri, fatura vb.) okuyup yazabilir.
+- **Şifre saklama:** Şifreler PHP `password_hash` (bcrypt) ile saklanır ve tarayıcıya hiç gönderilmez. Eski SHA-256 hash'ler kullanıcının ilk girişinde otomatik olarak bcrypt'e çevrilir. Veritabanında düz metin şifre kalmışsa o hesap giriş yapamaz; Admin System Management'tan yeni şifre vermelidir.
 - **Düz FTP:** Deploy sırasında FTP şifresi ağda şifrelenmeden gider. Hosting firması FTP'de TLS'i açarsa `deploy.yml` dosyasında `protocol: ftps` yapılmalıdır.
 - **Büyük dokümanlar:** `ops_docs` dosyaları base64 olarak saklar. Büyük dosyalar yüklenemiyorsa cPanel → **MultiPHP INI Editor** bölümünden `post_max_size` değeri yükseltilmelidir.
 

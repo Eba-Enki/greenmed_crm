@@ -16,7 +16,11 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
     setUsers(u);
   },[]);
 
-  const saveUsers=u=>{setUsers(u);LS.set('gm_users',u);};
+  // Sends the change to api/users.php; the server checks admin rights and hashes passwords.
+  const callUsers=async(action,payload,okMsg)=>{
+    try{setUsers(await usersApi(action,payload));showToast(okMsg);return true;}
+    catch(e){alert(e.message);return false;}
+  };
 
   // ==========================
   // USER FORM
@@ -35,8 +39,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
         alert(`A user named "${norm.username}" already exists. Usernames must be unique (case doesn't matter).`);
         return;
       }
-      const p=norm.password?await hashPassword(norm.password):init.password;
-      onSave({...norm,password:p});
+      onSave(norm);
     };
 
     const portals=u.portals||{};
@@ -98,11 +101,11 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
     );
   }
 
-  const handleSaveUser=u=>{
-    const saved={...u,id:u.id||uid(),createdAt:u.createdAt||td()};
-    saveUsers(u.id&&users.find(x=>x.id===u.id)?users.map(x=>x.id===u.id?saved:x):[...users,saved]);
-    showToast('User saved');
-    setView('users');setCur(null);
+  const handleSaveUser=async u=>{
+    const{id,username,password,firstName,lastName,email,active,portals}=u;
+    if(await callUsers('save',{user:{id,username,password,firstName,lastName,email,active,portals}},'User saved')){
+      setView('users');setCur(null);
+    }
   };
 
   // ==========================
@@ -142,7 +145,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
             </div>
             <div className="sys-actions">
               <button className="sys-ab" onClick={()=>{setCur(u);setView('user_form');}} title="Edit" aria-label="Edit"><Ico n="edit" size={13}/></button>
-              {u.id!==session.userId&&<button className="sys-ab danger" onClick={()=>askConfirm(`Do you want to delete user "${u.username}"?`,()=>{saveUsers(users.filter(x=>x.id!==u.id));showToast('User deleted');})} title="Delete" aria-label="Delete"><Ico n="trash" size={13}/></button>}
+              {u.id!==session.userId&&<button className="sys-ab danger" onClick={()=>askConfirm(`Do you want to delete user "${u.username}"?`,()=>callUsers('delete',{id:u.id},'User deleted'))} title="Delete" aria-label="Delete"><Ico n="trash" size={13}/></button>}
             </div>
           </div>
         );

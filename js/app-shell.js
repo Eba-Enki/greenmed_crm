@@ -13,28 +13,11 @@ function LoginScreen({onLogin}){
     if(!username||!password){setError('Username and password required');return;}
     setLoading(true);setError('');
     try{
-      try{await apiCall('login.php',{method:'POST',body:JSON.stringify({username,password})});}
+      // The server verifies the password and returns the account (without its hash).
+      let user;
+      try{({user}=await apiCall('login.php',{method:'POST',body:JSON.stringify({username,password})}));}
       catch(e){setError(e.status===401?'Incorrect username or password':'Server error: '+e.message);setLoading(false);return;}
       await Sync.pull();
-      migrateToGlobalUsers();
-      let users=LS.get('gm_users')||[];
-      if(users.length===0){
-        const hp=await hashPassword('admin');
-        users=[{id:uid(),username:'admin',password:hp,firstName:'Admin',lastName:'User',email:'admin@greenmedltd.com',active:true,createdAt:td(),portals:{off:'Admin',ops:'Admin'}}];
-        LS.set('gm_users',users);
-      }
-      const hashed=await hashPassword(password);
-      const uname=username.trim().toLowerCase();
-      let user=users.find(u=>(u.username||'').toLowerCase()===uname&&u.password===hashed&&u.active);
-      if(!user){
-        const legacy=users.find(u=>(u.username||'').toLowerCase()===uname&&u.password===password&&u.active);
-        if(legacy){
-          const updated=users.map(u=>u.id===legacy.id?{...u,password:hashed}:u);
-          LS.set('gm_users',updated);
-          user=legacy;
-        }
-      }
-      if(!user){setError('Incorrect username or password');setLoading(false);return;}
       const portals=user.portals||{};
       const accessible=Object.entries(portals).filter(([,r])=>r).map(([k])=>k);
       if(accessible.length===0){setError('This account has no portal access');setLoading(false);return;}
@@ -46,7 +29,7 @@ function LoginScreen({onLogin}){
     <div className="acc-screen">
       <div style={{maxWidth:'420px',width:'100%'}}>
         <div style={{textAlign:'center',marginBottom:32}}>
-          <img src={logo||LOGO} style={{width:150,height:'auto',display:'block',margin:'0 auto 16px'}} alt="Green Med Ltd"/>
+          <img src={logo||LOGO} style={{width:130,height:'auto',display:'block',margin:'0 auto 16px'}} alt="Green Med Ltd"/>
           <h2 style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:8}}>Green Med Ltd</h2>
           <p style={{fontSize:14,color:'var(--g500)'}}>Sign in to your account</p>
         </div>
@@ -174,7 +157,8 @@ function SidebarUserFooter({session,onOpenProfile,onLogout}){
 // PROFILE MODAL
 // ==========================
 function ProfileModal({session,onClose,onUpdate}){
-  const[form,setForm]=useState({firstName:session.firstName||'',lastName:session.lastName||'',email:session.email||'',username:session.username||'',password:'',confirmPassword:''});
+  const me=(LS.get('gm_users')||[]).find(u=>u.id===session.userId)||{};
+  const[form,setForm]=useState({firstName:session.firstName||'',lastName:session.lastName||'',email:me.email||session.email||'',username:session.username||'',password:'',confirmPassword:''});
   const[error,setError]=useState('');
   const[saving,setSaving]=useState(false);
   const s=(k,v)=>setForm(x=>({...x,[k]:v}));
@@ -184,13 +168,9 @@ function ProfileModal({session,onClose,onUpdate}){
     if(!form.username){setError('Username is required');return;}
     setSaving(true);setError('');
     try{
-      const users=LS.get('gm_users')||[];
-      const idx=users.findIndex(u=>u.id===session.userId);
-      if(idx===-1){setError('User not found');setSaving(false);return;}
-      const updated={...users[idx],firstName:form.firstName,lastName:form.lastName,email:form.email,username:form.username};
-      if(form.password)updated.password=await hashPassword(form.password);
-      LS.set('gm_users',users.map((u,i)=>i===idx?updated:u));
-      const newSess={...session,firstName:form.firstName,lastName:form.lastName,username:form.username};
+      const{firstName,lastName,email,username,password}=form;
+      await usersApi('profile',{profile:{firstName,lastName,email,username,password}});
+      const newSess={...session,firstName:firstName.trim(),lastName:lastName.trim(),username:username.trim().toLowerCase()};
       setSession(newSess);
       onUpdate(newSess);
       onClose();

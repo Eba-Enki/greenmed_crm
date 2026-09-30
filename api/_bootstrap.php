@@ -16,7 +16,7 @@ const RECORD_KEYS = [
 const SETTING_KEYS = ['off_co', 'off_cnt', 'ops_co', 'ops_cnt', 'ops_pp'];
 const RAW_KEYS = ['gm_logo', 'gm_signature'];
 
-const PASSWORD_SALT = 'gm_salt_2025'; // must match hashPassword() in js/utils.js
+const PASSWORD_SALT = 'gm_salt_2025'; // legacy SHA-256 hashes only; new hashes use password_hash()
 
 function respond(int $status, array $body): void
 {
@@ -98,6 +98,38 @@ function load_users(): array
     return array_map(function ($r) { return json_decode($r['data']); }, $rows);
 }
 
+function hash_password(string $password): string
+{
+    return password_hash($password, PASSWORD_DEFAULT);
+}
+
+// Accepts bcrypt hashes and the legacy salted SHA-256 hashes the old client produced.
+// The stored value itself is never accepted as a password.
+function verify_password(string $password, string $stored): bool
+{
+    if ($stored === '') return false;
+    if ($stored[0] === '$') return password_verify($password, $stored);
+    return strlen($stored) === 64 && hash_equals($stored, hash('sha256', $password . PASSWORD_SALT));
+}
+
+function password_needs_upgrade(string $stored): bool
+{
+    return $stored === '' || $stored[0] !== '$' || password_needs_rehash($stored, PASSWORD_DEFAULT);
+}
+
+// User record as sent to the browser — the password hash never leaves the server.
+function public_user($user)
+{
+    $u = clone $user;
+    unset($u->password);
+    return $u;
+}
+
+function public_users(array $users): array
+{
+    return array_map('public_user', $users);
+}
+
 function find_user_by_id(string $id)
 {
     foreach (load_users() as $u) {
@@ -158,6 +190,9 @@ function save_setting(string $key, $value, string $by): void
 
 function save_key(string $key, $value, string $by): void
 {
+    if ($key === 'gm_users') {
+        respond(403, ['error' => 'Users are managed through users.php']);
+    }
     if (in_array($key, RECORD_KEYS, true)) {
         if ($value !== null && !is_array($value)) respond(400, ['error' => "$key must be an array"]);
         save_records($key, $value, $by);

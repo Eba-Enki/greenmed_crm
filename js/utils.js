@@ -1,7 +1,7 @@
 const {useState,useEffect,useRef,useCallback}=React;
 // Brand mark (leaf icon only, no wordmark) recolored per background context.
 // Light backgrounds use the primary brand green; dark backgrounds use the light sage tint.
-const logoMarkSVG=color=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 253.75 260"><path fill="${color}" fill-rule="evenodd" d="M38.84,0s9.75,16.5-6.75,95.25c0,0-13.5,70.5,14.25,100.5,0,0,5.25-37.5,51-69,0,0-9.75-52.5-26.25-84.75,0,0,30.75,33.75,34.5,76.5,0,0,13.5-8.25,36-12.75,0,0-5.25-57-102.75-105.75"/><path fill="${color}" fill-rule="evenodd" d="M51.13,252.75S25.63,82.5,243.88,116.25c0,0-24,18.75-46.5,71.25s-79.5,101.25-138,75c0,0,50-97.5,132.75-129.75,0,0-78,2.25-141,120"/></svg>`;
+const logoMarkSVG=color=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="27 -2 219 274"><path fill="${color}" fill-rule="evenodd" d="M38.84,0s9.75,16.5-6.75,95.25c0,0-13.5,70.5,14.25,100.5,0,0,5.25-37.5,51-69,0,0-9.75-52.5-26.25-84.75,0,0,30.75,33.75,34.5,76.5,0,0,13.5-8.25,36-12.75,0,0-5.25-57-102.75-105.75"/><path fill="${color}" fill-rule="evenodd" d="M51.13,252.75S25.63,82.5,243.88,116.25c0,0-24,18.75-46.5,71.25s-79.5,101.25-138,75c0,0,50-97.5,132.75-129.75,0,0-78,2.25-141,120"/></svg>`;
 const LOGO='data:image/svg+xml;base64,'+btoa(logoMarkSVG('#608425'));
 const LOGO_DARK='data:image/svg+xml;base64,'+btoa(logoMarkSVG('#a8c070'));
 const CURR={GBP:'£',USD:'$',EUR:'€',TRY:'₺'};
@@ -77,7 +77,7 @@ const Sync={
   timers:{},
   // Debounced so rapid successive saves of one key send a single request with the latest value.
   push(k){
-    if(!isSyncKey(k))return;
+    if(!isSyncKey(k)||k==='gm_users')return; // gm_users is pulled only; changes go through users.php
     clearTimeout(this.timers[k]);
     this.timers[k]=setTimeout(()=>this.send(k),300);
   },
@@ -116,26 +116,17 @@ const LS={
   setRaw:(k,v)=>{try{localStorage.setItem(k,v);Sync.push(k);}catch(e){console.warn('LS.setRaw failed:',k,e.name);}},
   del:k=>{try{localStorage.removeItem(k);Sync.push(k);}catch{}}
 };
-const hashPassword=async p=>{const d=new TextEncoder().encode(p+'gm_salt_2025');const b=await crypto.subtle.digest('SHA-256',d);return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('');};
-
 // Central session helpers
 const getSession=()=>LS.get('gm_session');
 const setSession=s=>LS.set('gm_session',s);
 const clearSession=()=>LS.del('gm_session');
 
-// One-time migration: off_users + ops_users → gm_users
-const migrateToGlobalUsers=()=>{
-  if(LS.get('gm_users'))return;
-  const off=LS.get('off_users')||[];
-  const ops=LS.get('ops_users')||[];
-  const by={};
-  off.forEach(u=>{by[u.username]={...u,portals:{off:u.role||'User',ops:null}};});
-  ops.forEach(u=>{
-    if(by[u.username])by[u.username].portals.ops=u.role||'User';
-    else by[u.username]={...u,portals:{off:null,ops:u.role||'User'}};
-  });
-  const merged=Object.values(by);
-  if(merged.length>0)LS.set('gm_users',merged);
+// User accounts are changed only through api/users.php (passwords are hashed server-side).
+// Returns the updated user list (without password hashes) and refreshes the local copy.
+const usersApi=async(action,payload)=>{
+  const{users}=await apiCall('users.php',{method:'POST',body:JSON.stringify({action,...payload})});
+  LS.set('gm_users',users);
+  return users;
 };
 
 // Logo stored separately (raw, no JSON) to avoid quota issues with large base64

@@ -1,7 +1,7 @@
 <?php
-// GET                → {data: {key: value, ...}} every synced key
-// PUT  ?key=off_cust → body {value: ...} replaces that key
-// POST               → body {data: {key: value, ...}} bulk import (admins only)
+// GET                → {data: {key: value, ...}} every synced key (gm_users without password hashes)
+// PUT  ?key=off_cust → body {value: ...} replaces that key (gm_users is read-only here — see users.php)
+// POST               → body {data: {key: value, ...}} bulk import (admins only, gm_users skipped)
 
 require __DIR__ . '/_bootstrap.php';
 
@@ -21,6 +21,7 @@ try {
             if ($out->{$k} === null) $out->{$k} = [];
             $out->{$k}[] = json_decode($r['data']);
         }
+        if (is_array($out->gm_users)) $out->gm_users = public_users($out->gm_users);
 
         foreach (db()->query('SELECT setting_key, value, is_raw FROM settings')->fetchAll() as $r) {
             $k = $r['setting_key'];
@@ -53,6 +54,7 @@ try {
         $imported = [];
         foreach ($body->data as $key => $value) {
             if (!in_array($key, RECORD_KEYS, true) && !in_array($key, SETTING_KEYS, true) && !in_array($key, RAW_KEYS, true)) continue;
+            if ($key === 'gm_users') continue; // users are managed through users.php
             save_key($key, $value, $by);
             $imported[] = $key;
         }
