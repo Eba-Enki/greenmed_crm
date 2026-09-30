@@ -391,6 +391,20 @@ table.ie td input[readonly]{background:transparent;color:var(--g500)}
 .tx-kind.tx-expense.active{border-color:var(--amber);background:var(--amberl);box-shadow:0 0 0 3px rgba(176,90,16,.1)}
 .tx-kind.tx-expense.active .tx-kind-l{color:var(--amber)}
 @media (max-width:720px){.tx-kinds{grid-template-columns:1fr}}
+/* NUMBERING SWITCH (Official settings) */
+.num-switch{display:flex;align-items:flex-start;gap:12px;padding:14px 16px;margin-bottom:14px;background:#fff;border:1px solid var(--g200);border-radius:10px;cursor:pointer}
+.num-switch input{position:absolute;opacity:0;width:1px;height:1px}
+.num-switch-track{flex-shrink:0;width:38px;height:22px;border-radius:11px;background:var(--g300);position:relative;margin-top:1px;transition:background .15s}
+.num-switch-track::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s cubic-bezier(.34,1.56,.64,1)}
+.num-switch input:checked+.num-switch-track{background:var(--gm-400)}
+.num-switch input:checked+.num-switch-track::after{transform:translateX(16px)}
+.num-switch input:focus-visible+.num-switch-track{outline:2px solid var(--gm-400);outline-offset:2px}
+.num-switch:hover .num-switch-track{filter:brightness(.97)}
+.num-switch:active .num-switch-track::after{transform:scale(.92)}
+.num-switch input:checked+.num-switch-track:active::after{transform:translateX(16px) scale(.92)}
+.num-switch-text{display:flex;flex-direction:column;gap:3px}
+.num-switch-t{font-size:13.5px;font-weight:600;color:var(--g900)}
+.num-switch-h{font-size:12px;color:var(--g500);line-height:1.5}
 @media (max-width:720px){.fx-accounts{grid-template-columns:1fr}.fx-swap{margin-top:0;justify-self:center}.fg.g4{grid-template-columns:1fr 1fr}}
 
 /* ALERT */

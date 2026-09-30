@@ -620,7 +620,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <div className="fc-body">
         <div className="fg g4">
           <Fld label="Quote No"><input value={q.number} readOnly className="fi" style={{fontFamily:'monospace',fontWeight:700}}/></Fld>
-          <Fld label="Date"><input type="date" value={q.date||td()} onChange={e=>set('date',e.target.value)} className="fi" disabled={isLocked}/></Fld>
+          <Fld label="Date"><input type="date" value={q.date||''} onChange={e=>set('date',e.target.value)} className="fi" disabled={isLocked}/></Fld>
           <Fld label="Valid Until"><input type="date" value={q.validUntil||addD(30)} onChange={e=>set('validUntil',e.target.value)} className="fi" disabled={isLocked}/></Fld>
           <Fld label="Currency"><select value={q.currency||'GBP'} onChange={e=>set('currency',e.target.value)} className="fi" disabled={isLocked}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
         </div>
@@ -823,8 +823,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="fc"><div className="fct">Invoice Details</div>
         <div className="fg g4">
           <Fld label="Invoice No"><input value={inv.number} readOnly className="fi" style={{fontFamily:'monospace',fontWeight:700}}/></Fld>
-          <Fld label="Invoice Date"><input type="date" value={inv.date||td()} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
-          <Fld label="Due Date"><input type="date" value={inv.dueDate||td()} onChange={e=>set('dueDate',e.target.value)} className="fi"/></Fld>
+          <Fld label="Invoice Date"><input type="date" value={inv.date||''} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
+          <Fld label="Due Date"><input type="date" value={inv.dueDate||''} onChange={e=>set('dueDate',e.target.value)} className="fi"/></Fld>
           <Fld label="Terms"><select value={inv.terms||'Due on Receipt'} onChange={e=>set('terms',e.target.value)} className="fi">{ITRM.map(t=><option key={t} value={t}>{t}</option>)}</select></Fld>
         </div>
         <div className="fg g2" style={{marginTop:12}}>
@@ -1097,7 +1097,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="fc"><div className="fct">Document Details</div>
         <div className="fg g4">
           <Fld label={isPQ?"Their PQ No":isPO?"PO No":"Their Invoice No"}><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={isPO} style={isPO?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld>
-          <Fld label="Date"><input type="date" value={doc.date||td()} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
+          <Fld label="Date"><input type="date" value={doc.date||''} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
           <Fld label={isPO?"Delivery Date":"Due Date"}><input type="date" value={doc.dueDate||doc.deliveryDate||addD(30)} onChange={e=>set(isPO?'deliveryDate':'dueDate',e.target.value)} className="fi"/></Fld>
           <Fld label="Currency"><select value={doc.currency||'GBP'} onChange={e=>set('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
         </div>
@@ -1278,7 +1278,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <div className="fg g-no-name"><Fld label="Project No"><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label="Project Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
         <div className="fg g-2-1-1" style={{marginTop:12}}>
           <Fld label="Client"><select value={p.clientId||''} onChange={e=>{s('clientId',e.target.value);const c=custPick.find(x=>x.id===e.target.value);if(c)s('client',c.company||c.contact||'');}} className="fi"><option value="">— Select customer —</option>{custPick.map(c=><option key={c.id} value={c.id}>{c.company||c.contact||''}</option>)}</select></Fld>
-          <Fld label="Start Date"><input type="date" value={p.startDate||td()} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld>
+          <Fld label="Start Date"><input type="date" value={p.startDate||''} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld>
           <Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld>
         </div>
         <div className="fg g-budget" style={{marginTop:12}}>
@@ -2239,7 +2239,7 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
   return(<div className="content"><div className="fw">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?'Edit Expense':'New Expense'}</h2><div style={{flex:1}}/>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>Save & New</Btn>}<Btn v="bp bsm" onClick={()=>onSave(normExp(e))}>Save</Btn></div>
     <div className="fc"><div className="fct">Expense Details</div>
-      <div className="fg g3"><Fld label="Date"><input ref={dateRef} type="date" value={e.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label="Amount"><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label="Currency"><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
+      <div className="fg g3"><Fld label="Date"><input ref={dateRef} type="date" value={e.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label="Amount"><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label="Currency"><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
       <div className="fg g3" style={{marginTop:12,gridTemplateColumns:'1fr 2fr 1fr'}}>
         <Fld label="Category"><select value={e.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">— Select —</option>{allCats.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select></Fld>
         <Fld label="Description"><input value={e.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="What was this for?"/></Fld>

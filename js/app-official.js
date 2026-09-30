@@ -173,24 +173,43 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     sold:String(t.fx.sold),rate:String(t.fx.rate),fee:t.fx.fee?String(t.fx.fee):'',feeCategory:t.fx.feeCategory||'',received:String(t.fx.received),
     reference:t.reference||'',description:t.fx.note!=null?t.fx.note:(t.description||'')});
 
-  const genN=(type)=>{
+  // Automatic numbering can be switched off in Settings (e.g. to enter old documents with their
+  // original numbers); then numbers are typed by hand and the counters stay where they are.
+  const autoNumber=co.autoNumber!==false;
+  const docsOfType=type=>type==='invoice'?inv:type==='po'?pos:type==='quote'?quo:rec;
+  const cntKey=type=>type==='invoice'?'i':type==='po'?'p':'q';
+  const fmtN=(type,n)=>{
     const pfx=type==='invoice'?(co.invPfx||'INV'):type==='po'?(co.poPfx||'PO'):(co.quoPfx||'QUO');
     const start=parseInt(type==='invoice'?(co.invStart||1):type==='po'?(co.poStart||1):(co.quoStart||1),10);
-    const n=type==='invoice'?cnt.i:type==='po'?cnt.p:cnt.q;
     return `${pfx}-${String(start+n).padStart(6,'0')}`;
   };
+  // Next counter position whose number isn't already taken (a hand-typed old number may match)
+  const nextSeq=type=>{
+    const used=new Set(docsOfType(type).map(d=>(d.number||'').trim().toLowerCase()));
+    let n=cnt[cntKey(type)];
+    while(used.has(fmtN(type,n).toLowerCase()))n++;
+    return n;
+  };
+  const genN=type=>fmtN(type,nextSeq(type));
 
-  const mkDoc=(type)=>({id:null,type,number:genN(type),date:td(),dueDate:type==='invoice'?td():addD(30),terms:type==='invoice'?'Due on Receipt':'Valid for 30 days',currency:'GBP',status:'draft',project:'',client:{name:'',address:'',email:'',ref:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:'Thanks for your business.'});
+  const mkDoc=(type)=>({id:null,type,number:autoNumber?genN(type):'',date:td(),dueDate:type==='invoice'?td():addD(30),terms:type==='invoice'?'Due on Receipt':'Valid for 30 days',currency:'GBP',status:'draft',project:'',client:{name:'',address:'',email:'',ref:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:'Thanks for your business.'});
   const mkRec=()=>({id:null,type:'received',number:'',supplier:'',supplierAddress:'',email:'',ref:'',date:td(),dueDate:addD(30),terms:'Due on Receipt',currency:'GBP',status:'pending',project:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
-  const handleSave=doc=>{
+  const handleSave=docIn=>{
+    const doc={...docIn,number:(docIn.number||'').trim()};
+    if(doc.type!=='received'){
+      if(!doc.number){alert('Enter a document number.');return;}
+      const dup=docsOfType(doc.type).find(d=>d.id!==doc.id&&(d.number||'').trim().toLowerCase()===doc.number.toLowerCase());
+      if(dup){alert(`Number "${doc.number}" is already used by another ${doc.type==='po'?'purchase order':doc.type}. Enter a different number.`);return;}
+    }
     const fresh=!doc.id;const saved=fresh?{...doc,id:uid()}:doc;
     if(doc.type==='invoice')si(fresh?[...inv,saved]:inv.map(d=>d.id===saved.id?saved:d));
     else if(doc.type==='quote')sq(fresh?[...quo,saved]:quo.map(d=>d.id===saved.id?saved:d));
     else if(doc.type==='po')sp(fresh?[...pos,saved]:pos.map(d=>d.id===saved.id?saved:d));
     else sr(fresh?[...rec,saved]:rec.map(d=>d.id===saved.id?saved:d));
-    if(fresh){const k=doc.type==='invoice'?'i':doc.type==='po'?'p':'q';sc({...cnt,[k]:cnt[k]+1});}
+    // Hand-typed numbers (automatic numbering off) don't consume a counter position
+    if(fresh&&autoNumber&&doc.type!=='received')sc({...cnt,[cntKey(doc.type)]:nextSeq(doc.type)+1});
     showToast('Saved ✓');
-    go(doc.type==='invoice'?'invoices':doc.type==='po'?'pos':doc.type==='received'?'received':'quotes');
+    go(doc.type==='invoice'?'off_invoices':doc.type==='po'?'off_pos':doc.type==='received'?'off_received':'off_quotes');
   };
   const handleDel=doc=>{
     if(!confirm(`Delete ${doc.number||doc.supplier}?`))return false;
@@ -231,8 +250,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         </div>
         <div className="fc"><div className="fct">Document Details</div>
           <div className="fg g3">
-            <Fld label="No"><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={!isRec} style={!isRec?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld>
-            <Fld label="Date"><input type="date" value={doc.date||td()} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
+            <Fld label="No"><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={!isRec&&autoNumber} placeholder={!isRec&&!autoNumber?'Type the document number':''} style={!isRec?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld>
+            <Fld label="Date"><input type="date" value={doc.date||''} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
             <Fld label={isInv?"Due Date":isRec?"Due Date":"Valid Until"}><input type="date" value={doc.dueDate||addD(30)} onChange={e=>set('dueDate',e.target.value)} className="fi"/></Fld>
           </div>
           <div className="fg g4" style={{marginTop:12}}>
@@ -411,7 +430,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           onEdit={t=>{if(t.fx){setCur(fxFormState(t));go('off_fx_form');}else{setCur(t);go('off_banktx_form');}}} onDelete={handleDeleteBankTx}/>}
         {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
-        {view==='settings'&&<OffSettings ns={ns} co={co} go={go} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast('Saved ✓');go('home');}} onClose={()=>go('home')}/>}
+        {view==='settings'&&<OffSettings ns={ns} co={co} go={go} onAutoNumberChange={v=>{const newCo={...co,autoNumber:v};setCo(newCo);LS.set(ns+'co',newCo);showToast(v?'Automatic numbering on':'Automatic numbering off — type numbers by hand');}} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast('Saved ✓');go('home');}} onClose={()=>go('home')}/>}
       </div>
       {toast&&<div className="toast">{toast}</div>}
       {editingBank&&<BankAccountModal bank={editingBank} onSave={b=>{saveBank(b);setEditingBank(null);}} onCancel={()=>setEditingBank(null)}/>}
@@ -511,7 +530,7 @@ function OffProjForm({proj:init,projects,onSave,onCancel,dirtyRef}){
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
     <div className="fc"><div className="fct">Project Details</div>
       <div className="fg g2"><Fld label="Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder="Project name"/></Fld><Fld label="Client"><input value={p.client||''} onChange={e=>s('client',e.target.value)} className="fi" placeholder="Client"/></Fld></div>
-      <div className="fg g2" style={{marginTop:12}}><Fld label="Start Date"><input type="date" value={p.startDate||td()} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld><Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld></div>
+      <div className="fg g2" style={{marginTop:12}}><Fld label="Start Date"><input type="date" value={p.startDate||''} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld><Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld></div>
       <div style={{marginTop:12}}><Fld label="Description"><textarea value={p.desc||''} onChange={e=>s('desc',e.target.value)} rows={2} className="fi"/></Fld></div>
     </div>
     <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
@@ -651,7 +670,7 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
     </table></div>
   </div>);
 }
-function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,onAddBank,onEditBank,onDeleteBank,onSetDefaultBank}){
+function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNumberChange,banks,onAddBank,onEditBank,onDeleteBank,onSetDefaultBank}){
   const[c,setC]=useState(()=>({...DEF_CO,...init}));
   const s=(k,v)=>setC(d=>({...d,[k]:v}));
   const[activeMenu,setActiveMenu]=useState(()=>LS.get(ns+'settingsMenu')||'company');
@@ -681,7 +700,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,on
   
   return(<div className="content" style={{padding:0,display:'flex',height:'calc(100vh - 54px)'}}>
     {/* Back Button & Title Bar */}
-    <div style={{position:'absolute',top:0,left:0,right:0,background:'var(--g50)',borderBottom:'1px solid var(--g200)',padding:'12px 24px',display:'flex',alignItems:'center',gap:10,zIndex:10}}>
+    <div style={{position:'fixed',top:54,left:'var(--sidebar)',right:0,background:'var(--g50)',borderBottom:'1px solid var(--g200)',padding:'12px 24px',display:'flex',alignItems:'center',gap:10,zIndex:50}}>
       <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back" size={14}/>Back to Dashboard</button>
       <h2 style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginLeft:10}}>Settings</h2>
       <div style={{flex:1}}/>
@@ -766,7 +785,17 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,banks,on
               <Btn v="bp bsm" onClick={()=>setNumLocked(true)}><Ico n="check" size={13}/>Done</Btn>
             }
           </div>
-          <div style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,overflow:'hidden'}}>
+          <label className="num-switch">
+            <input type="checkbox" checked={c.autoNumber!==false} onChange={e=>{s('autoNumber',e.target.checked);onAutoNumberChange(e.target.checked);}}/>
+            <span className="num-switch-track" aria-hidden="true"/>
+            <span className="num-switch-text">
+              <span className="num-switch-t">Automatic numbering {c.autoNumber!==false?'on':'off'}</span>
+              <span className="num-switch-h">{c.autoNumber!==false
+                ?'New quotations, invoices and purchase orders get the next number from the prefixes below.'
+                :'Numbers are typed by hand on each quotation, invoice and purchase order — use this to enter old documents. The counters stay where they are; turn this back on to continue automatically.'}</span>
+            </span>
+          </label>
+          <div style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,overflow:'hidden',opacity:c.autoNumber!==false?1:.55}}>
             {/* Sales Quotation */}
             <div style={{padding:'16px 20px',borderBottom:'1px solid var(--g200)',display:'flex',alignItems:'center',gap:16}}>
               <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>1</div>
@@ -1073,6 +1102,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
   };
 
   const trySave=()=>{
+    if(!t.date){alert('Enter a valid date.');return;}
     if(!(+t.amount>0)){alert('Enter an amount.');return;}
     if(isNew&&kind!=='expense'&&!t.contactId){alert(`Select who the money ${kind==='in'?'came from':'went to'}.`);return;}
     if(kind==='expense'&&!t.category){alert('Select an expense category.');return;}
@@ -1104,7 +1134,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
     </div>
     <div className="fc"><div className="fct">Details</div>
       <div className="fg g3">
-        <Fld label="Date"><input type="date" value={t.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
+        <Fld label="Date"><input type="date" value={t.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
         <Fld label={`Amount (${account.currency||'GBP'})`}><input type="number" value={t.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
         <Fld label="Reference"><input value={t.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Ref No"/></Fld>
       </div>
@@ -1167,6 +1197,7 @@ function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,dirtyRef})
   const accOpt=b=><option key={b.id} value={b.id}>{b.accountName||'Unnamed'} ({b.currency||'GBP'})</option>;
 
   const trySave=()=>{
+    if(!f.date){alert('Enter a valid date.');return;}
     if(!from||!to){alert('Select both accounts.');return;}
     if(from.id===to.id){alert('Choose two different accounts.');return;}
     if(!(+f.sold>0)||!(+f.rate>0)||!(+f.received>0)||+(f.fee||0)<0){alert('Enter the amount out, FX rate and amount in (fee cannot be negative).');return;}
@@ -1195,7 +1226,7 @@ function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,dirtyRef})
         </Fld>
       </div>
       <div className="fg g2" style={{marginTop:12}}>
-        <Fld label="Date"><input type="date" value={f.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
+        <Fld label="Date"><input type="date" value={f.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
         <Fld label="Reference"><input value={f.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Statement reference"/></Fld>
       </div>
     </div>
