@@ -2052,15 +2052,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const revenue=dt(salesInvoices.filter(d=>d.status==='sent'||d.status==='paid').flatMap(d=>d.items));
     const activePQ=purchaseQuotes.filter(d=>d.status==='draft').length;
     
+    // All cards share the brand accent on a white surface.
+    const accent='#608425';
     const cards=[
-      {k:'sales_quotes',ico:'sq',lbl:'Sales Quotes',val:salesQuotes.filter(d=>d.status!=='passive').length,sub:`${salesQuotes.filter(d=>d.status==='approved').length} approved`,color:'#608425',bg:'linear-gradient(135deg, rgba(96,132,37,0.08) 0%, rgba(96,132,37,0.02) 100%)'},
-      {k:'sales_invoices',ico:'si',lbl:'Sales Invoices',val:salesInvoices.length,sub:`${salesInvoices.filter(d=>d.status==='draft').length} draft`,color:'#4f6f1f',bg:'linear-gradient(135deg, rgba(79,111,31,0.08) 0%, rgba(79,111,31,0.02) 100%)'},
-      {k:'purchase_quotes',ico:'rq',lbl:'Purchase Quotes',val:purchaseQuotes.length,sub:`${activePQ} active`,color:'#3B6D11',bg:'linear-gradient(135deg, rgba(59,109,17,0.08) 0%, rgba(59,109,17,0.02) 100%)'},
-      {k:'purchase_orders',ico:'po',lbl:'Purchase Orders',val:purchaseOrders.length,sub:`${purchaseOrders.filter(d=>d.status==='sent').length} sent`,color:'#a8c070',bg:'linear-gradient(135deg, rgba(168,192,112,0.08) 0%, rgba(168,192,112,0.02) 100%)'},
-      {k:'received_invoices',ico:'ri',lbl:'Received Invoices',val:receivedInvoices.length,sub:`${receivedInvoices.filter(d=>d.status==='pending').length} pending`,color:'#1a2a0a',bg:'linear-gradient(135deg, rgba(26,42,10,0.08) 0%, rgba(26,42,10,0.02) 100%)'},
-      {k:'projects',ico:'project',lbl:'Projects',val:projects.length,sub:`${projects.filter(d=>d.status==='active').length} active`,color:'#608425',bg:'linear-gradient(135deg, rgba(96,132,37,0.08) 0%, rgba(96,132,37,0.02) 100%)'},
-      {k:'product_pool',ico:'pool',lbl:'Product Pool',val:poolItems.length,sub:'items',color:'#4f6f1f',bg:'linear-gradient(135deg, rgba(79,111,31,0.08) 0%, rgba(79,111,31,0.02) 100%)'},
-      {k:'customers',ico:'customers',lbl:'Customers',val:customers.length,sub:'contacts',color:'#3B6D11',bg:'linear-gradient(135deg, rgba(59,109,17,0.08) 0%, rgba(59,109,17,0.02) 100%)'},
+      {k:'sales_quotes',ico:'sq',lbl:'Sales Quotes',val:salesQuotes.filter(d=>d.status!=='passive').length,sub:`${salesQuotes.filter(d=>d.status==='approved').length} approved`},
+      {k:'sales_invoices',ico:'si',lbl:'Sales Invoices',val:salesInvoices.length,sub:`${salesInvoices.filter(d=>d.status==='draft').length} draft`},
+      {k:'purchase_quotes',ico:'rq',lbl:'Purchase Quotes',val:purchaseQuotes.length,sub:`${activePQ} active`},
+      {k:'purchase_orders',ico:'po',lbl:'Purchase Orders',val:purchaseOrders.length,sub:`${purchaseOrders.filter(d=>d.status==='sent').length} sent`},
+      {k:'received_invoices',ico:'ri',lbl:'Received Invoices',val:receivedInvoices.length,sub:`${receivedInvoices.filter(d=>d.status==='pending').length} pending`},
+      {k:'projects',ico:'project',lbl:'Projects',val:projects.length,sub:`${projects.filter(d=>d.status==='active').length} active`},
+      {k:'product_pool',ico:'pool',lbl:'Product Pool',val:poolItems.length,sub:'items'},
+      {k:'customers',ico:'customers',lbl:'Customers',val:customers.length,sub:'contacts'},
     ];
     
     return(<div className="content">
@@ -2075,8 +2077,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             key={c.k} 
             onClick={()=>go(c.k)}
             style={{
-              background:c.bg,
-              border:`1px solid ${c.color}20`,
+              background:'#fff',
+              border:`1px solid ${accent}20`,
               borderRadius:12,
               padding:'22px 20px',
               cursor:'pointer',
@@ -2087,36 +2089,36 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             }}
             onMouseEnter={(e)=>{
               e.currentTarget.style.transform='translateY(-4px)';
-              e.currentTarget.style.boxShadow=`0 8px 24px ${c.color}20`;
-              e.currentTarget.style.borderColor=`${c.color}40`;
+              e.currentTarget.style.boxShadow=`0 8px 24px ${accent}20`;
+              e.currentTarget.style.borderColor=`${accent}40`;
             }}
             onMouseLeave={(e)=>{
               e.currentTarget.style.transform='translateY(0)';
               e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';
-              e.currentTarget.style.borderColor=`${c.color}20`;
+              e.currentTarget.style.borderColor=`${accent}20`;
             }}
           >
-            <div style={{position:'absolute',top:-10,right:-10,width:80,height:80,borderRadius:'50%',background:`${c.color}08`,filter:'blur(20px)'}}/>
+            <div style={{position:'absolute',top:-10,right:-10,width:80,height:80,borderRadius:'50%',background:`${accent}08`,filter:'blur(20px)'}}/>
             
             <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16,position:'relative'}}>
               <div style={{
                 width:48,
                 height:48,
                 borderRadius:10,
-                background:`${c.color}15`,
+                background:`${accent}15`,
                 display:'flex',
                 alignItems:'center',
                 justifyContent:'center',
-                border:`1px solid ${c.color}20`
+                border:`1px solid ${accent}20`
               }}>
-                <div style={{color:c.color}}>
+                <div style={{color:accent}}>
                   <Ico n={c.ico} size={20}/>
                 </div>
               </div>
               <div style={{
                 fontSize:32,
                 fontWeight:800,
-                color:c.color,
+                color:accent,
                 lineHeight:1,
                 letterSpacing:'-1px'
               }}>
