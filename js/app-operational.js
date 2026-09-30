@@ -91,24 +91,28 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // ── DOCUMENT NUMBERS ──
   // PREFIX + 4 digits (SQ0001), using the prefix and start number from Settings → Numbering.
-  // A number that doesn't start with the current prefix was typed by hand and is kept as is.
+  // The next number follows the highest existing one with that prefix — no counter, so cancelled
+  // or deleted drafts never leave gaps. A number that doesn't start with the current prefix was
+  // typed by hand and is kept as is.
   const docPfx=k=>(co[k+'Pfx']||'').trim()||DEF_CO[k+'Pfx'];
-  const docNum=(k,seq)=>fmtDocNum(docPfx(k),co[k+'Start'],seq);
+  const usedDocNums={
+    sq:()=>salesQuotes.map(q=>(q.base||q.number||'').replace(/\.R\d+$/,'')),
+    si:()=>salesInvoices.map(d=>d.number),
+    po:()=>purchaseOrders.map(d=>d.number),
+  };
+  const docNum=k=>nextDocNum(docPfx(k),co[k+'Start'],usedDocNums[k]());
   const isAutoNum=(k,num)=>!num||num.startsWith(docPfx(k));
 
   // ── SALES QUOTATION LOGIC ──
   // Each quote group has a base number (SQ0001).
   // revNum=0 → SQ0001, revNum=1 → SQ0001.R01, etc.
   // items carry invoicedQty (tracked per item)
-  // Like invoices and POs, a new quote only shows the next number; the counter moves on save,
-  // so a cancelled quote doesn't burn a number.
   const assignQuoteNumber=(q)=>{
     // A hand-typed number becomes its own base so the quote list can group its revisions
     if(!isAutoNum('sq',q.number))return q.base?q:{...q,base:q.number};
     // Revisions keep the base of the quote they revise
     if(q.base)return{...q,number:genQuoteNum(q.base,q.rev||0)};
-    const n=cnt.sq;const base=docNum('sq',n+1);
-    sCnt({...cnt,sq:n+1});
+    const base=docNum('sq');
     return{...q,base,number:genQuoteNum(base,q.rev||0)};
   };
   const mkSalesQuote=(base,rev,fromQuote)=>{
@@ -182,17 +186,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // Create SI from quote
   const mkSalesInvoice=(q)=>{
-    const n=cnt.si;const num=docNum('si',n+1);
+    const num=docNum('si');
     const remaining=getQuoteRemainingItems(q);
     return{id:null,number:num,quoteId:q.id,quoteNum:q.number,date:td(),dueDate:td(),terms:'Due on Receipt',currency:q.currency||'GBP',status:'draft',project:q.project||'',projectNumber:q.projectNumber||'',client:{...q.client},shipToEnabled:q.shipToEnabled||false,shipTo:q.shipTo?{...q.shipTo}:{company:'',contact:'',email:'',phone:'',address:''},items:remaining.map(it=>({id:uid(),quoteItemId:it.id,item:it.item,desc:it.desc,unit:it.unit,price:it.price,qty:String(it.remainingQty),maxQty:it.remainingQty})),notes:q.notes||''};
   };
   const assignInvoiceNumber=(si)=>{
-    if(isAutoNum('si',si.number)){
-      const n=cnt.si;const num=docNum('si',n+1);
-      sCnt({...cnt,si:n+1});
-      return{...si,number:num};
-    }
-    return si;
+    return isAutoNum('si',si.number)?{...si,number:docNum('si')}:si;
   };
 
   const handleSaveSI=si=>{
@@ -213,16 +212,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // ── PROCUREMENT LOGIC ──
   const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkPurchaseOrder=(pq)=>{
-    const n=cnt.po;const num=docNum('po',n+1);
+    const num=docNum('po');
     return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''};
   };
   const assignPONumber=(po)=>{
-    if(isAutoNum('po',po.number)){
-      const n=cnt.po;const num=docNum('po',n+1);
-      sCnt({...cnt,po:n+1});
-      return{...po,number:num};
-    }
-    return po;
+    return isAutoNum('po',po.number)?{...po,number:docNum('po')}:po;
   };
   const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''});
 
@@ -1932,7 +1926,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 <td className="st-num-doc">{label}</td>
                 <td><input value={c[k+'Pfx']??def} onChange={e=>s(k+'Pfx',e.target.value.toUpperCase().replace(/\s/g,''))} className="fi" readOnly={numLocked} placeholder={def}/></td>
                 <td><input type="number" value={c[k+'Start']||'1'} onChange={e=>s(k+'Start',e.target.value)} className="fi" min="1" readOnly={numLocked}/></td>
-                <td className="st-num-next">{fmtDocNum((c[k+'Pfx']||'').trim()||def,c[k+'Start'],(cnt[k]||0)+1)}</td>
+                <td className="st-num-next">{nextDocNum((c[k+'Pfx']||'').trim()||def,c[k+'Start'],usedDocNums[k]())}</td>
               </tr>
             ))}
           </tbody>
@@ -2153,8 +2147,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="topbar no-print">
             <h1 className="topbar-title">{titles[view]||''}</h1>
             <div style={{flex:1}}/>
-            {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq',cnt.sq+1)});go('sales_quote_form');}}><Ico n="plus"/>New Quotation</Btn>}
-            {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si',cnt.si+1);setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>New Invoice</Btn>}
+            {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>New Quotation</Btn>}
+            {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si');setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>New Invoice</Btn>}
             {view==='purchase_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>New Received Quote</Btn>}
             {view==='purchase_orders'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
             {view==='received_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>New Received Invoice</Btn>}

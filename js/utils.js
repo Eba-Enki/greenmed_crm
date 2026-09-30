@@ -51,8 +51,13 @@ const SM={
 
 // Numbering helpers
 const padN=n=>String(n).padStart(4,'0');
-// Sales & Procurement document number: prefix + 4 digits, offset by the start number (SQ0001).
-const fmtDocNum=(pfx,start,seq)=>`${pfx}${padN((Math.max(1,parseInt(start,10)||1))-1+seq)}`;
+// Next Sales & Procurement document number: prefix + 4 digits (SQ0001), one above the highest
+// existing number with that prefix, or the start number when there is none (or it is higher).
+const nextDocNum=(pfx,start,existing)=>{
+  const re=new RegExp('^'+pfx.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(\\d+)$');
+  const top=existing.reduce((m,n)=>{const r=re.exec(n||'');return r?Math.max(m,+r[1]):m;},0);
+  return pfx+padN(Math.max(Math.max(1,parseInt(start,10)||1),top+1));
+};
 const genQuoteNum=(base,rev)=>rev===0?base:`${base}.R${String(rev).padStart(2,'0')}`;
 const genPQNum=()=>''; // manual
 const genProjNum=n=>`PRJ-${padN(n)}`;
