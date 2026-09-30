@@ -354,13 +354,16 @@ table.ie td input[readonly]{background:transparent;color:var(--g500)}
 .st-link{background:none;border:none;font-size:12px;font-weight:600;color:var(--gm-500);cursor:pointer;padding:4px 8px;border-radius:6px;transition:background .15s}
 .st-link:hover{background:var(--greenl)}
 .st-link:active{background:#dcebc8}
-.st-bank-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0}
+.st-bank-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0}
 .st-bank-grid dt{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--g400);margin-bottom:2px}
 .st-bank-grid dd{margin:0;font-size:12.5px;color:var(--g700);font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+.st-bank-grid dd.st-plain{font-family:inherit;word-break:normal;white-space:pre-line}
+.st-bank-addr{grid-column:1/-1}
 .st-modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
 .st-modal{background:#fff;border-radius:14px;padding:24px;width:560px;max-width:100%;box-shadow:0 20px 60px rgba(26,42,10,.2)}
 .st-modal-t{font-size:16px;font-weight:700;color:var(--g900);margin-bottom:18px}
 .st-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--g700);cursor:pointer}
+@media (max-width:960px){.st-bank-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:720px){.st-bank-grid{grid-template-columns:1fr}}
 
 /* ALERT */

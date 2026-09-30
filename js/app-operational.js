@@ -1822,7 +1822,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       setCo(x=>({...x,banks}));
     };
     const saveBank=b=>{
-      const bank={...b,accountName:toTitleCase(b.accountName),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase(),currency:b.currency||'GBP'};
+      const bank={...b,accountName:toTitleCase(b.accountName),bankName:(b.bankName||'').trim(),bankAddress:(b.bankAddress||'').trim(),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase(),currency:b.currency||'GBP'};
       const list=draft().banks||[];
       let banks=list.some(x=>x.id===bank.id)?list.map(x=>x.id===bank.id?bank:x):[...list,bank];
       if(bank.isDefault)banks=banks.map(x=>({...x,isDefault:x.id===bank.id}));
@@ -1936,7 +1936,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {/* Bank Details */}
       {activeMenu==='bank'&&(<div className="fc">
         <div className="st-fct-row"><div className="fct">Bank Details</div>
-          <Btn v="bp bsm" onClick={()=>setEditingBank({id:uid(),accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',isDefault:!(c.banks||[]).length})}><Ico n="plus" size={13}/>Add Bank</Btn>
+          <Btn v="bp bsm" onClick={()=>setEditingBank({id:uid(),accountName:'',bankName:'',bankAddress:'',accountNumber:'',iban:'',bic:'',currency:'GBP',isDefault:!(c.banks||[]).length})}><Ico n="plus" size={13}/>Add Bank</Btn>
         </div>
         {(!c.banks||c.banks.length===0)&&(
           <div className="st-empty">
@@ -1958,9 +1958,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 <button onClick={()=>deleteBank(bank.id)} className="ab danger" title="Delete" aria-label="Delete"><Ico n="trash"/></button>
               </div>
               <dl className="st-bank-grid">
+                <div><dt>Bank Name</dt><dd className="st-plain">{bank.bankName||'—'}</dd></div>
                 <div><dt>Account Number</dt><dd>{bank.accountNumber||'—'}</dd></div>
                 <div><dt>IBAN</dt><dd>{bank.iban||'—'}</dd></div>
-                <div><dt>BIC</dt><dd>{bank.bic||'—'}</dd></div>
+                <div><dt>SWIFT/BIC</dt><dd>{bank.bic||'—'}</dd></div>
+                {bank.bankAddress&&<div className="st-bank-addr"><dt>Bank Address</dt><dd className="st-plain">{bank.bankAddress}</dd></div>}
               </dl>
             </div>
           ))}
@@ -1971,14 +1973,18 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <div className="st-modal" onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true">
           <div className="st-modal-t">{isNewBank?'New Bank Account':'Edit Bank Account'}</div>
           <div className="fg">
-            <Fld label="Account Name"><input value={editingBank.accountName||''} onChange={e=>eb('accountName',e.target.value)} className="fi" autoFocus/></Fld>
+            <div className="fg g2">
+              <Fld label="Account Name"><input value={editingBank.accountName||''} onChange={e=>eb('accountName',e.target.value)} className="fi" autoFocus/></Fld>
+              <Fld label="Bank Name"><input value={editingBank.bankName||''} onChange={e=>eb('bankName',e.target.value)} className="fi" placeholder="e.g. Barclays Bank UK PLC"/></Fld>
+            </div>
+            <Fld label="Bank Address"><textarea value={editingBank.bankAddress||''} onChange={e=>eb('bankAddress',e.target.value)} rows={2} className="fi"/></Fld>
             <div className="fg g-2-1">
               <Fld label="Account Number"><input value={editingBank.accountNumber||''} onChange={e=>eb('accountNumber',e.target.value)} className="fi"/></Fld>
               <Fld label="Currency"><select value={editingBank.currency||'GBP'} onChange={e=>eb('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([k,v])=><option key={k} value={k}>{k} ({v})</option>)}</select></Fld>
             </div>
             <div className="fg g-2-1">
               <Fld label="IBAN"><input value={editingBank.iban||''} onChange={e=>eb('iban',e.target.value)} className="fi"/></Fld>
-              <Fld label="BIC"><input value={editingBank.bic||''} onChange={e=>eb('bic',e.target.value)} className="fi"/></Fld>
+              <Fld label="SWIFT/BIC"><input value={editingBank.bic||''} onChange={e=>eb('bic',e.target.value)} className="fi"/></Fld>
             </div>
             <label className="st-check"><input type="checkbox" checked={editingBank.isDefault||false} onChange={e=>eb('isDefault',e.target.checked)}/><span>Set as default bank account</span></label>
           </div>
