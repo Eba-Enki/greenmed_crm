@@ -51,11 +51,10 @@ const SM={
 
 // Numbering helpers
 const padN=n=>String(n).padStart(4,'0');
-const genQuoteBase=n=>`Q${padN(n)}`;
+// Sales & Procurement document number: prefix + 4 digits, offset by the start number (SQ0001).
+const fmtDocNum=(pfx,start,seq)=>`${pfx}${padN((Math.max(1,parseInt(start,10)||1))-1+seq)}`;
 const genQuoteNum=(base,rev)=>rev===0?base:`${base}.R${String(rev).padStart(2,'0')}`;
-const genSINum=n=>`SI-${padN(n)}`;
 const genPQNum=()=>''; // manual
-const genPONum=n=>`PO-${padN(n)}`;
 const genProjNum=n=>`PRJ-${padN(n)}`;
 
 // ── Server sync (PHP API in /api) ──

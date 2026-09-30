@@ -89,29 +89,27 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sDocs=d=>save('docs',setDocuments,d);
   const sCnt=d=>{setCnt(d);LS.set(ns+'cnt',d)};
 
+  // ── DOCUMENT NUMBERS ──
+  // PREFIX + 4 digits (SQ0001), using the prefix and start number from Settings → Numbering.
+  // A number that doesn't start with the current prefix was typed by hand and is kept as is.
+  const docPfx=k=>(co[k+'Pfx']||'').trim()||DEF_CO[k+'Pfx'];
+  const docNum=(k,seq)=>fmtDocNum(docPfx(k),co[k+'Start'],seq);
+  const isAutoNum=(k,num)=>!num||num.startsWith(docPfx(k));
+
   // ── SALES QUOTATION LOGIC ──
-  // Each quote group has a baseNum (Q0001).
-  // revNum=0 → Q0001, revNum=1 → Q0001.R01, etc.
+  // Each quote group has a base number (SQ0001).
+  // revNum=0 → SQ0001, revNum=1 → SQ0001.R01, etc.
   // items carry invoicedQty (tracked per item)
-  const getNextQuoteBase=()=>{
-    const n=cnt.sq;const base=genQuoteBase(n+1);
-    sCnt({...cnt,sq:n+1});
-    return base;
-  };
+  // Like invoices and POs, a new quote only shows the next number; the counter moves on save,
+  // so a cancelled quote doesn't burn a number.
   const assignQuoteNumber=(q)=>{
-    if(q.number&&q.number.startsWith('Q')){
-      // If base already exists (revision), use the existing base
-      if(q.base){
-        const num=genQuoteNum(q.base,q.rev||0);
-        return{...q,number:num};
-      }
-      // New quote - create a new base
-      const n=cnt.sq;const base=genQuoteBase(n+1);
-      const num=genQuoteNum(base,q.rev||0);
-      sCnt({...cnt,sq:n+1});
-      return{...q,base,number:num};
-    }
-    return q;
+    // A hand-typed number becomes its own base so the quote list can group its revisions
+    if(!isAutoNum('sq',q.number))return q.base?q:{...q,base:q.number};
+    // Revisions keep the base of the quote they revise
+    if(q.base)return{...q,number:genQuoteNum(q.base,q.rev||0)};
+    const n=cnt.sq;const base=docNum('sq',n+1);
+    sCnt({...cnt,sq:n+1});
+    return{...q,base,number:genQuoteNum(base,q.rev||0)};
   };
   const mkSalesQuote=(base,rev,fromQuote)=>{
     const num=genQuoteNum(base,rev);
@@ -184,13 +182,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // Create SI from quote
   const mkSalesInvoice=(q)=>{
-    const n=cnt.si;const num=genSINum(n+1);
+    const n=cnt.si;const num=docNum('si',n+1);
     const remaining=getQuoteRemainingItems(q);
     return{id:null,number:num,quoteId:q.id,quoteNum:q.number,date:td(),dueDate:td(),terms:'Due on Receipt',currency:q.currency||'GBP',status:'draft',project:q.project||'',projectNumber:q.projectNumber||'',client:{...q.client},shipToEnabled:q.shipToEnabled||false,shipTo:q.shipTo?{...q.shipTo}:{company:'',contact:'',email:'',phone:'',address:''},items:remaining.map(it=>({id:uid(),quoteItemId:it.id,item:it.item,desc:it.desc,unit:it.unit,price:it.price,qty:String(it.remainingQty),maxQty:it.remainingQty})),notes:q.notes||''};
   };
   const assignInvoiceNumber=(si)=>{
-    if(!si.number||si.number.startsWith('SI')){
-      const n=cnt.si;const num=genSINum(n+1);
+    if(isAutoNum('si',si.number)){
+      const n=cnt.si;const num=docNum('si',n+1);
       sCnt({...cnt,si:n+1});
       return{...si,number:num};
     }
@@ -215,12 +213,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // ── PROCUREMENT LOGIC ──
   const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkPurchaseOrder=(pq)=>{
-    const n=cnt.po;const num=genPONum(n+1);
+    const n=cnt.po;const num=docNum('po',n+1);
     return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''};
   };
   const assignPONumber=(po)=>{
-    if(!po.number||po.number.startsWith('PO')){
-      const n=cnt.po;const num=genPONum(n+1);
+    if(isAutoNum('po',po.number)){
+      const n=cnt.po;const num=docNum('po',n+1);
       sCnt({...cnt,po:n+1});
       return{...po,number:num};
     }
@@ -1927,13 +1925,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           {numLocked?<Btn v="bgh bsm" onClick={()=>setNumLocked(false)}><Ico n="edit" size={13}/>Edit</Btn>:<Btn v="bp bsm" onClick={()=>setNumLocked(true)}><Ico n="check" size={13}/>Done</Btn>}
         </div>
         <table className="st-num">
-          <thead><tr><th>Document</th><th>Prefix</th><th>Start Number</th></tr></thead>
+          <thead><tr><th>Document</th><th>Prefix</th><th>Start Number</th><th>Next Number</th></tr></thead>
           <tbody>
             {numRows.map(([k,label,def])=>(
               <tr key={k}>
                 <td className="st-num-doc">{label}</td>
-                <td><input value={c[k+'Pfx']||def} onChange={e=>s(k+'Pfx',e.target.value.toUpperCase())} className="fi" readOnly={numLocked}/></td>
+                <td><input value={c[k+'Pfx']??def} onChange={e=>s(k+'Pfx',e.target.value.toUpperCase().replace(/\s/g,''))} className="fi" readOnly={numLocked} placeholder={def}/></td>
                 <td><input type="number" value={c[k+'Start']||'1'} onChange={e=>s(k+'Start',e.target.value)} className="fi" min="1" readOnly={numLocked}/></td>
+                <td className="st-num-next">{fmtDocNum((c[k+'Pfx']||'').trim()||def,c[k+'Start'],(cnt[k]||0)+1)}</td>
               </tr>
             ))}
           </tbody>
@@ -2154,8 +2153,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="topbar no-print">
             <h1 className="topbar-title">{titles[view]||''}</h1>
             <div style={{flex:1}}/>
-            {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{const base=getNextQuoteBase();setCur(mkSalesQuote(base,0));go('sales_quote_form');}}><Ico n="plus"/>New Quotation</Btn>}
-            {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const n=cnt.si;const num=genSINum(n+1);sCnt({...cnt,si:n+1});setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>New Invoice</Btn>}
+            {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq',cnt.sq+1)});go('sales_quote_form');}}><Ico n="plus"/>New Quotation</Btn>}
+            {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si',cnt.si+1);setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>New Invoice</Btn>}
             {view==='purchase_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>New Received Quote</Btn>}
             {view==='purchase_orders'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
             {view==='received_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
