@@ -18,8 +18,8 @@ jobs:
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ftp
-          # Relative to the FTP login dir (/home/cromtest) → /home/cromtest/crm.greenmed.uk/
-          server-dir: crm.greenmed.uk/
+          # FTP account is rooted at /home/cromtest/crm.greenmed.uk
+          server-dir: ./
           exclude: |
             **/.git*
             **/.git*/**
