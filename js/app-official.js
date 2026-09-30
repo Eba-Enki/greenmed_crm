@@ -143,30 +143,35 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     showToast('Deleted');
   };
 
-  // Currency exchange (e.g. USD → EUR) is stored as two linked transactions sharing fx.id:
-  // money out of the source account (sold) and money in to the target account (received).
-  // The fee is charged in the target currency and already netted out of `received`, matching
-  // bank statements (EUR 75.00 × 0.834676 − £0.38 fee = £62.22). Not income or expense, so no category.
+  // Currency exchange (e.g. USD → EUR) is stored as linked transactions sharing fx.id (fxLeg marks the role):
+  //  out: money out of the source account (sold)
+  //  in:  gross amount into the target account (received + fee)
+  //  fee: the fee out of the target account, as an expense in its category (e.g. Bank Fee)
+  // The statement shows the net figure (EUR 75.00 × 0.834676 − £0.38 fee = £62.22); in − fee nets to it,
+  // so balances still match. The conversion itself is neither income nor expense, so out/in carry no category.
   const handleSaveFx=f=>{
     const from=(co.banks||[]).find(b=>b.id===f.fromAccountId);
     const to=(co.banks||[]).find(b=>b.id===f.toAccountId);
+    const fee=Math.round(+(f.fee||0)*100)/100;
     const fx={id:f.id||uid(),fromAccountId:f.fromAccountId,toAccountId:f.toAccountId,
       fromCurrency:(from&&from.currency)||'GBP',toCurrency:(to&&to.currency)||'GBP',
-      sold:+f.sold,rate:+f.rate,fee:+(f.fee||0),received:+f.received};
+      sold:+f.sold,rate:+f.rate,fee,feeCategory:fee?f.feeCategory:'',received:+f.received,note:(f.description||'').trim()};
     const prevLegs=bankTx.filter(t=>t.fx&&t.fx.id===fx.id);
-    const legId=type=>((prevLegs.find(t=>t.type===type)||{}).id)||uid();
-    const common={date:f.date,description:(f.description||'').trim(),reference:(f.reference||'').trim(),category:'',linkedDoc:null,fx};
+    const legId=leg=>((prevLegs.find(t=>t.fxLeg===leg)||{}).id)||uid();
+    const common={date:f.date,reference:(f.reference||'').trim(),linkedDoc:null,fx};
     const legs=[
-      {...common,id:legId('out'),accountId:fx.fromAccountId,type:'out',amount:fx.sold},
-      {...common,id:legId('in'),accountId:fx.toAccountId,type:'in',amount:fx.received},
+      {...common,id:legId('out'),fxLeg:'out',accountId:fx.fromAccountId,type:'out',amount:fx.sold,description:fx.note,category:''},
+      {...common,id:legId('in'),fxLeg:'in',accountId:fx.toAccountId,type:'in',amount:Math.round((fx.received+fee)*100)/100,description:fx.note,category:''},
     ];
+    if(fee)legs.push({...common,id:legId('fee'),fxLeg:'fee',accountId:fx.toAccountId,type:'out',amount:fee,
+      description:`Exchange fee · ${fx.fromCurrency} → ${fx.toCurrency}`,category:fx.feeCategory});
     sBankTx([...bankTx.filter(t=>!(t.fx&&t.fx.id===fx.id)),...legs]);
     showToast('Exchange saved');
     go(prev);
   };
   const fxFormState=t=>({id:t.fx.id,date:t.date,fromAccountId:t.fx.fromAccountId,toAccountId:t.fx.toAccountId,
-    sold:String(t.fx.sold),rate:String(t.fx.rate),fee:t.fx.fee?String(t.fx.fee):'',received:String(t.fx.received),
-    reference:t.reference||'',description:t.description||''});
+    sold:String(t.fx.sold),rate:String(t.fx.rate),fee:t.fx.fee?String(t.fx.fee):'',feeCategory:t.fx.feeCategory||'',received:String(t.fx.received),
+    reference:t.reference||'',description:t.fx.note!=null?t.fx.note:(t.description||'')});
 
   const genN=(type)=>{
     const pfx=type==='invoice'?(co.invPfx||'INV'):type==='po'?(co.poPfx||'PO'):(co.quoPfx||'QUO');
@@ -395,16 +400,16 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(`Delete "${p.name}"?`))return;spr(projects.filter(d=>d.id!==p.id));showToast('Deleted');}}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
-        {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{setCur(t);go('off_banktx_form');}} onDelete={handleDeleteBankTx}/>}
+        {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{const{account,...raw}=t;if(raw.fx){setCur(fxFormState(raw));go('off_fx_form');}else{setCur(raw);go('off_banktx_form');}}} onDelete={handleDeleteBankTx}/>}
         {view==='off_form'&&cur&&<SimpleDocForm doc={cur} onSave={d=>{handleSave({...d,type:cur.type});}} onCancel={()=>go(prev)} onPreview={d=>{setCur(d);go('off_preview','off_form');}}/>}
         {view==='off_preview'&&cur&&<Preview doc={cur} co={co} docType={cur.type} onBack={()=>go(prev)} onEdit={()=>go('off_form','off_preview')}/>}
         {view==='off_custform'&&cur&&<OffCustForm cust={cur} customers={customers} onSave={handleSaveCust} onCancel={()=>go('off_customers')} dirtyRef={dirtyCheckRef}/>}
         {view==='off_projform'&&cur&&<OffProjForm proj={cur} projects={projects} onSave={handleSavePrj} onCancel={()=>go('off_projects')} dirtyRef={dirtyCheckRef}/>}
         {view==='off_bank'&&<OffBankAccounts banks={co.banks||[]} accountBalance={accountBalance} onOpen={b=>{setSelectedBankId(b.id);go('off_bank_detail');}} onEdit={b=>setEditingBank(b)} onDelete={deleteBank} onSetDefault={setDefaultBank}/>}
         {view==='off_bank_detail'&&selectedBank&&<OffBankLedger account={selectedBank} banks={co.banks||[]} transactions={bankTxForAccount} onBack={()=>go('off_bank')} onNew={()=>{setCur({id:null,accountId:selectedBank.id,date:td(),type:'in',amount:'',category:'',description:'',reference:'',linkedDoc:null});go('off_banktx_form');}}
-          onExchange={()=>{setCur({id:null,date:td(),fromAccountId:selectedBank.id,toAccountId:((co.banks||[]).find(b=>b.id!==selectedBank.id)||{}).id||'',sold:'',rate:'',fee:'',received:'',reference:'',description:''});go('off_fx_form');}}
+          onExchange={()=>{setCur({id:null,date:td(),fromAccountId:selectedBank.id,toAccountId:((co.banks||[]).find(b=>b.id!==selectedBank.id)||{}).id||'',sold:'',rate:'',fee:'',feeCategory:'',received:'',reference:'',description:''});go('off_fx_form');}}
           onEdit={t=>{if(t.fx){setCur(fxFormState(t));go('off_fx_form');}else{setCur(t);go('off_banktx_form');}}} onDelete={handleDeleteBankTx}/>}
-        {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
+        {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='settings'&&<OffSettings ns={ns} co={co} go={go} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast('Saved ✓');go('home');}} onClose={()=>go('home')}/>}
       </div>
@@ -945,7 +950,9 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
     return{...t,balance:running};
   });
 
-  const fxTitle=t=>t.fx?`${t.fx.fromCurrency} → ${t.fx.toCurrency}${t.description?' · '+t.description:''}`:t.description;
+  // The exchange's own legs (out/in); its fee leg is shown as an ordinary expense row
+  const isFx=t=>t.fx&&t.fxLeg!=='fee';
+  const fxTitle=t=>isFx(t)?`${t.fx.fromCurrency} → ${t.fx.toCurrency}${t.description?' · '+t.description:''}`:t.description;
   // The other side of an exchange, shown under the amount like a bank statement does
   const fxCounter=t=>t.type==='out'?`${CURR[t.fx.toCurrency]||''}${fmt(+t.fx.received)}`:`${CURR[t.fx.fromCurrency]||''}${fmt(+t.fx.sold)}`;
   const fxOther=t=>(banks||[]).find(b=>b.id===(t.type==='out'?t.fx.toAccountId:t.fx.fromAccountId));
@@ -961,6 +968,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
   const curSym=CURR[account.currency]||'£';
 
   const linkLabel=t=>{
+    if(t.fxLeg==='fee')return 'FX fee';
     if(t.fx){const o=fxOther(t);return `${t.type==='out'?'To':'From'} ${(o&&o.accountName)||t.fx[t.type==='out'?'toCurrency':'fromCurrency']}`;}
     if(!t.linkedDoc)return null;
     const l={invoice:'Invoice',received:'Received',expense:'Expense'}[t.linkedDoc.type]||t.linkedDoc.type;
@@ -983,7 +991,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
       <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
       <div style={{flex:1}}/>
       {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>In: {curSym}{fmt(totalIn)} · Out: {curSym}{fmt(totalOut)}</span>}
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.fx?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:(t.description||''),t.fx?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>Export</Btn>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>Export</Btn>
     </div>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,2.2,1,1,0.9,0.9,0.9,0.6]}/>
@@ -991,11 +999,11 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
       <tbody>{filtered.length===0?<tr><td colSpan={8}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(t=>(
         <tr key={t.id}>
           <td style={{color:'var(--g500)',fontSize:12}}>{t.date||'—'}</td>
-          <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{fxTitle(t)||'—'}{t.fx&&<div className="fx-sub">{fxDetail(t.fx)}</div>}</td>
-          <td>{t.fx?<span className="fx-badge">FX</span>:t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
+          <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{fxTitle(t)||'—'}{isFx(t)&&<div className="fx-sub">{fxDetail(t.fx)}</div>}</td>
+          <td>{isFx(t)?<span className="fx-badge">FX</span>:t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
           <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
-          <td className="tar" style={{color:'var(--green)'}}>{t.type==='in'&&<>{curSym+fmt(+t.amount)}{t.fx&&<div className="fx-sub">{fxCounter(t)}</div>}</>}</td>
-          <td className="tar" style={{color:'var(--red)'}}>{t.type==='out'&&<>{curSym+fmt(+t.amount)}{t.fx&&<div className="fx-sub">{fxCounter(t)}</div>}</>}</td>
+          <td className="tar" style={{color:'var(--green)'}}>{t.type==='in'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}</>}</td>
+          <td className="tar" style={{color:'var(--red)'}}>{t.type==='out'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}</>}</td>
           <td className="tar" style={{fontWeight:600}}>{curSym}{fmt(t.balance)}</td>
           <td>{!t.isOpening&&<div className="aw"><button className="ab" onClick={()=>{const{balance,...raw}=t;onEdit(raw);}}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(t)}><Ico n="trash"/></button></div>}</td>
         </tr>
@@ -1086,11 +1094,13 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,invoices,receivedInvoice
 
 // Currency exchange between two bank accounts, entered from the bank statement:
 // amount out (source currency), FX rate, fee (target currency) and amount in (target currency).
-function OffFxForm({fx:init,banks,accountBalance,onSave,onCancel,dirtyRef}){
-  const[f,setF]=useState(init);
+function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,dirtyRef}){
+  // The fee is booked as an expense; preselect a "Bank Fee"/"Bank Charges" category when there is one
+  const defaultFeeCat=((cats||[]).find(c=>/bank\s*(fee|charge)/i.test(c.name||''))||{}).name||'';
+  const[f,setF]=useState(()=>({...init,feeCategory:init.feeCategory||defaultFeeCat}));
   // Amount In follows out × rate − fee until it is typed in by hand (always the case when editing)
   const[receivedTouched,setReceivedTouched]=useState(!!init.id);
-  const _initStr=useRef(JSON.stringify(init));
+  const _initStr=useRef(JSON.stringify(f));
   const _isDirty=()=>JSON.stringify(f)!==_initStr.current;
   const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
   if(dirtyRef)dirtyRef.current=_isDirty;
@@ -1115,6 +1125,7 @@ function OffFxForm({fx:init,banks,accountBalance,onSave,onCancel,dirtyRef}){
     if(!from||!to){alert('Select both accounts.');return;}
     if(from.id===to.id){alert('Choose two different accounts.');return;}
     if(!(+f.sold>0)||!(+f.rate>0)||!(+f.received>0)||+(f.fee||0)<0){alert('Enter the amount out, FX rate and amount in (fee cannot be negative).');return;}
+    if(+(f.fee||0)>0&&!f.feeCategory){alert('Select an expense category for the fee.');return;}
     const early=[from,to].find(b=>b.openingBalanceDate&&f.date<b.openingBalanceDate);
     if(early){alert(`This exchange is dated before the Opening Balance date of ${early.accountName} (${early.openingBalanceDate}). Pick a later date.`);return;}
     onSave(f);
@@ -1153,7 +1164,11 @@ function OffFxForm({fx:init,banks,accountBalance,onSave,onCancel,dirtyRef}){
       {calculated!=null&&<div className="fx-calc">{fromSym}{fmt(+f.sold)} × {fxRateStr(f.rate)}{+f.fee?` − ${toSym}${fmt(+f.fee)} fee`:''} = <strong>{toSym}{fmt(calculated)}</strong>
         {mismatch&&<span className="fx-warn"> · Amount In differs from this — check it against the statement</span>}
       </div>}
-      <div className="fg g1" style={{marginTop:12}}>
+      <div className="fg g2" style={{marginTop:12}}>
+        {+f.fee>0&&<Fld label="Fee Expense Category">
+          <select value={f.feeCategory||''} onChange={x=>s('feeCategory',x.target.value)} className="fi"><option value="">— Select —</option>{groupCats(cats||[]).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>
+          <span className="fx-hint">The fee is booked as a separate expense: {toSym}{fmt(+f.received+ +f.fee)} in, {toSym}{fmt(+f.fee)} fee out.</span>
+        </Fld>}
         <Fld label="Description (optional)"><input value={f.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="e.g. Supplier payment funding"/></Fld>
       </div>
     </div>
