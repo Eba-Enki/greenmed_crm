@@ -31,4 +31,5 @@ jobs:
             serve.ps1
             index_backup_monolith.html
             database/**
+            docs/**
             api/config.sample.php
