@@ -340,7 +340,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     {k:'off_received',ico:'received',lbl:'Received Invoices',cnt:rec.length},
     {div:true},
     {sec:'Management'},
-    {k:'off_customers',ico:'customers',lbl:'Customers',cnt:customers.length},
+    {k:'off_customers',ico:'customers',lbl:'Contacts',cnt:customers.length},
     {k:'off_projects',ico:'project',lbl:'Projects',cnt:projects.length},
     {k:'off_expenses',ico:'expense',lbl:'Expenses',cnt:expCats.length},
     {k:'off_incomes',ico:'income',lbl:'Incomes',cnt:incomeCats.length},
@@ -351,7 +351,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const selectedBank=(co.banks||[]).find(b=>b.id===selectedBankId)||null;
   const bankTxForAccount=selectedBank?bankTx.filter(t=>t.accountId===selectedBank.id):[];
 
-  const titles={off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Customers',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings',home:'Dashboard'};
+  const titles={off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Contacts',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings',home:'Dashboard'};
 
   dirtyCheckRef.current=null;
   return(
@@ -372,7 +372,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
       </div>
       <div className="main">
         {!['off_preview','off_form','off_custform','off_projform','off_bank_detail','off_banktx_form','off_fx_form','off_cat_detail'].includes(view)&&(()=>{
-          const offTitles={home:'Dashboard',off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Customers',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings'};
+          const offTitles={home:'Dashboard',off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Contacts',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings'};
           return(<div className="topbar no-print">
             <h1 className="topbar-title">{offTitles[view]||''}</h1>
             <div style={{flex:1}}/>
@@ -380,7 +380,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
             {view==='off_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('quote'));go('off_form');}}><Ico n="plus"/>New Quotation</Btn>}
             {view==='off_pos'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('po'));go('off_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
             {view==='off_received'&&<Btn v="bp bsm" onClick={()=>{setCur(mkRec());go('off_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
-            {view==='off_customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('off_custform');}}><Ico n="plus"/>New Customer</Btn>}
+            {view==='off_customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('off_custform');}}><Ico n="plus"/>New Contact</Btn>}
             {view==='off_projects'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}}><Ico n="plus"/>New Project</Btn>}
             {view==='off_expenses'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'out'})}><Ico n="plus"/>New Expense</Btn>}
             {view==='off_incomes'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'in'})}><Ico n="plus"/>New Income</Btn>}
@@ -410,7 +410,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           onExchange={()=>{setCur({id:null,date:td(),fromAccountId:selectedBank.id,toAccountId:((co.banks||[]).find(b=>b.id!==selectedBank.id)||{}).id||'',sold:'',rate:'',fee:'',feeCategory:'',received:'',reference:'',description:''});go('off_fx_form');}}
           onEdit={t=>{if(t.fx){setCur(fxFormState(t));go('off_fx_form');}else{setCur(t);go('off_banktx_form');}}} onDelete={handleDeleteBankTx}/>}
         {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
-        {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
+        {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='settings'&&<OffSettings ns={ns} co={co} go={go} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast('Saved ✓');go('home');}} onClose={()=>go('home')}/>}
       </div>
       {toast&&<div className="toast">{toast}</div>}
@@ -421,15 +421,23 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
 }
 
 // Simple Official sub-components
+// Contact relationships (stored in contact.type; "both" = customer and supplier)
+const CONTACT_TYPES=[['customer','Customer'],['supplier','Supplier'],['both','Customer & Supplier'],['employee','Employee'],['owner','Owner'],['expense','Expense']];
+const contactTypeLabel=t=>(CONTACT_TYPES.find(([k])=>k===(t||'customer'))||[])[1]||'Customer';
+const contactName=c=>c.company||c.contact||'';
+
 function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
   const[q,setQ]=useState('');
-  const {pg,ps,setPg,setPs}=usePagination(q);
-  const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
+  const[typeF,setTypeF]=useState('');
+  const {pg,ps,setPg,setPs}=usePagination(q+'|'+typeF);
+  const f=[...customers.filter(c=>(!typeF||(c.type||'customer')===typeF)&&[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
   return(<div className="content">
-    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Company','Contact','Email','Phone','Invoices','Quotes'],...f.map(c=>[c.company||'',c.contact||'',c.email||'',c.phone||'',inv.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length,quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length])],'customers')}><Ico n="export"/>Export</Btn>
+    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div>
+      <select value={typeF} onChange={e=>setTypeF(e.target.value)}><option value="">All relationships</option>{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
+      <div style={{flex:1}}/>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Company','Contact','Relationship','Email','Phone','Invoices','Quotes'],...f.map(c=>[c.company||'',c.contact||'',contactTypeLabel(c.type),c.email||'',c.phone||'',inv.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length,quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length])],'contacts')}><Ico n="export"/>Export</Btn>
     </div>
-    {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No customers yet</div></div></div>:(
+    {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{customers.length?'No contacts match':'No contacts yet'}</div></div></div>:(
     <div className="tcard"><table className="dt">
       <Cg w={[2,1.4,1.8,1,0.7,0.5,0.6,0.6]}/>
       <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Type</th><th className="tac">Inv</th><th className="tac">Quotes</th><th>Actions</th></tr></thead>
@@ -438,7 +446,7 @@ function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
         <td>{c.contact||'—'}</td>
         <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
         <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
-        <td style={{color:'var(--g600)',fontSize:12}}>{c.type==='supplier'?'Supplier':c.type==='both'?'Customer & Supplier':'Customer'}</td>
+        <td style={{color:'var(--g600)',fontSize:12}}>{contactTypeLabel(c.type)}</td>
         <td className="tac" style={{color:'var(--green)'}}>{inv.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
         <td className="tac" style={{color:'var(--gm-500)'}}>{quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
         <td><div className="aw"><button className="ab" onClick={()=>onEdit(c)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(c)}><Ico n="trash"/></button></div></td>
@@ -458,15 +466,15 @@ function OffCustForm({cust:init,customers,onSave,onCancel,dirtyRef}){
     const nameField=norm.company?'company':'contact';
     const nameVal=norm.company||norm.contact;
     const dup=findCaseInsensitiveDup(customers||[],nameField,nameVal,norm.id);
-    if(dup&&!(await askDuplicateOk('customer',nameVal)))return;
+    if(dup&&!(await askDuplicateOk('contact',nameVal)))return;
     onSave(norm);
   };
   return(<div className="content"><div className="fw" style={{maxWidth:640}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Customer':'New Customer'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
-    <div className="fc"><div className="fct">Customer Info</div>
-      <div className="fg g2"><Fld label="Company Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Contact':'New Contact'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
+    <div className="fc"><div className="fct">Contact Info</div>
+      <div className="fg g2"><Fld label="Company / Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
-      <div style={{marginTop:12}}><Fld label="Relationship"><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">Customer</option><option value="supplier">Supplier</option><option value="both">Both</option></select></Fld></div>
+      <div style={{marginTop:12}}><Fld label="Relationship"><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi">{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></Fld></div>
       <div style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
       <div style={{marginTop:12}}><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
     </div>
@@ -958,7 +966,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
   const fxOther=t=>(banks||[]).find(b=>b.id===(t.type==='out'?t.fx.toAccountId:t.fx.fromAccountId));
 
   const filtered=withBalance.filter(t=>{
-    if(q&&![fxTitle(t),t.reference,t.category].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
+    if(q&&![fxTitle(t),t.reference,t.category,t.contactName].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
     if(dateFrom&&t.date<dateFrom)return false;
     if(dateTo&&t.date>dateTo)return false;
     return true;
@@ -991,14 +999,15 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
       <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
       <div style={{flex:1}}/>
       {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>In: {curSym}{fmt(totalIn)} · Out: {curSym}{fmt(totalOut)}</span>}
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>Export</Btn>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Contact','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.contactName||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>Export</Btn>
     </div>
     <div className="tcard"><table className="dt">
-      <Cg w={[0.8,2.2,1,1,0.9,0.9,0.9,0.6]}/>
-      <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Linked</th><th className="tar">In</th><th className="tar">Out</th><th className="tar">Balance</th><th>Actions</th></tr></thead>
-      <tbody>{filtered.length===0?<tr><td colSpan={8}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(t=>(
+      <Cg w={[0.8,1.2,2,1,1,0.9,0.9,0.9,0.6]}/>
+      <thead><tr><th>Date</th><th>Contact</th><th>Description</th><th>Category</th><th>Linked</th><th className="tar">In</th><th className="tar">Out</th><th className="tar">Balance</th><th>Actions</th></tr></thead>
+      <tbody>{filtered.length===0?<tr><td colSpan={9}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(t=>(
         <tr key={t.id}>
           <td style={{color:'var(--g500)',fontSize:12}}>{t.date||'—'}</td>
+          <td style={{fontWeight:500,color:'var(--g800)'}}>{t.contactName||<span style={{color:'var(--g300)'}}>—</span>}</td>
           <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{fxTitle(t)||'—'}{isFx(t)&&<div className="fx-sub">{fxDetail(t.fx)}</div>}</td>
           <td>{isFx(t)?<span className="fx-badge">FX</span>:t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
           <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
@@ -1012,83 +1021,121 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
   </div>);
 }
 
-function OffBankTxForm({tx:init,account,cats,incomeCats,invoices,receivedInvoices,onSave,onCancel,dirtyRef}){
-  const[t,setT]=useState(init);
+// Transaction kinds: money in / money out are payments with a contact (optionally settling an invoice);
+// expense is a categorised cost with an optional payee. kind drives the form; type (in/out) drives balances.
+const txKindOf=t=>t.kind||(t.type==='out'&&t.category&&!t.linkedDoc&&!t.contactId?'expense':(t.type||'in'));
+// Which contact relationships to list first for each kind
+const TX_CONTACT_ORDER={in:['customer','both','owner','supplier','employee','expense'],out:['supplier','both','employee','owner','customer','expense'],expense:['expense']};
+
+function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receivedInvoices,onSave,onCancel,dirtyRef}){
+  const[t,setT]=useState(()=>({...init,kind:txKindOf(init)}));
   const s=(k,v)=>setT(d=>({...d,[k]:v}));
-  const _initStr=useRef(JSON.stringify(init));
+  const _initStr=useRef(JSON.stringify({...init,kind:txKindOf(init)}));
   const _isDirty=()=>JSON.stringify(t)!==_initStr.current;
   const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
   if(dirtyRef)dirtyRef.current=_isDirty;
   const isNew=!init.id;
-  const linkType=t.linkedDoc?t.linkedDoc.type:'';
+  const kind=t.kind;
   const curSym=CURR[account.currency]||'£';
-  const catList=t.type==='out'?cats:incomeCats;
+  const catList=kind==='in'?incomeCats:cats;
+  const docType=kind==='in'?'invoice':kind==='out'?'received':'';
 
-  const docOptions=(type)=>{
-    if(type==='invoice')return invoices.map(d=>({id:d.id,number:d.number,label:`${d.number} — ${(d.client&&d.client.name)||'—'} — ${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))} (${d.date})`,amount:dt(d.items||[]),txType:'in'}));
-    if(type==='received')return receivedInvoices.map(d=>({id:d.id,number:d.number,label:`${d.number} — ${d.supplier||'—'} — ${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))} (${d.date})`,amount:dt(d.items||[]),txType:'out'}));
+  const setKind=k=>setT(d=>{
+    const next={...d,kind:k,type:k==='in'?'in':'out'};
+    // Categories and documents differ between money in and money out
+    if((d.kind==='in')!==(k==='in'))next.category='';
+    if(k==='expense'||(d.linkedDoc&&d.linkedDoc.type!==(k==='in'?'invoice':'received')))next.linkedDoc=null;
+    if(k==='expense'&&d.contactId&&!(contacts.find(c=>c.id===d.contactId&&c.type==='expense'))){next.contactId='';next.contactName='';}
+    return next;
+  });
+
+  // Contacts grouped by relationship, most relevant groups first for this kind
+  const contactGroups=(TX_CONTACT_ORDER[kind]||[]).map(type=>({type,label:contactTypeLabel(type),
+    list:contacts.filter(c=>(c.type||'customer')===type).sort((a,b)=>contactName(a).localeCompare(contactName(b)))})).filter(g=>g.list.length);
+  const setContact=id=>{
+    const c=contacts.find(x=>x.id===id);
+    setT(d=>({...d,contactId:id,contactName:c?contactName(c):'',linkedDoc:null}));
+  };
+
+  // Unpaid documents of the chosen contact (all of them for older transactions without a contact)
+  const docOptions=()=>{
+    const name=t.contactName;
+    const own=(t.linkedDoc&&t.linkedDoc.id)||'';
+    if(docType==='invoice')return invoices.filter(d=>(!name||(d.client&&d.client.name)===name)&&(d.status!=='paid'||d.id===own))
+      .map(d=>({id:d.id,number:d.number,label:`${d.number} — ${(d.client&&d.client.name)||'—'} — ${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))} (${d.date})`,amount:dt(d.items||[])}));
+    if(docType==='received')return receivedInvoices.filter(d=>(!name||d.supplier===name)&&(d.status!=='paid'||d.id===own))
+      .map(d=>({id:d.id,number:d.number,label:`${d.number} — ${d.supplier||'—'} — ${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))} (${d.date})`,amount:dt(d.items||[])}));
     return [];
   };
-
-  const handleLinkTypeChange=(type)=>{
-    s('linkedDoc',type?{type,id:'',number:''}:null);
-  };
-  const handleLinkDocChange=(type,id)=>{
-    const opt=docOptions(type).find(o=>o.id===id);
+  const setDoc=id=>{
+    if(!id){s('linkedDoc',null);return;}
+    const opt=docOptions().find(o=>o.id===id);
     if(!opt)return;
-    setT(d=>{
-      const next={...d,linkedDoc:{type,id:opt.id,number:opt.number}};
-      if(isNew&&!d.amount){next.amount=opt.amount;next.type=opt.txType;}
-      return next;
-    });
+    setT(d=>({...d,linkedDoc:{type:docType,id:opt.id,number:opt.number},amount:(isNew&&!d.amount)?opt.amount:d.amount}));
   };
+
   const trySave=()=>{
+    if(!(+t.amount>0)){alert('Enter an amount.');return;}
+    if(isNew&&kind!=='expense'&&!t.contactId){alert(`Select who the money ${kind==='in'?'came from':'went to'}.`);return;}
+    if(kind==='expense'&&!t.category){alert('Select an expense category.');return;}
     if(account.openingBalanceDate&&t.date<account.openingBalanceDate){
       alert(`This transaction is dated before the account's Opening Balance date (${account.openingBalanceDate}). Pick a later date.`);
       return;
     }
-    onSave({...t,description:toSentenceCase(t.description)});
+    onSave({...t,type:kind==='in'?'in':'out',description:toSentenceCase(t.description)});
   };
 
-  return(<div className="content"><div className="fw" style={{maxWidth:680}}>
+  const kinds=[['in','Money In','Payment received from a contact'],['out','Money Out','Payment made to a contact'],['expense','Expense','A cost booked to an expense category']];
+  const catSelect=(<select value={t.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">{kind==='expense'?'— Select —':'— None —'}</option>{groupCats(catList).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>);
+  const docs=docType?docOptions():[];
+
+  return(<div className="content"><div className="fw">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
       <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{t.id?'Edit Transaction':'New Transaction'}</h2>
+      <span style={{fontSize:13,color:'var(--g500)'}}>{account.accountName||'Account'} · {curSym}</span>
       <div style={{flex:1}}/>
       <Btn v="bp bsm" onClick={trySave}>Save</Btn>
     </div>
-    <div className="fc"><div className="fct">Transaction Details ({account.accountName||'Account'} · {curSym})</div>
+    <div className="tx-kinds" role="radiogroup" aria-label="Transaction type">
+      {kinds.map(([k,label,hint])=>(
+        <button key={k} type="button" role="radio" aria-checked={kind===k} className={`tx-kind tx-${k}${kind===k?' active':''}`} onClick={()=>setKind(k)}>
+          <span className="tx-kind-l">{label}</span><span className="tx-kind-h">{hint}</span>
+        </button>
+      ))}
+    </div>
+    <div className="fc"><div className="fct">Details</div>
       <div className="fg g3">
         <Fld label="Date"><input type="date" value={t.date||td()} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
-        <Fld label="Type"><select value={t.type||'in'} onChange={x=>s('type',x.target.value)} className="fi"><option value="in">Money In</option><option value="out">Money Out</option></select></Fld>
-        <Fld label="Amount"><input type="number" value={t.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
-      </div>
-      <div className="fg g2" style={{marginTop:12}}>
-        <Fld label="Category"><select value={t.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">— Select —</option>{groupCats(catList).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select></Fld>
+        <Fld label={`Amount (${account.currency||'GBP'})`}><input type="number" value={t.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
         <Fld label="Reference"><input value={t.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Ref No"/></Fld>
       </div>
+      <div className="fg g2" style={{marginTop:12}}>
+        <Fld label={kind==='in'?'Received From *':kind==='out'?'Paid To *':'Payee (optional)'}>
+          <select value={t.contactId||''} onChange={x=>setContact(x.target.value)} className="fi">
+            <option value="">{kind==='expense'?'— None —':'— Select contact —'}</option>
+            {contactGroups.map(g=><optgroup key={g.type} label={g.label}>{g.list.map(c=><option key={c.id} value={c.id}>{contactName(c)}</option>)}</optgroup>)}
+            {t.contactId&&!contacts.some(c=>c.id===t.contactId)&&<option value={t.contactId}>{t.contactName} (deleted)</option>}
+          </select>
+          {contactGroups.length===0&&<span className="fx-hint">{kind==='expense'?'Add contacts with the Expense relationship under Contacts.':'No contacts yet. Add them under Contacts.'}</span>}
+        </Fld>
+        <Fld label={kind==='expense'?'Expense Category *':`${kind==='in'?'Income':'Expense'} Category (optional)`}>{catSelect}</Fld>
+      </div>
+      {docType&&(t.contactId||t.linkedDoc)&&<div className="fg g1" style={{marginTop:12}}>
+        <Fld label={kind==='in'?'Settles Invoice (optional)':'Settles Received Invoice (optional)'}>
+          <select value={(t.linkedDoc&&t.linkedDoc.id)||''} onChange={x=>setDoc(x.target.value)} className="fi">
+            <option value="">— None —</option>
+            {docs.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+          {t.contactId&&docs.length===0&&<span className="fx-hint">No unpaid {kind==='in'?'invoices':'received invoices'} for this contact.</span>}
+          {t.linkedDoc&&<span className="fx-hint">The {kind==='in'?'invoice':'received invoice'} is marked as paid when you save.</span>}
+        </Fld>
+      </div>}
       <div className="fg g1" style={{marginTop:12}}>
         <Fld label="Description"><input value={t.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="What was this for?"/></Fld>
       </div>
     </div>
-    <div className="fc" style={{marginTop:16}}><div className="fct">Link to Document (optional)</div>
-      <div className="fg g2">
-        <Fld label="Document Type">
-          <select value={linkType} onChange={x=>handleLinkTypeChange(x.target.value)} className="fi">
-            <option value="">— None —</option>
-            <option value="invoice">Invoice</option>
-            <option value="received">Received Invoice</option>
-          </select>
-        </Fld>
-        {linkType&&<Fld label="Document">
-          <select value={(t.linkedDoc&&t.linkedDoc.id)||''} onChange={x=>handleLinkDocChange(linkType,x.target.value)} className="fi">
-            <option value="">— Select —</option>
-            {docOptions(linkType).map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        </Fld>}
-      </div>
-    </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={trySave}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={trySave}>Save</Btn></div>
   </div></div>);
 }
 
