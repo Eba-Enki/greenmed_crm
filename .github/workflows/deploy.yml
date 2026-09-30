@@ -17,8 +17,7 @@ jobs:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          security: loose
+          protocol: ftp
           # Relative to the FTP login dir (/home/cromtest) → /home/cromtest/crm.greenmed.uk/
           server-dir: crm.greenmed.uk/
           exclude: |
