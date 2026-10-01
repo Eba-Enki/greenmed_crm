@@ -332,8 +332,11 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   pdf.setFontSize(8);
   pdf.text('Notes :',13.651,notesY+2.5);
   pdf.setFont('Arial','normal');
-  pdf.text(fixText(doc.notes||''),24,notesY+2.5);
-  
+  // Notes wrap before the totals column; the Total In Words line below moves down to clear them
+  const noteLines=pdf.splitTextToSize(fixText(doc.notes||''),116);
+  noteLines.forEach((t,k)=>pdf.text(t,24,notesY+2.5+k*3.3));
+  const notesEndY=notesY+2.5+(noteLines.length-1)*3.3;
+
   // Sub Total & Total
   const subTotalY=notesY+8;
   pdf.setFont('Arial','normal');
@@ -348,7 +351,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   pdf.text(sym+fmt(total),195-3,totalY+2.5,{align:'right'});
   
   // Horizontal Line 4
-  const totalWordsY=totalY+6;
+  const totalWordsY=Math.max(totalY+6,notesEndY+3.5);
   pdf.line(12.025,totalWordsY-1,198.025,totalWordsY-1);
   
   // Total In Words - Arial 8pt bold (label) + Arial 8pt regular (value)
