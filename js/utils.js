@@ -41,7 +41,7 @@ const SM={
   draft:{l:'Draft',c:'b-draft'},sent:{l:'Sent',c:'b-sent'},approved:{l:'Approved',c:'b-approved'},
   locked:{l:'Locked',c:'b-locked'},passive:{l:'Passive',c:'b-passive'},
   'po-created':{l:'PO Created',c:'b-po-created'},closed:{l:'Closed',c:'b-closed'},
-  paid:{l:'Paid',c:'b-paid'},received:{l:'Received',c:'b-received'},
+  paid:{l:'Paid',c:'b-paid'},partial:{l:'Partially Paid',c:'b-partial'},received:{l:'Received',c:'b-received'},
   unpaid:{l:'Unpaid',c:'b-pending'},
   overdue:{l:'Overdue',c:'b-overdue'},cancelled:{l:'Cancelled',c:'b-cancelled'},
   pending:{l:'Pending',c:'b-pending'},active:{l:'Active',c:'b-active'},

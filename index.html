@@ -405,6 +405,42 @@ table.ie td input[readonly]{background:transparent;color:var(--g500)}
 .num-switch-text{display:flex;flex-direction:column;gap:3px}
 .num-switch-t{font-size:13.5px;font-weight:600;color:var(--g900)}
 .num-switch-h{font-size:12px;color:var(--g500);line-height:1.5}
+/* CONTACT BALANCES & STATEMENT (Official) */
+.b-partial{background:var(--bluel);color:#2f78aa}
+.ct-row{cursor:pointer}
+.ct-recv{font-weight:600;color:var(--green);white-space:nowrap}
+.ct-pay{font-weight:600;color:var(--red);white-space:nowrap}
+.ct-plain{font-size:12px;color:var(--g500);white-space:nowrap}
+.ct-type{font-size:11px;font-weight:600;padding:2px 9px;border-radius:10px;background:var(--g100);color:var(--g600)}
+.ct-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:16px}
+.ct-card{background:#fff;border:1px solid var(--g200);border-radius:10px;padding:14px 16px;box-shadow:var(--sh-sm)}
+.ct-card-l{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--g500);margin-bottom:6px}
+.ct-card-v{font-size:20px;font-weight:800;color:var(--g900);letter-spacing:-.02em}
+.ct-bal.pos{border-color:rgba(59,109,17,.35);background:var(--greenl)}
+.ct-bal.pos .ct-card-v{color:var(--green)}
+.ct-bal.neg{border-color:rgba(192,57,43,.3);background:var(--redl)}
+.ct-bal.neg .ct-card-v{color:var(--red)}
+.ct-kind{font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.ct-k-invoice{background:var(--greenl);color:var(--green)}
+.ct-k-bill{background:var(--amberl);color:var(--amber)}
+.ct-k-in{background:var(--bluel);color:#2f78aa}
+.ct-k-out{background:var(--redl);color:var(--red)}
+
+/* PAYMENT ALLOCATION (Official bank transaction form) */
+.tx-alloc{margin-top:14px;border:1px solid var(--g200);border-radius:10px;padding:14px 16px;background:var(--g50)}
+.tx-alloc-t{font-size:12px;font-weight:700;color:var(--g700);margin-bottom:10px}
+.tx-alloc-t span{font-weight:400;color:var(--g400)}
+.tx-alloc-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tx-alloc-tbl th{text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--g500);padding:0 8px 6px}
+.tx-alloc-tbl td{padding:6px 8px;border-top:1px solid var(--g200);color:var(--g700)}
+.tx-alloc-tbl th:first-child,.tx-alloc-tbl td:first-child{width:28px;padding-left:0}
+.tx-alloc-tbl tr.on td{background:#fff}
+.tx-alloc-tbl input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--gm-400)}
+.tx-alloc-in{width:130px;padding:6px 9px;text-align:right;display:inline-block}
+.tx-draft{margin-left:6px;font-size:10px;font-weight:600;color:var(--g500);background:var(--g100);padding:1px 6px;border-radius:8px}
+.tx-alloc-sum{margin-top:10px;font-size:12.5px;color:var(--g600)}
+.tx-alloc-sum strong{color:var(--g900)}
+.tx-alloc-sum.over{color:var(--red)}
 @media (max-width:720px){.fx-accounts{grid-template-columns:1fr}.fx-swap{margin-top:0;justify-self:center}.fg.g4{grid-template-columns:1fr 1fr}}
 
 /* ALERT */

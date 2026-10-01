@@ -18,6 +18,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const[toast,showToast]=useToast();
   const[bankTx,setBankTx]=useState([]);
   const[selectedBankId,setSelectedBankId]=useState(null);
+  const[selectedContactId,setSelectedContactId]=useState(null);
   const[editingBank,setEditingBank]=useState(null);
   const[categoryBrowse,setCategoryBrowse]=useState(null);
   const[editingCategory,setEditingCategory]=useState(null);
@@ -107,25 +108,28 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   };
   const accountBalance=(bank)=>+(bank.openingBalance||0)+bankTx.filter(t=>t.accountId===bank.id).reduce((s,t)=>s+(t.type==='in'?+t.amount:-t.amount),0);
 
-  const markDocPaid=(ref)=>{
-    if(!ref)return;
-    if(ref.type==='invoice')si(inv.map(d=>d.id===ref.id?{...d,status:'paid'}:d));
-    else if(ref.type==='received')sr(rec.map(d=>d.id===ref.id?{...d,status:'paid'}:d));
-  };
-  const revertDocPaid=(ref)=>{
-    if(!ref)return;
-    if(ref.type==='invoice')si(inv.map(d=>d.id===ref.id&&d.status==='paid'?{...d,status:'sent'}:d));
-    else if(ref.type==='received')sr(rec.map(d=>d.id===ref.id&&d.status==='paid'?{...d,status:'pending'}:d));
+  // Paid / Partially Paid follow the payments allocated to a document. Only documents touched by the
+  // change are updated, so statuses set by hand on other documents (e.g. old records) are left alone.
+  const syncDocStatuses=(nextTx,refs)=>{
+    if(!refs.length)return;
+    const alloc=allocatedByDoc(nextTx);
+    const keys=new Set(refs.map(r=>docKey(r.type,r.id)));
+    const upd=(list,type,unpaid)=>list.map(d=>{
+      if(!keys.has(docKey(type,d.id)))return d;
+      const paid=alloc[docKey(type,d.id)]||0;
+      const status=paid>0.005&&paid>=docTotal(d)-0.005?'paid':paid>0.005?'partial':(d.status==='paid'||d.status==='partial'?unpaid:d.status);
+      return status===d.status?d:{...d,status};
+    });
+    if(refs.some(r=>r.type==='invoice'))si(upd(inv,'invoice','sent'));
+    if(refs.some(r=>r.type==='received'))sr(upd(rec,'received','pending'));
   };
   const handleSaveBankTx=(tx)=>{
     const fresh=!tx.id;
     const saved=fresh?{...tx,id:uid()}:tx;
     const prevTx=fresh?null:bankTx.find(t=>t.id===tx.id);
-    if(prevTx&&prevTx.linkedDoc&&(!saved.linkedDoc||prevTx.linkedDoc.id!==saved.linkedDoc.id||prevTx.linkedDoc.type!==saved.linkedDoc.type)){
-      revertDocPaid(prevTx.linkedDoc);
-    }
-    if(saved.linkedDoc)markDocPaid(saved.linkedDoc);
-    sBankTx(fresh?[...bankTx,saved]:bankTx.map(t=>t.id===saved.id?saved:t));
+    const next=fresh?[...bankTx,saved]:bankTx.map(t=>t.id===saved.id?saved:t);
+    sBankTx(next);
+    syncDocStatuses(next,[...(prevTx?txAllocs(prevTx):[]),...txAllocs(saved)]);
     showToast('Saved ✓');
     go(prev);
   };
@@ -138,8 +142,9 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
       return;
     }
     if(!confirm('Delete this transaction?'))return;
-    if(t.linkedDoc)revertDocPaid(t.linkedDoc);
-    sBankTx(bankTx.filter(x=>x.id!==t.id));
+    const next=bankTx.filter(x=>x.id!==t.id);
+    sBankTx(next);
+    syncDocStatuses(next,txAllocs(t));
     showToast('Deleted');
   };
 
@@ -217,7 +222,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     else if(doc.type==='quote')sq(quo.filter(d=>d.id!==doc.id));
     else if(doc.type==='po')sp(pos.filter(d=>d.id!==doc.id));
     else sr(rec.filter(d=>d.id!==doc.id));
-    if(doc.type==='invoice'||doc.type==='received')sBankTx(bankTx.map(t=>t.linkedDoc&&t.linkedDoc.type===doc.type&&t.linkedDoc.id===doc.id?{...t,linkedDoc:null}:t));
+    if(doc.type==='invoice'||doc.type==='received')sBankTx(bankTx.map(t=>{const al=txAllocs(t);if(!al.some(x=>x.type===doc.type&&x.id===doc.id))return t;return{...t,linkedDoc:null,allocations:al.filter(x=>!(x.type===doc.type&&x.id===doc.id))};}));
     showToast('Deleted');
     return true;
   };
@@ -231,7 +236,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     const set=(p,v)=>setDoc(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
     const isInv=doc.type==='invoice';const isPO=doc.type==='po';const isRec=doc.type==='received';
     const trms=isInv||isRec?ITRM:['Due on Receipt','Valid for 30 days','Valid for 14 days'];
-    const sts=isInv?['draft','sent','paid','overdue','cancelled']:isPO?['draft','sent','approved','received','cancelled']:isRec?['pending','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
+    const sts=isInv?['draft','sent','partial','paid','overdue','cancelled']:isPO?['draft','sent','approved','received','cancelled']:isRec?['pending','partial','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
     const typeLabel=isInv?'Invoice':isPO?'Purchase Order':isRec?'Received Invoice':'Quotation';
     const savedDoc={...doc,items};
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
@@ -297,7 +302,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
     const isRec=type==='received';
     const lbl=type==='invoice'?'Invoice':type==='po'?'Purchase Order':isRec?'Received Invoice':'Quotation';
-    const sts=type==='invoice'?['draft','sent','paid','overdue','cancelled']:type==='po'?['draft','sent','approved','received','cancelled']:isRec?['pending','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
+    const sts=type==='invoice'?['draft','sent','partial','paid','overdue','cancelled']:type==='po'?['draft','sent','approved','received','cancelled']:isRec?['pending','partial','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
     const filtered=items.filter(d=>{
       const name=(isRec?d.supplier:(d&&d.client&&d.client.name))||'';
       if(fs.q&&![name,d.number||''].some(x=>x.toLowerCase().includes(fs.q.toLowerCase())))return false;
@@ -390,7 +395,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         </div>
       </div>
       <div className="main">
-        {!['off_preview','off_form','off_custform','off_projform','off_bank_detail','off_banktx_form','off_fx_form','off_cat_detail'].includes(view)&&(()=>{
+        {!['off_preview','off_form','off_custform','off_projform','off_bank_detail','off_banktx_form','off_fx_form','off_cat_detail','off_contact'].includes(view)&&(()=>{
           const offTitles={home:'Dashboard',off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Contacts',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings'};
           return(<div className="topbar no-print">
             <h1 className="topbar-title">{offTitles[view]||''}</h1>
@@ -415,7 +420,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_quotes'&&<OffListView type="quote" items={quo}/>}
         {view==='off_pos'&&<OffListView type="po" items={pos}/>}
         {view==='off_received'&&<OffListView type="received" items={rec}/>}
-        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} quo={quo} onNew={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('off_custform');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}/>}
+        {view==='off_contact'&&customers.find(c=>c.id===selectedContactId)&&<OffContactStatement contact={customers.find(c=>c.id===selectedContactId)} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go('off_customers')} onEdit={c=>{setCur(c);go('off_custform');}}/>}
+        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}/>}
         {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(`Delete "${p.name}"?`))return;spr(projects.filter(d=>d.id!==p.id));showToast('Deleted');}}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
@@ -429,7 +435,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           onExchange={()=>{setCur({id:null,date:td(),fromAccountId:selectedBank.id,toAccountId:((co.banks||[]).find(b=>b.id!==selectedBank.id)||{}).id||'',sold:'',rate:'',fee:'',feeCategory:'',received:'',reference:'',description:''});go('off_fx_form');}}
           onEdit={t=>{if(t.fx){setCur(fxFormState(t));go('off_fx_form');}else{setCur(t);go('off_banktx_form');}}} onDelete={handleDeleteBankTx}/>}
         {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
-        {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
+        {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} bankTx={bankTx} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='settings'&&<OffSettings ns={ns} co={co} go={go} onAutoNumberChange={v=>{const newCo={...co,autoNumber:v};setCo(newCo);LS.set(ns+'co',newCo);showToast(v?'Automatic numbering on':'Automatic numbering off — type numbers by hand');}} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast('Saved ✓');go('home');}} onClose={()=>go('home')}/>}
       </div>
       {toast&&<div className="toast">{toast}</div>}
@@ -445,31 +451,177 @@ const CONTACT_TYPES=[['customer','Customer'],['supplier','Supplier'],['both','Cu
 const contactTypeLabel=t=>(CONTACT_TYPES.find(([k])=>k===(t||'customer'))||[])[1]||'Customer';
 const contactName=c=>c.company||c.contact||'';
 
-function OffCustomers({customers,inv,quo,onNew,onEdit,onDelete}){
+// ── Payment allocation ──
+// A bank transaction can settle several documents, fully or partly:
+//   tx.allocations=[{type:'invoice'|'received',id,number,amount}]  (amount in the account's currency = the document's)
+// Older transactions linked one document (tx.linkedDoc) for the whole amount; txAllocs reads both.
+const r2=n=>Math.round(n*100)/100;
+const docTotal=d=>dt(d.items||[]);
+const docKey=(type,id)=>type+':'+id;
+const txAllocs=t=>t.allocations||(t.linkedDoc&&t.linkedDoc.id?[{type:t.linkedDoc.type,id:t.linkedDoc.id,number:t.linkedDoc.number,amount:+t.amount}]:[]);
+// Amount already allocated to each document, keyed by docKey (optionally ignoring one transaction)
+const allocatedByDoc=(txs,excludeTxId)=>{
+  const m={};
+  txs.forEach(t=>{if(t.id===excludeTxId)return;txAllocs(t).forEach(a=>{const k=docKey(a.type,a.id);m[k]=(m[k]||0)+(+a.amount||0);});});
+  return m;
+};
+const curFmt=(cur,n)=>`${n<0?'-':''}${CURR[cur]||''}${fmt(Math.abs(n))}`;
+
+// Everything that moved between us and a contact, per currency.
+// Signed amounts: positive = the contact owes us more, negative = we owe them more.
+// Sales invoices (not draft/cancelled) +, received invoices (not cancelled) −, money in −, money out +.
+const contactLedger=(c,{inv,rec,bankTx,banks})=>{
+  const name=contactName(c);
+  const accCur=id=>((banks.find(b=>b.id===id)||{}).currency)||'GBP';
+  const sales=inv.filter(d=>(d.client&&d.client.name)===name);
+  const bills=rec.filter(d=>d.supplier===name);
+  const own=new Set([...sales.map(d=>docKey('invoice',d.id)),...bills.map(d=>docKey('received',d.id))]);
+  const paidTo=allocatedByDoc(bankTx);
+  const entries=[];
+  sales.filter(d=>d.status!=='draft'&&d.status!=='cancelled').forEach(d=>entries.push({id:'d'+d.id,date:d.date||'',kind:'invoice',ref:d.number,desc:'Sales invoice',cur:d.currency||'GBP',amount:docTotal(d),doc:d}));
+  bills.filter(d=>d.status!=='cancelled').forEach(d=>entries.push({id:'d'+d.id,date:d.date||'',kind:'bill',ref:d.number,desc:'Received invoice',cur:d.currency||'GBP',amount:-docTotal(d),doc:d}));
+  bankTx.forEach(t=>{
+    if(t.fx)return;
+    let amt;
+    if(t.contactId===c.id)amt=+t.amount;
+    // older payments without a contact still count for the documents they settle
+    else if(!t.contactId)amt=txAllocs(t).filter(a=>own.has(docKey(a.type,a.id))).reduce((s,a)=>s+(+a.amount||0),0);
+    if(!amt)return;
+    const al=txAllocs(t);
+    entries.push({id:'t'+t.id,date:t.date||'',kind:t.type==='in'?'in':'out',ref:al.map(a=>a.number).filter(Boolean).join(', ')||t.reference||'',
+      desc:t.description||(t.type==='in'?'Payment received':'Payment made'),cur:accCur(t.accountId),amount:t.type==='in'?-amt:amt,tx:t});
+  });
+  entries.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  const byCur={};
+  entries.forEach(e=>{
+    const s=byCur[e.cur]||(byCur[e.cur]={invoiced:0,billed:0,received:0,paid:0,balance:0});
+    if(e.kind==='invoice')s.invoiced+=e.amount;else if(e.kind==='bill')s.billed-=e.amount;
+    else if(e.kind==='in')s.received-=e.amount;else s.paid+=e.amount;
+    s.balance+=e.amount;
+  });
+  Object.values(byCur).forEach(s=>Object.keys(s).forEach(k=>{s[k]=r2(s[k]);}));
+  // Open documents with what is still outstanding on each
+  const today=td();
+  const open=[...sales.filter(d=>d.status!=='draft'&&d.status!=='cancelled').map(d=>({type:'invoice',d})),...bills.filter(d=>d.status!=='cancelled').map(d=>({type:'received',d}))]
+    .map(({type,d})=>{const total=docTotal(d),paid=r2(paidTo[docKey(type,d.id)]||0);return{type,d,total,paid,outstanding:r2(total-paid),overdue:!!d.dueDate&&d.dueDate<today}})
+    .filter(x=>x.outstanding>0.005).sort((a,b)=>(a.d.dueDate||a.d.date||'')<(b.d.dueDate||b.d.date||'')?-1:1);
+  return{entries,byCur,open};
+};
+// Trading contacts carry a balance; employees, owners and expense payees just show what was paid / received
+const isTrading=c=>['customer','supplier','both'].includes(c.type||'customer');
+// What the contact owes us (receivable) and what we owe them (payable), per currency
+const contactPositions=(c,byCur)=>{
+  const t=c.type||'customer';const R={},P={};
+  Object.entries(byCur).forEach(([cur,s])=>{
+    if(t==='customer')R[cur]=s.balance;
+    else if(t==='supplier')P[cur]=-s.balance;
+    else{R[cur]=r2(s.invoiced-s.received);P[cur]=r2(s.billed-s.paid);}
+  });
+  return{R,P};
+};
+const curList=m=>Object.entries(m).filter(([,v])=>Math.abs(v)>0.005);
+
+function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
+  const{entries,byCur,open}=contactLedger(c,{inv,rec,bankTx,banks});
+  const curs=Object.keys(byCur);
+  const[cur,setCur]=useState(curs[0]||'GBP');
+  const s=byCur[cur]||{invoiced:0,billed:0,received:0,paid:0,balance:0};
+  const trading=isTrading(c);
+  let running=0;
+  const rows=entries.filter(e=>e.cur===cur).map(e=>{running=r2(running+e.amount);return{...e,balance:running};});
+  const openRows=open.filter(o=>(o.d.currency||'GBP')===cur);
+  const name=contactName(c);
+  const kindLabel={invoice:'Invoice',bill:'Received Invoice',in:'Money In',out:'Money Out'};
+  const balLabel=b=>Math.abs(b)<0.005?'Settled':b>0?`${name} owes us`:'We owe '+name;
+  const cards=[
+    ...(s.invoiced?[['Invoiced',s.invoiced]]:[]),...(s.received?[['Received',s.received]]:[]),
+    ...(s.billed?[['Billed to us',s.billed]]:[]),...(s.paid?[['Paid',s.paid]]:[]),
+  ];
+  const exportRows=()=>exportExcel([['Date','Type','Reference','Description','Debit','Credit','Balance'],...rows.map(e=>[e.date,kindLabel[e.kind],e.ref,e.desc,e.amount>0?e.amount:'',e.amount<0?-e.amount:'',e.balance])],`statement-${name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${cur.toLowerCase()}`);
+
+  return(<div className="content">
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap'}}>
+      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
+      <div style={{width:1,height:24,background:'var(--g200)'}}/>
+      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{name}</h2>
+      <span className="ct-type">{contactTypeLabel(c.type)}</span>
+      <div style={{flex:1}}/>
+      {rows.length>0&&<Btn v="bex bsm" onClick={exportRows}><Ico n="export"/>Export Statement</Btn>}
+      <Btn v="bgh bsm" onClick={()=>onEdit(c)}><Ico n="edit"/>Edit Contact</Btn>
+    </div>
+    {curs.length>1&&<div className="st-tabs" style={{marginBottom:14}}>{curs.map(k=><button key={k} className={`st-tab${k===cur?' active':''}`} onClick={()=>setCur(k)}>{k}</button>)}</div>}
+    {entries.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No invoices or payments yet</div><div className="empty-s">Invoices in this name and bank transactions with this contact appear here</div></div></div>:(<>
+      <div className="ct-cards">
+        {cards.map(([l,v])=><div key={l} className="ct-card"><div className="ct-card-l">{l}</div><div className="ct-card-v">{curFmt(cur,v)}</div></div>)}
+        {trading&&<div className={`ct-card ct-bal${s.balance>0.005?' pos':s.balance<-0.005?' neg':''}`}><div className="ct-card-l">{balLabel(s.balance)}</div><div className="ct-card-v">{curFmt(cur,Math.abs(s.balance))}</div></div>}
+      </div>
+      {openRows.length>0&&<div className="tcard" style={{marginBottom:16}}>
+        <div className="tcard-hdr"><span className="tcard-hdr-t">Open Documents</span></div>
+        <table className="dt"><Cg w={[1.2,1.3,0.9,0.9,1,1,1]}/>
+          <thead><tr><th>Number</th><th>Type</th><th>Date</th><th>Due</th><th className="tar">Total</th><th className="tar">Paid</th><th className="tar">Outstanding</th></tr></thead>
+          <tbody>{openRows.map(o=><tr key={o.type+o.d.id}>
+            <td style={{fontWeight:600}}>{o.d.number||'—'}</td>
+            <td style={{fontSize:12,color:'var(--g600)'}}>{o.type==='invoice'?'Sales Invoice':'Received Invoice'}</td>
+            <td style={{fontSize:12,color:'var(--g500)'}}>{o.d.date||'—'}</td>
+            <td style={{fontSize:12,color:o.overdue?'var(--red)':'var(--g500)',fontWeight:o.overdue?600:400}}>{o.d.dueDate||'—'}{o.overdue&&' · overdue'}</td>
+            <td className="tar">{curFmt(cur,o.total)}</td>
+            <td className="tar" style={{color:'var(--g500)'}}>{o.paid?curFmt(cur,o.paid):'—'}</td>
+            <td className="tar" style={{fontWeight:700}}>{curFmt(cur,o.outstanding)}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+      <div className="tcard">
+        <div className="tcard-hdr"><span className="tcard-hdr-t">Statement ({cur})</span><span style={{fontSize:11.5,color:'var(--g400)'}}>Debit = owed to us · Credit = owed by us or paid to us</span></div>
+        <table className="dt"><Cg w={[0.8,1.1,1.3,1.8,0.9,0.9,1]}/>
+          <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th className="tar">Debit</th><th className="tar">Credit</th><th className="tar">Balance</th></tr></thead>
+          <tbody>{[...rows].reverse().map(e=><tr key={e.id}>
+            <td style={{fontSize:12,color:'var(--g500)'}}>{e.date||'—'}</td>
+            <td><span className={`ct-kind ct-k-${e.kind}`}>{kindLabel[e.kind]}</span></td>
+            <td style={{fontWeight:500}}>{e.ref||'—'}</td>
+            <td style={{color:'var(--g600)'}}>{e.desc}</td>
+            <td className="tar">{e.amount>0?curFmt(cur,e.amount):''}</td>
+            <td className="tar">{e.amount<0?curFmt(cur,-e.amount):''}</td>
+            <td className="tar" style={{fontWeight:600,color:e.balance<-0.005?'var(--red)':'var(--g900)'}}>{curFmt(cur,e.balance)}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+    </>)}
+  </div>);
+}
+
+function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete}){
   const[q,setQ]=useState('');
   const[typeF,setTypeF]=useState('');
   const {pg,ps,setPg,setPs}=usePagination(q+'|'+typeF);
   const f=[...customers.filter(c=>(!typeF||(c.type||'customer')===typeF)&&[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
+  // Receivable / payable per currency for trading contacts; paid / received totals for the rest
+  const pos=c=>{
+    const{byCur}=contactLedger(c,{inv,rec,bankTx,banks});
+    if(isTrading(c)){const{R,P}=contactPositions(c,byCur);return{a:curList(R),b:curList(P)};}
+    return{a:curList(Object.fromEntries(Object.entries(byCur).map(([k,s])=>[k,s.received]))),b:curList(Object.fromEntries(Object.entries(byCur).map(([k,s])=>[k,s.paid]))),plain:true};
+  };
+  const cell=(list,cls,prefix)=>list.length?list.map(([cur,v])=><div key={cur} className={cls}>{prefix}{curFmt(cur,v)}</div>):<span style={{color:'var(--g300)'}}>—</span>;
+  const exportList=()=>exportExcel([['Company','Contact','Relationship','Email','Phone','Receivable / Received','Payable / Paid'],...f.map(c=>{const p=pos(c);const txt=l=>l.map(([cur,v])=>curFmt(cur,v)).join(' · ');return[c.company||'',c.contact||'',contactTypeLabel(c.type),c.email||'',c.phone||'',txt(p.a),txt(p.b)];})],'contacts');
   return(<div className="content">
     <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div>
       <select value={typeF} onChange={e=>setTypeF(e.target.value)}><option value="">All relationships</option>{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
       <div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Company','Contact','Relationship','Email','Phone','Invoices','Quotes'],...f.map(c=>[c.company||'',c.contact||'',contactTypeLabel(c.type),c.email||'',c.phone||'',inv.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length,quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length])],'contacts')}><Ico n="export"/>Export</Btn>
+      <Btn v="bex bsm" onClick={exportList}><Ico n="export"/>Export</Btn>
     </div>
     {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{customers.length?'No contacts match':'No contacts yet'}</div></div></div>:(
     <div className="tcard"><table className="dt">
-      <Cg w={[2,1.4,1.8,1,0.7,0.5,0.6,0.6]}/>
-      <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Type</th><th className="tac">Inv</th><th className="tac">Quotes</th><th>Actions</th></tr></thead>
-      <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
+      <Cg w={[2,1.3,1.7,1,0.9,1.2,1.2,0.8]}/>
+      <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Type</th><th className="tar">Receivable</th><th className="tar">Payable</th><th>Actions</th></tr></thead>
+      <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=>{const p=pos(c);return(<tr key={c.id} className="ct-row" onClick={()=>onOpen(c)}>
         <td style={{fontWeight:500}}>{c.company||'—'}</td>
         <td>{c.contact||'—'}</td>
-        <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
+        <td onClick={e=>e.stopPropagation()}>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
         <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
         <td style={{color:'var(--g600)',fontSize:12}}>{contactTypeLabel(c.type)}</td>
-        <td className="tac" style={{color:'var(--green)'}}>{inv.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
-        <td className="tac" style={{color:'var(--gm-500)'}}>{quo.filter(d=>(d&&d.client&&d.client.name)===(c.company||c.contact)).length}</td>
-        <td><div className="aw"><button className="ab" onClick={()=>onEdit(c)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(c)}><Ico n="trash"/></button></div></td>
-      </tr>)}</tbody>
+        <td className="tar">{p.plain?cell(p.a,'ct-plain','Received '):cell(p.a,'ct-recv','')}</td>
+        <td className="tar">{p.plain?cell(p.b,'ct-plain','Paid '):cell(p.b,'ct-pay','')}</td>
+        <td onClick={e=>e.stopPropagation()}><div className="aw"><button className="ab" onClick={()=>onOpen(c)} title="Statement" aria-label="Statement"><Ico n="eye"/></button><button className="ab" onClick={()=>onEdit(c)} title="Edit" aria-label="Edit"><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(c)} title="Delete" aria-label="Delete"><Ico n="trash"/></button></div></td>
+      </tr>);})}</tbody>
     </table><Pagination total={f.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
     )}
   </div>);
@@ -638,8 +790,8 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
   }).sort((a,b)=>a.date===b.date?0:(a.date<b.date?1:-1));
   const totalsByCurrency=filtered.reduce((acc,t)=>{const c=(t.account&&t.account.currency)||'GBP';acc[c]=(acc[c]||0)+(+t.amount||0);return acc;},{});
   const linkLabel=t=>{
-    if(!t.linkedDoc)return null;
-    return t.linkedDoc.number||null; // the document number alone is enough
+    const al=txAllocs(t);
+    return al.length?al.map(x=>x.number).filter(Boolean).join(', ')||null:null; // document numbers alone are enough
   };
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
@@ -1006,8 +1158,8 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
   const linkLabel=t=>{
     if(t.fxLeg==='fee')return 'FX fee';
     if(t.fx){const o=fxOther(t);return `${t.type==='out'?'To':'From'} ${(o&&o.accountName)||t.fx[t.type==='out'?'toCurrency':'fromCurrency']}`;}
-    if(!t.linkedDoc)return null;
-    return t.linkedDoc.number||null; // the document number alone is enough
+    const al=txAllocs(t);
+    return al.length?al.map(x=>x.number).filter(Boolean).join(', ')||null:null; // document numbers alone are enough
   };
 
   return(<div className="content">
@@ -1054,10 +1206,13 @@ const txKindOf=t=>t.kind||(t.type==='out'&&t.category&&!t.linkedDoc&&!t.contactI
 // Which contact relationships to list first for each kind
 const TX_CONTACT_ORDER={in:['customer','both','owner','supplier','employee','expense'],out:['supplier','both','employee','owner','customer','expense'],expense:['expense']};
 
-function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receivedInvoices,onSave,onCancel,dirtyRef}){
-  const[t,setT]=useState(()=>({...init,kind:txKindOf(init)}));
+function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receivedInvoices,bankTx,onSave,onCancel,dirtyRef}){
+  const start=()=>({...init,kind:txKindOf(init),allocations:txAllocs(init),linkedDoc:null});
+  const[t,setT]=useState(start);
   const s=(k,v)=>setT(d=>({...d,[k]:v}));
-  const _initStr=useRef(JSON.stringify({...init,kind:txKindOf(init)}));
+  // Amount follows the allocated total until it is typed in (always the case when editing)
+  const[amountTouched,setAmountTouched]=useState(!!init.id||!!init.amount);
+  const _initStr=useRef(JSON.stringify(start()));
   const _isDirty=()=>JSON.stringify(t)!==_initStr.current;
   const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
   if(dirtyRef)dirtyRef.current=_isDirty;
@@ -1071,7 +1226,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
     const next={...d,kind:k,type:k==='in'?'in':'out'};
     // Categories and documents differ between money in and money out
     if((d.kind==='in')!==(k==='in'))next.category='';
-    if(k==='expense'||(d.linkedDoc&&d.linkedDoc.type!==(k==='in'?'invoice':'received')))next.linkedDoc=null;
+    if(k==='expense'||(d.kind==='in')!==(k==='in'))next.allocations=[];
     if(k==='expense'&&d.contactId&&!(contacts.find(c=>c.id===d.contactId&&c.type==='expense'))){next.contactId='';next.contactName='';}
     return next;
   });
@@ -1081,41 +1236,54 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
     list:contacts.filter(c=>(c.type||'customer')===type).sort((a,b)=>contactName(a).localeCompare(contactName(b)))})).filter(g=>g.list.length);
   const setContact=id=>{
     const c=contacts.find(x=>x.id===id);
-    setT(d=>({...d,contactId:id,contactName:c?contactName(c):'',linkedDoc:null}));
+    setT(d=>({...d,contactId:id,contactName:c?contactName(c):'',allocations:[]}));
   };
 
-  // Unpaid documents of the chosen contact (all of them for older transactions without a contact)
-  const docOptions=()=>{
-    const name=t.contactName;
-    const own=(t.linkedDoc&&t.linkedDoc.id)||'';
-    if(docType==='invoice')return invoices.filter(d=>(!name||(d.client&&d.client.name)===name)&&(d.status!=='paid'||d.id===own))
-      .map(d=>({id:d.id,number:d.number,label:`${d.number} — ${(d.client&&d.client.name)||'—'} — ${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))} (${d.date})`,amount:dt(d.items||[])}));
-    if(docType==='received')return receivedInvoices.filter(d=>(!name||d.supplier===name)&&(d.status!=='paid'||d.id===own))
-      .map(d=>({id:d.id,number:d.number,label:`${d.number} — ${d.supplier||'—'} — ${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))} (${d.date})`,amount:dt(d.items||[])}));
-    return [];
-  };
-  const setDoc=id=>{
-    if(!id){s('linkedDoc',null);return;}
-    const opt=docOptions().find(o=>o.id===id);
-    if(!opt)return;
-    setT(d=>({...d,linkedDoc:{type:docType,id:opt.id,number:opt.number},amount:(isNew&&!d.amount)?opt.amount:d.amount}));
-  };
+  // Open documents of the chosen contact in this account's currency (drafts included: paying one issues it).
+  // Older transactions without a contact only list the documents they already settle.
+  const accCur=account.currency||'GBP';
+  const allocs=t.allocations||[];
+  const allocOthers=allocatedByDoc(bankTx||[],init.id);
+  const openDocs=!docType?[]:(docType==='invoice'?invoices:receivedInvoices).filter(d=>{
+      const mine=allocs.some(x=>x.type===docType&&x.id===d.id);
+      if(mine)return true;
+      if(!t.contactName||d.status==='cancelled'||(d.currency||'GBP')!==accCur)return false;
+      return docType==='invoice'?(d.client&&d.client.name)===t.contactName:d.supplier===t.contactName;
+    }).map(d=>{const total=docTotal(d);const mine=allocs.find(x=>x.type===docType&&x.id===d.id);
+      return{d,total,remaining:r2(total-(allocOthers[docKey(docType,d.id)]||0)),mine};})
+    .filter(x=>x.mine||x.remaining>0.005).sort((x,y)=>(x.d.date||'')<(y.d.date||'')?-1:1);
+  const allocTotal=r2(allocs.reduce((sum,x)=>sum+(+x.amount||0),0));
+  const applyAllocs=fn=>setT(d=>{
+    const allocations=fn(d.allocations||[]);
+    const n={...d,allocations};
+    if(!amountTouched)n.amount=allocations.length?String(r2(allocations.reduce((sum,x)=>sum+(+x.amount||0),0))):'';
+    return n;
+  });
+  const toggleDoc=o=>applyAllocs(list=>{
+    if(list.some(x=>x.type===docType&&x.id===o.d.id))return list.filter(x=>!(x.type===docType&&x.id===o.d.id));
+    // With an amount typed in, fill up to what is left of it; otherwise take the full outstanding
+    const left=amountTouched?r2((+t.amount||0)-list.reduce((sum,x)=>sum+(+x.amount||0),0)):o.remaining;
+    return[...list,{type:docType,id:o.d.id,number:o.d.number,amount:String(r2(Math.min(o.remaining,left>0.005?left:o.remaining)))}];
+  });
+  const setAllocAmt=(o,v)=>applyAllocs(list=>list.map(x=>x.type===docType&&x.id===o.d.id?{...x,amount:v}:x));
 
   const trySave=()=>{
     if(!t.date){alert('Enter a valid date.');return;}
     if(!(+t.amount>0)){alert('Enter an amount.');return;}
     if(isNew&&kind!=='expense'&&!t.contactId){alert(`Select who the money ${kind==='in'?'came from':'went to'}.`);return;}
     if(kind==='expense'&&!t.category){alert('Select an expense category.');return;}
+    for(const o of openDocs){if(o.mine&&(!(+o.mine.amount>0)||+o.mine.amount>o.remaining+0.005)){alert(`Amount for ${o.d.number} must be between 0 and its outstanding ${curFmt(accCur,o.remaining)}.`);return;}}
+    if(allocTotal>+t.amount+0.005){alert(`The invoices total ${curFmt(accCur,allocTotal)}, more than the payment of ${curFmt(accCur,+t.amount)}.`);return;}
     if(account.openingBalanceDate&&t.date<account.openingBalanceDate){
       alert(`This transaction is dated before the account's Opening Balance date (${account.openingBalanceDate}). Pick a later date.`);
       return;
     }
-    onSave({...t,type:kind==='in'?'in':'out',description:toSentenceCase(t.description)});
+    const allocations=kind==='expense'?[]:allocs.map(x=>({...x,amount:r2(+x.amount)}));
+    onSave({...t,type:kind==='in'?'in':'out',allocations,linkedDoc:null,description:toSentenceCase(t.description)});
   };
 
   const kinds=[['in','Money In','Payment received from a contact'],['out','Money Out','Payment made to a contact'],['expense','Expense','A cost booked to an expense category']];
   const catSelect=(<select value={t.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">{kind==='expense'?'— Select —':'— None —'}</option>{groupCats(catList).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>);
-  const docs=docType?docOptions():[];
 
   return(<div className="content"><div className="fw">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
@@ -1135,7 +1303,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
     <div className="fc"><div className="fct">Details</div>
       <div className="fg g3">
         <Fld label="Date"><input type="date" value={t.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
-        <Fld label={`Amount (${account.currency||'GBP'})`}><input type="number" value={t.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+        <Fld label={`Amount (${account.currency||'GBP'})`}><input type="number" value={t.amount||''} onChange={x=>{setAmountTouched(true);s('amount',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
         <Fld label="Reference"><input value={t.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Ref No"/></Fld>
       </div>
       <div className="fg g2" style={{marginTop:12}}>
@@ -1149,15 +1317,25 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
         </Fld>
         <Fld label={kind==='expense'?'Expense Category *':`${kind==='in'?'Income':'Expense'} Category (optional)`}>{catSelect}</Fld>
       </div>
-      {docType&&(t.contactId||t.linkedDoc)&&<div className="fg g1" style={{marginTop:12}}>
-        <Fld label={kind==='in'?'Settles Invoice (optional)':'Settles Received Invoice (optional)'}>
-          <select value={(t.linkedDoc&&t.linkedDoc.id)||''} onChange={x=>setDoc(x.target.value)} className="fi">
-            <option value="">— None —</option>
-            {docs.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-          {t.contactId&&docs.length===0&&<span className="fx-hint">No unpaid {kind==='in'?'invoices':'received invoices'} for this contact.</span>}
-          {t.linkedDoc&&<span className="fx-hint">The {kind==='in'?'invoice':'received invoice'} is marked as paid when you save.</span>}
-        </Fld>
+      {docType&&(t.contactId||allocs.length>0)&&<div className="tx-alloc">
+        <div className="tx-alloc-t">{kind==='in'?'Invoices settled by this payment':'Received invoices settled by this payment'} <span>(optional · {accCur})</span></div>
+        {openDocs.length===0?<div className="fx-hint">No open {kind==='in'?'invoices':'received invoices'} in {accCur} for this contact.</div>:(
+        <table className="tx-alloc-tbl">
+          <thead><tr><th/><th>Document</th><th>Date</th><th className="tar">Total</th><th className="tar">Outstanding</th><th className="tar">This payment</th></tr></thead>
+          <tbody>{openDocs.map(o=>(
+            <tr key={o.d.id} className={o.mine?'on':''}>
+              <td><input type="checkbox" checked={!!o.mine} onChange={()=>toggleDoc(o)} aria-label={'Settle '+o.d.number}/></td>
+              <td style={{fontWeight:600}}>{o.d.number||'—'}{o.d.status==='draft'&&<span className="tx-draft">Draft</span>}</td>
+              <td style={{color:'var(--g500)'}}>{o.d.date||'—'}</td>
+              <td className="tar">{curFmt(accCur,o.total)}</td>
+              <td className="tar">{curFmt(accCur,o.remaining)}</td>
+              <td className="tar">{o.mine?<input type="number" value={o.mine.amount} onChange={x=>setAllocAmt(o,x.target.value)} className="fi tx-alloc-in" min="0" step=".01"/>:<span style={{color:'var(--g300)'}}>—</span>}</td>
+            </tr>))}</tbody>
+        </table>)}
+        {allocs.length>0&&<div className={`tx-alloc-sum${allocTotal>(+t.amount||0)+0.005?' over':''}`}>
+          Allocated <strong>{curFmt(accCur,allocTotal)}</strong> of {curFmt(accCur,+t.amount||0)}
+          {allocTotal>(+t.amount||0)+0.005?' — more than the payment':(+t.amount||0)-allocTotal>0.005?` · ${curFmt(accCur,r2((+t.amount||0)-allocTotal))} on account`:''}
+        </div>}
       </div>}
       <div className="fg g1" style={{marginTop:12}}>
         <Fld label="Description"><input value={t.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="What was this for?"/></Fld>
