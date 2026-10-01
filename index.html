@@ -199,6 +199,12 @@ button.sb-item{border-top:0;border-right:0;border-bottom:0;background:transparen
 .tcard-hdr-t{font-size:13px;font-weight:700;color:var(--g900)}
 table.dt{width:100%;border-collapse:collapse;table-layout:fixed}
 table.dt th{padding:7px 12px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.65px;color:var(--g700);background:var(--g50);border-bottom:1px solid var(--g200);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+table.dt th.sth{cursor:pointer;user-select:none;transition:background .12s,color .12s}
+table.dt th.sth:hover{background:var(--g100);color:var(--g900)}
+table.dt th.sth:focus-visible{outline:2px solid var(--gm-400);outline-offset:-2px}
+table.dt th.sth:active{background:var(--g200)}
+.sth-i{margin-left:5px;font-size:9px;color:var(--g300);display:inline-block}
+table.dt th.sth[aria-sort=ascending] .sth-i,table.dt th.sth[aria-sort=descending] .sth-i{color:var(--gm-500)}
 table.dt td{padding:7px 12px;border-bottom:1px solid var(--g100);font-size:12.5px;color:var(--g600);transition:background .1s;font-weight:400;overflow-wrap:break-word;word-break:break-word}
 table.dt tbody tr:hover td{background:#fafbfc}
 table.dt tbody tr:last-child td{border-bottom:none}

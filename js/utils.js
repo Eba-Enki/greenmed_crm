@@ -336,6 +336,40 @@ const toSentenceCase=s=>{
 // Toast helper
 function useToast(){const[t,setT]=useState('');const show=m=>{setT(m);setTimeout(()=>setT(''),2500)};return[t,show];}
 
+// Table sorting. Default order is newest date first and, within the same day, the highest document number first —
+// so freshly added records always land on page 1. Clicking a header sorts by that column; ties fall back to
+// date then number so rows with equal values never shuffle. Numbers compare naturally (CI0099 < CI00100, R03 < R10).
+const natCmp=(a,b)=>{
+  if(typeof a==='number'&&typeof b==='number')return a-b;
+  return String(a==null?'':a).localeCompare(String(b==null?'':b),undefined,{numeric:true,sensitivity:'base'});
+};
+function useSort(defaultKey='date',defaultDir='desc'){
+  const[sort,setSort]=useState({key:defaultKey,dir:defaultDir});
+  // A new column starts ascending, except date which starts newest-first
+  const onSort=key=>setSort(p=>p.key===key?{key,dir:p.dir==='asc'?'desc':'asc'}:{key,dir:key==='date'?'desc':'asc'});
+  return{sort,onSort};
+}
+// cols maps sort keys to row=>value accessors; 'date' and 'no' (when given) are used as tie-breakers
+const sortRows=(rows,sort,cols)=>{
+  const get=cols[sort.key];
+  const sign=sort.dir==='asc'?1:-1;
+  const tie=['date','no'].filter(k=>cols[k]&&k!==sort.key);
+  // Sorting by date/number keeps the tie-break in the same direction; any other column falls back to newest first
+  const tieSign=sort.key==='date'||sort.key==='no'?sign:-1;
+  return[...rows].sort((a,b)=>{
+    if(get){const c=natCmp(get(a),get(b));if(c)return c*sign;}
+    for(const k of tie){const c=natCmp(cols[k](a),cols[k](b));if(c)return c*tieSign;}
+    return 0;
+  });
+};
+const SortTh=({k,sort,onSort,className,style,children})=>{
+  const on=sort.key===k;
+  return <th className={'sth'+(className?' '+className:'')} style={style} tabIndex={0} aria-sort={on?(sort.dir==='asc'?'ascending':'descending'):'none'}
+    onClick={()=>onSort(k)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onSort(k);}}}>
+    {children}<span className="sth-i">{on?(sort.dir==='asc'?'▲':'▼'):'↕'}</span>
+  </th>;
+};
+
 function usePagination(filterKey,defaultSize=25){const[pg,setPg]=useState(1);const[ps,setPs]=useState(defaultSize);useEffect(()=>{setPg(1);},[filterKey]);return{pg,ps,setPg,setPs};}
 function Pagination({total,page,pageSize,onPageChange,onPageSizeChange}){if(!total)return null;const pages=Math.ceil(total/pageSize);const s=(page-1)*pageSize+1,e=Math.min(page*pageSize,total);const nums=()=>{if(pages<=7)return Array.from({length:pages},(_,i)=>i+1);const r=[1];if(page>3)r.push('…');for(let i=Math.max(2,page-1);i<=Math.min(pages-1,page+1);i++)r.push(i);if(page<pages-2)r.push('…');r.push(pages);return r;};const pb=(active,disabled)=>({display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:28,height:28,padding:'0 6px',border:`1px solid ${active?'var(--gm-400)':'var(--g200)'}`,borderRadius:5,background:active?'var(--gm-400)':'var(--g50)',color:active?'#fff':disabled?'var(--g300)':'var(--g700)',fontSize:12,fontWeight:active?700:500,cursor:disabled?'default':'pointer',transition:'background .15s,border-color .15s,color .15s',outline:'none'});return(<div style={{display:'flex',alignItems:'center',gap:8,padding:'9px 14px',borderTop:'1px solid var(--g200)',flexWrap:'wrap',background:'var(--g50)',borderRadius:'0 0 8px 8px'}}><span style={{fontSize:12,color:'var(--g500)',flex:1}}>Showing {s}–{e} of {total}</span><div style={{display:'flex',alignItems:'center',gap:5}}><span style={{fontSize:11,color:'var(--g500)'}}>Per page:</span><select value={pageSize} onChange={ev=>onPageSizeChange(+ev.target.value)} style={{border:'1px solid var(--g200)',borderRadius:5,padding:'3px 6px',fontSize:12,color:'var(--g700)',background:'var(--white)',cursor:'pointer'}}>{[10,25,50].map(n=><option key={n} value={n}>{n}</option>)}</select></div>{pages>1&&<div style={{display:'flex',alignItems:'center',gap:3}}><button style={pb(false,page===1)} disabled={page===1} onClick={()=>onPageChange(page-1)}>‹</button>{nums().map((p,i)=>p==='…'?<span key={`e${i}`} style={{fontSize:12,color:'var(--g400)',padding:'0 2px',lineHeight:'28px'}}>…</span>:<button key={p} style={pb(p===page,false)} onClick={()=>onPageChange(p)}>{p}</button>)}<button style={pb(false,page===pages)} disabled={page===pages} onClick={()=>onPageChange(page+1)}>›</button></div>}</div>);}
 

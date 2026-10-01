@@ -326,7 +326,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   function OffListView({type,items}){
     const[fs,setFs]=useState({s:'',q:'',dateFrom:'',dateTo:''});
     const[quickView,setQuickView]=useState(null);
-    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
+    const{sort,onSort}=useSort();
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
     const isRec=type==='received';
     const lbl=type==='invoice'?'Invoice':type==='po'?'Purchase Order':isRec?'Received Invoice':'Quotation';
     const sts=type==='invoice'?['draft','sent','partial','paid','overdue','cancelled']:type==='po'?['draft','sent','approved','received','cancelled']:isRec?['pending','partial','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
@@ -338,6 +339,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
       if(fs.dateTo&&d.date>fs.dateTo)return false;
       return true;
     });
+    const partyName=d=>(isRec?d.supplier:(d&&d.client&&d.client.name))||'';
+    const sorted=sortRows([...filtered].reverse(),sort,{date:d=>d.date,no:d=>d.number,party:partyName,project:d=>d.project,amount:d=>dt(d.items||[]),status:d=>d.status});
     return(
       <div className="content">
         <div className="fbar">
@@ -348,26 +351,26 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
           <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
           <div style={{flex:1}}/>
-          <Btn v="bex bsm" onClick={()=>exportExcel([['Number',isRec?'Supplier':'Customer','Date','Amount','Status'],...filtered.map(d=>[d.number,isRec?d.supplier:(d&&d.client&&d.client.name)||'',d.date,fmt(dt(d.items||[])),d.status])],type)}><Ico n="export"/>Export</Btn>
+          <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number',isRec?'Supplier':'Customer','Amount','Status'],...sorted.map(d=>[d.date,d.number,partyName(d),fmt(dt(d.items||[])),d.status])],type)}><Ico n="export"/>Export</Btn>
         </div>
         {filtered.length===0?(
           <div className="tcard"><div className="empty"><Ico n={type==='invoice'?'invoice':isRec?'received':type==='po'?'po':'quote'} size={40}/><div className="empty-t">No {lbl.toLowerCase()}s yet</div><div className="empty-s">Get started by creating one</div><Btn v="bp bsm" onClick={()=>{setCur(isRec?mkRec():mkDoc(type));go('off_form');}}><Ico n="plus"/>New {lbl}</Btn></div></div>
         ):(
           <div className="tcard">
             <table className="dt">
-              <Cg w={type==='po'?[1,0.8,2,1,0.9,0.9]:[1,0.8,2,0.9,0.9]}/>
+              <Cg w={type==='po'?[0.8,1,2,1,0.9,0.9]:[0.8,1,2,0.9,0.9]}/>
               <thead><tr>
-                <th>No</th>
-                <th>Date</th>
-                <th>{isRec?'Supplier':'Customer'}</th>
-                {type==='po'&&<th>Project</th>}
-                <th className="tar">Amount</th>
-                <th className="tac">Status</th>
+                <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+                <SortTh k="no" sort={sort} onSort={onSort}>No</SortTh>
+                <SortTh k="party" sort={sort} onSort={onSort}>{isRec?'Supplier':'Customer'}</SortTh>
+                {type==='po'&&<SortTh k="project" sort={sort} onSort={onSort}>Project</SortTh>}
+                <SortTh k="amount" sort={sort} onSort={onSort} className="tar">Amount</SortTh>
+                <SortTh k="status" sort={sort} onSort={onSort} className="tac">Status</SortTh>
               </tr></thead>
-              <tbody>{[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(d=>(
+              <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
                 <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
-                  <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number||'—'}</span></td>
                   <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+                  <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number||'—'}</span></td>
                   <td>{isRec?d.supplier:(d&&d.client&&d.client.name)||'—'}</td>
                   {type==='po'&&<td style={{color:'var(--g500)',fontSize:11}}>{d.project||'—'}{d.sourceRef&&<div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>from {d.sourceRef}</div>}</td>}
                   <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items||[]))}</td>
@@ -519,7 +522,8 @@ const contactLedger=(c,{inv,rec,bankTx,banks})=>{
       desc:(t.description||(t.type==='in'?'Payment received':'Payment made'))+(t.xpay?` · ${curFmt(accCur(t.accountId),t.xpay.total)} via ${accCur(t.accountId)} account`:''),
       cur:t.xpay?t.xpay.currency:accCur(t.accountId),amount:t.type==='in'?-amt:amt,tx:t});
   });
-  entries.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
+  // Chronological, then by document number, so the running balance matches the table read bottom-up
+  entries.sort((a,b)=>natCmp(a.date,b.date)||natCmp(a.ref,b.ref));
   const byCur={};
   entries.forEach(e=>{
     const s=byCur[e.cur]||(byCur[e.cur]={invoiced:0,billed:0,received:0,paid:0,balance:0});
@@ -557,7 +561,11 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
   const trading=isTrading(c);
   let running=0;
   const rows=entries.filter(e=>e.cur===cur).map(e=>{running=r2(running+e.amount);return{...e,balance:running};});
-  const openRows=open.filter(o=>(o.d.currency||'GBP')===cur);
+  const{sort:oSort,onSort:onOSort}=useSort();
+  const{sort:stSort,onSort:onStSort}=useSort();
+  const openRows=sortRows(open.filter(o=>(o.d.currency||'GBP')===cur),oSort,{date:o=>o.d.date,no:o=>o.d.number,type:o=>o.type,due:o=>o.d.dueDate,total:o=>o.total,paid:o=>o.paid,outstanding:o=>o.outstanding});
+  // Fed newest-first so equal keys keep the reverse-chronological order the balances were built in
+  const stRows=sortRows([...rows].reverse(),stSort,{date:e=>e.date,no:e=>e.ref,type:e=>e.kind,desc:e=>e.desc,debit:e=>e.amount>0?e.amount:0,credit:e=>e.amount<0?-e.amount:0,balance:e=>e.balance});
   const name=contactName(c);
   const kindLabel={invoice:'Invoice',bill:'Received Invoice',in:'Money In',out:'Money Out'};
   const balLabel=b=>Math.abs(b)<0.005?'Settled':b>0?`${name} owes us`:'We owe '+name;
@@ -565,7 +573,7 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
     ...(s.invoiced?[['Invoiced',s.invoiced]]:[]),...(s.received?[['Received',s.received]]:[]),
     ...(s.billed?[['Billed to us',s.billed]]:[]),...(s.paid?[['Paid',s.paid]]:[]),
   ];
-  const exportRows=()=>exportExcel([['Date','Type','Reference','Description','Debit','Credit','Balance'],...rows.map(e=>[e.date,kindLabel[e.kind],e.ref,e.desc,e.amount>0?e.amount:'',e.amount<0?-e.amount:'',e.balance])],`statement-${name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${cur.toLowerCase()}`);
+  const exportRows=()=>exportExcel([['Date','Reference','Type','Description','Debit','Credit','Balance'],...rows.map(e=>[e.date,e.ref,kindLabel[e.kind],e.desc,e.amount>0?e.amount:'',e.amount<0?-e.amount:'',e.balance])],`statement-${name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${cur.toLowerCase()}`);
 
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap'}}>
@@ -585,12 +593,20 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
       </div>
       {openRows.length>0&&<div className="tcard" style={{marginBottom:16}}>
         <div className="tcard-hdr"><span className="tcard-hdr-t">Open Documents</span></div>
-        <table className="dt"><Cg w={[1.2,1.3,0.9,0.9,1,1,1]}/>
-          <thead><tr><th>Number</th><th>Type</th><th>Date</th><th>Due</th><th className="tar">Total</th><th className="tar">Paid</th><th className="tar">Outstanding</th></tr></thead>
+        <table className="dt"><Cg w={[0.9,1.2,1.3,0.9,1,1,1]}/>
+          <thead><tr>
+            <SortTh k="date" sort={oSort} onSort={onOSort}>Date</SortTh>
+            <SortTh k="no" sort={oSort} onSort={onOSort}>Number</SortTh>
+            <SortTh k="type" sort={oSort} onSort={onOSort}>Type</SortTh>
+            <SortTh k="due" sort={oSort} onSort={onOSort}>Due</SortTh>
+            <SortTh k="total" sort={oSort} onSort={onOSort} className="tar">Total</SortTh>
+            <SortTh k="paid" sort={oSort} onSort={onOSort} className="tar">Paid</SortTh>
+            <SortTh k="outstanding" sort={oSort} onSort={onOSort} className="tar">Outstanding</SortTh>
+          </tr></thead>
           <tbody>{openRows.map(o=><tr key={o.type+o.d.id}>
+            <td style={{fontSize:12,color:'var(--g500)'}}>{o.d.date||'—'}</td>
             <td style={{fontWeight:600}}>{o.d.number||'—'}</td>
             <td style={{fontSize:12,color:'var(--g600)'}}>{o.type==='invoice'?'Sales Invoice':'Received Invoice'}</td>
-            <td style={{fontSize:12,color:'var(--g500)'}}>{o.d.date||'—'}</td>
             <td style={{fontSize:12,color:o.overdue?'var(--red)':'var(--g500)',fontWeight:o.overdue?600:400}}>{o.d.dueDate||'—'}{o.overdue&&' · overdue'}</td>
             <td className="tar">{curFmt(cur,o.total)}</td>
             <td className="tar" style={{color:'var(--g500)'}}>{o.paid?curFmt(cur,o.paid):'—'}</td>
@@ -600,12 +616,20 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
       </div>}
       <div className="tcard">
         <div className="tcard-hdr"><span className="tcard-hdr-t">Statement ({cur})</span><span style={{fontSize:11.5,color:'var(--g400)'}}>Debit = owed to us · Credit = owed by us or paid to us</span></div>
-        <table className="dt"><Cg w={[0.8,1.1,1.3,1.8,0.9,0.9,1]}/>
-          <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th className="tar">Debit</th><th className="tar">Credit</th><th className="tar">Balance</th></tr></thead>
-          <tbody>{[...rows].reverse().map(e=><tr key={e.id}>
+        <table className="dt"><Cg w={[0.8,1.3,1.1,1.8,0.9,0.9,1]}/>
+          <thead><tr>
+            <SortTh k="date" sort={stSort} onSort={onStSort}>Date</SortTh>
+            <SortTh k="no" sort={stSort} onSort={onStSort}>Reference</SortTh>
+            <SortTh k="type" sort={stSort} onSort={onStSort}>Type</SortTh>
+            <SortTh k="desc" sort={stSort} onSort={onStSort}>Description</SortTh>
+            <SortTh k="debit" sort={stSort} onSort={onStSort} className="tar">Debit</SortTh>
+            <SortTh k="credit" sort={stSort} onSort={onStSort} className="tar">Credit</SortTh>
+            <SortTh k="balance" sort={stSort} onSort={onStSort} className="tar">Balance</SortTh>
+          </tr></thead>
+          <tbody>{stRows.map(e=><tr key={e.id}>
             <td style={{fontSize:12,color:'var(--g500)'}}>{e.date||'—'}</td>
-            <td><span className={`ct-kind ct-k-${e.kind}`}>{kindLabel[e.kind]}</span></td>
             <td style={{fontWeight:500}}>{e.ref||'—'}</td>
+            <td><span className={`ct-kind ct-k-${e.kind}`}>{kindLabel[e.kind]}</span></td>
             <td style={{color:'var(--g600)'}}>{e.desc}</td>
             <td className="tar">{e.amount>0?curFmt(cur,e.amount):''}</td>
             <td className="tar">{e.amount<0?curFmt(cur,-e.amount):''}</td>
@@ -620,8 +644,10 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
 function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete}){
   const[q,setQ]=useState('');
   const[typeF,setTypeF]=useState('');
-  const {pg,ps,setPg,setPs}=usePagination(q+'|'+typeF);
-  const f=[...customers.filter(c=>(!typeF||(c.type||'customer')===typeF)&&[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
+  const{sort,onSort}=useSort('company','asc');
+  const {pg,ps,setPg,setPs}=usePagination(q+'|'+typeF+JSON.stringify(sort));
+  const f=sortRows(customers.filter(c=>(!typeF||(c.type||'customer')===typeF)&&[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()))),sort,
+    {company:c=>c.company||c.contact,contact:c=>c.contact,email:c=>c.email,phone:c=>c.phone,type:c=>contactTypeLabel(c.type)});
   // Receivable / payable per currency for trading contacts; paid / received totals for the rest
   const pos=c=>{
     const{byCur}=contactLedger(c,{inv,rec,bankTx,banks});
@@ -639,7 +665,14 @@ function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete}){
     {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{customers.length?'No contacts match':'No contacts yet'}</div></div></div>:(
     <div className="tcard"><table className="dt">
       <Cg w={[2,1.3,1.7,1,0.9,1.2,1.2,0.8]}/>
-      <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Type</th><th className="tar">Receivable</th><th className="tar">Payable</th><th>Actions</th></tr></thead>
+      <thead><tr>
+        <SortTh k="company" sort={sort} onSort={onSort}>Company</SortTh>
+        <SortTh k="contact" sort={sort} onSort={onSort}>Contact</SortTh>
+        <SortTh k="email" sort={sort} onSort={onSort}>Email</SortTh>
+        <SortTh k="phone" sort={sort} onSort={onSort}>Phone</SortTh>
+        <SortTh k="type" sort={sort} onSort={onSort}>Type</SortTh>
+        <th className="tar">Receivable</th><th className="tar">Payable</th><th>Actions</th>
+      </tr></thead>
       <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=>{const p=pos(c);return(<tr key={c.id} className="ct-row" onClick={()=>onOpen(c)}>
         <td style={{fontWeight:500}}>{c.company||'—'}</td>
         <td>{c.contact||'—'}</td>
@@ -681,15 +714,23 @@ function OffCustForm({cust:init,customers,onSave,onCancel,dirtyRef}){
   </div></div>);
 }
 function OffProjects({projects,onNew,onEdit,onDelete}){
-  const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
+  const{sort,onSort}=useSort();
+  const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(sort));
+  const rows=sortRows(projects,sort,{date:p=>p.startDate,name:p=>p.name,client:p=>p.client,status:p=>p.status||'active'});
   return(<div className="content">
     <div className="fbar"><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Name','Client','Start Date','Status'],...projects.map(p=>[p.name||'',p.client||'',p.startDate||'',p.status||''])],'projects')}><Ico n="export"/>Export</Btn>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Start Date','Name','Client','Status'],...rows.map(p=>[p.startDate||'',p.name||'',p.client||'',p.status||''])],'projects')}><Ico n="export"/>Export</Btn>
     </div>
     <div className="tcard"><table className="dt">
-      <Cg w={[1.8,1.8,0.8,0.9,0.6]}/>
-      <thead><tr><th>Name</th><th>Client</th><th>Start</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">No projects yet</div></div></td></tr>:projects.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id}><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
+      <Cg w={[0.8,1.8,1.8,0.9,0.6]}/>
+      <thead><tr>
+        <SortTh k="date" sort={sort} onSort={onSort}>Start</SortTh>
+        <SortTh k="name" sort={sort} onSort={onSort}>Name</SortTh>
+        <SortTh k="client" sort={sort} onSort={onSort}>Client</SortTh>
+        <SortTh k="status" sort={sort} onSort={onSort}>Status</SortTh>
+        <th>Actions</th>
+      </tr></thead>
+      <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">No projects yet</div></div></td></tr>:rows.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id}><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
       </tbody>
     </table><Pagination total={projects.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
@@ -812,15 +853,16 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
   const[q,setQ]=useState('');
   const{direction,mainName,names}=categoryBrowse;
   const rows=bankTx.filter(t=>t.type===direction&&names.includes(t.category)).map(t=>({...t,account:banks.find(b=>b.id===t.accountId)}));
-  const filtered=rows.filter(t=>{
-    if(!q)return true;
-    return[t.description,t.reference,(t.account&&t.account.accountName)].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()));
-  }).sort((a,b)=>a.date===b.date?0:(a.date<b.date?1:-1));
-  const totalsByCurrency=filtered.reduce((acc,t)=>{const c=(t.account&&t.account.currency)||'GBP';acc[c]=(acc[c]||0)+(+t.amount||0);return acc;},{});
+  const{sort,onSort}=useSort();
   const linkLabel=t=>{
     const al=txAllocs(t);
     return al.length?al.map(x=>x.number).filter(Boolean).join(', ')||null:null; // document numbers alone are enough
   };
+  const filtered=sortRows(rows.filter(t=>{
+    if(!q)return true;
+    return[t.description,t.reference,(t.account&&t.account.accountName)].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()));
+  }),sort,{date:t=>t.date,no:t=>linkLabel(t)||t.reference,account:t=>t.account&&t.account.accountName,desc:t=>t.description,linked:linkLabel,amount:t=>+t.amount||0});
+  const totalsByCurrency=filtered.reduce((acc,t)=>{const c=(t.account&&t.account.currency)||'GBP';acc[c]=(acc[c]||0)+(+t.amount||0);return acc;},{});
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
       <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
@@ -833,7 +875,14 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
     </div>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.6,2.2,1,0.9,0.6]}/>
-      <thead><tr><th>Date</th><th>Account</th><th>Description</th><th>Linked</th><th className="tar">Amount</th><th>Actions</th></tr></thead>
+      <thead><tr>
+        <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+        <SortTh k="account" sort={sort} onSort={onSort}>Account</SortTh>
+        <SortTh k="desc" sort={sort} onSort={onSort}>Description</SortTh>
+        <SortTh k="linked" sort={sort} onSort={onSort}>Linked</SortTh>
+        <SortTh k="amount" sort={sort} onSort={onSort} className="tar">Amount</SortTh>
+        <th>Actions</th>
+      </tr></thead>
       <tbody>{filtered.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:filtered.map(t=>{
         const curSym=CURR[(t.account&&t.account.currency)]||'£';
         return(
@@ -1151,14 +1200,16 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
   const[q,setQ]=useState('');
   const[dateFrom,setDateFrom]=useState('');
   const[dateTo,setDateTo]=useState('');
-  const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo}));
+  const{sort,onSort}=useSort();
+  const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo,sort}));
 
   const openingEntry={id:'__opening__',date:account.openingBalanceDate||'',description:'Opening Balance',category:null,reference:'',linkedDoc:null,type:'in',amount:+(account.openingBalance||0),isOpening:true};
+  // Same date + reference order as the default table view, so the running balance reads cleanly top to bottom
   const sorted=[openingEntry,...transactions].sort((a,b)=>{
     if(a.date!==b.date)return a.date<b.date?-1:1;
     if(a.isOpening)return -1;
     if(b.isOpening)return 1;
-    return 0;
+    return natCmp(a.reference,b.reference);
   });
   let running=0;
   const withBalance=sorted.map(t=>{
@@ -1193,6 +1244,9 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
     const al=txAllocs(t);
     return al.length?al.map(x=>x.number).filter(Boolean).join(', ')||null:null; // document numbers alone are enough
   };
+  // Fed newest-first so rows with equal keys keep the reverse-chronological order the balances were built in
+  const shown=sortRows([...filtered].reverse(),sort,{date:t=>t.date,no:t=>t.reference,contact:t=>t.contactName,desc:fxTitle,
+    category:t=>isFx(t)?'Currency Exchange':t.category,linked:linkLabel,in:t=>t.type==='in'?+t.amount:0,out:t=>t.type==='out'?+t.amount:0,balance:t=>t.balance});
 
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
@@ -1214,8 +1268,18 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
     </div>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.2,2,1,1,0.9,0.9,0.9,0.6]}/>
-      <thead><tr><th>Date</th><th>Contact</th><th>Description</th><th>Category</th><th>Linked</th><th className="tar">In</th><th className="tar">Out</th><th className="tar">Balance</th><th>Actions</th></tr></thead>
-      <tbody>{filtered.length===0?<tr><td colSpan={9}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(t=>(
+      <thead><tr>
+        <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+        <SortTh k="contact" sort={sort} onSort={onSort}>Contact</SortTh>
+        <SortTh k="desc" sort={sort} onSort={onSort}>Description</SortTh>
+        <SortTh k="category" sort={sort} onSort={onSort}>Category</SortTh>
+        <SortTh k="linked" sort={sort} onSort={onSort}>Linked</SortTh>
+        <SortTh k="in" sort={sort} onSort={onSort} className="tar">In</SortTh>
+        <SortTh k="out" sort={sort} onSort={onSort} className="tar">Out</SortTh>
+        <SortTh k="balance" sort={sort} onSort={onSort} className="tar">Balance</SortTh>
+        <th>Actions</th>
+      </tr></thead>
+      <tbody>{filtered.length===0?<tr><td colSpan={9}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:shown.slice((pg-1)*ps,pg*ps).map(t=>(
         <tr key={t.id}>
           <td style={{color:'var(--g500)',fontSize:12}}>{t.date||'—'}</td>
           <td style={{fontWeight:500,color:'var(--g800)'}}>{t.contactName||<span style={{color:'var(--g300)'}}>—</span>}</td>

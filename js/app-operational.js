@@ -315,14 +315,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Sales Quotes List
   function SalesQuotesList(){
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
-    const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
+    const{sort,onSort}=useSort();
     const[expandedGroups,setExpandedGroups]=useState(new Set());
     const[quickView,setQuickView]=useState(null);
     const[remTip,setRemTip]=useState(null);
     const hasFilter=fs.q||fs.s||fs.dateFrom||fs.dateTo;
-    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
     const toggleGroup=(base)=>{setExpandedGroups(prev=>{const next=new Set(prev);if(next.has(base))next.delete(base);else next.add(base);return next;});};
-    const handleSort=(key)=>{setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));};
     const matchesFilter=(q)=>{
       const company=(q.client&&q.client.company)||'';
       const contact=(q.client&&q.client.contact)||'';
@@ -337,20 +336,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const filteredGroups=Object.entries(allGroups)
       .filter(([,revs])=>!hasFilter||revs.some(matchesFilter))
       .map(([base,revs])=>{const sorted=[...revs].sort((a,b)=>b.rev-a.rev);return{base,revs:sorted,latest:sorted[0]};});
-    const flatFiltered=salesQuotes.filter(matchesFilter);
-    const sortedGroups=[...filteredGroups].sort((a,b)=>{
-      if(!sortConfig.key)return b.latest.date.localeCompare(a.latest.date);
-      let aVal,bVal;
-      if(sortConfig.key==='number')aVal=a.base,bVal=b.base;
-      else if(sortConfig.key==='date')aVal=a.latest.date,bVal=b.latest.date;
-      else if(sortConfig.key==='customer')aVal=(a.latest.client&&a.latest.client.company)||'',bVal=(b.latest.client&&b.latest.client.company)||'';
-      else if(sortConfig.key==='project')aVal=a.latest.project||'',bVal=b.latest.project||'';
-      else if(sortConfig.key==='total')aVal=dt(a.latest.items),bVal=dt(b.latest.items);
-      else if(sortConfig.key==='status')aVal=a.latest.status,bVal=b.latest.status;
-      else return 0;
-      if(typeof aVal==='string')return sortConfig.dir==='asc'?aVal.localeCompare(bVal):bVal.localeCompare(aVal);
-      return sortConfig.dir==='asc'?aVal-bVal:bVal-aVal;
-    });
+    const qCols={date:q=>q.date,no:q=>q.number,project:q=>q.project,customer:q=>q.client&&q.client.company,total:q=>dt(q.items||[]),status:q=>q.status};
+    const flatFiltered=sortRows(salesQuotes.filter(matchesFilter),sort,qCols);
+    // Each revision group sorts by its latest revision
+    const sortedGroups=sortRows(filteredGroups,sort,Object.fromEntries(Object.entries(qCols).map(([k,f])=>[k,g=>f(g.latest)])));
     const isExpanded=(base)=>hasFilter||expandedGroups.has(base);
     return(<div className="content">
       <div className="fbar">
@@ -362,19 +351,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Number','Date','Company','Contact','Total','Status','Project'],...flatFiltered.map(q=>[q.number,q.date,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}><Ico n="export"/>Export</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...flatFiltered.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}><Ico n="export"/>Export</Btn>
       </div>
       {sortedGroups.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">No quotations yet</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[0.8,1,1,2,0.9,1.3,0.9]}/>
           <thead><tr>
-            <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date {sortConfig.key==='date'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>Quote No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project {sortConfig.key==='project'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer {sortConfig.key==='customer'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th className="tar" onClick={()=>handleSort('total')} style={{cursor:'pointer',userSelect:'none'}}>Total {sortConfig.key==='total'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+            <SortTh k="no" sort={sort} onSort={onSort}>Quote No</SortTh>
+            <SortTh k="project" sort={sort} onSort={onSort}>Project</SortTh>
+            <SortTh k="customer" sort={sort} onSort={onSort}>Customer</SortTh>
+            <SortTh k="total" sort={sort} onSort={onSort} className="tar">Total</SortTh>
             <th className="tac">Actions</th>
-            <th className="tac" onClick={()=>handleSort('status')} style={{cursor:'pointer',userSelect:'none'}}>Status {sortConfig.key==='status'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <SortTh k="status" sort={sort} onSort={onSort} className="tac">Status</SortTh>
           </tr></thead>
           <tbody>{sortedGroups.slice((pg-1)*ps,pg*ps).map(({base,revs,latest})=>{
             const history=revs.slice(1);
@@ -913,12 +902,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Sales Invoices List
   function SalesInvoicesList(){
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
-    const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
+    const{sort,onSort}=useSort();
     const[quickView,setQuickView]=useState(null);
-    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
-    const handleSort=(key)=>{
-      setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
-    };
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
     const filtered=salesInvoices.filter(d=>{
       const company=(d&&d.client&&d.client.company)||'';
       const contact=(d&&d.client&&d.client.contact)||'';
@@ -928,19 +914,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(fs.dateTo&&d.date>fs.dateTo)return false;
       return true;
     });
-    const sorted=[...filtered].sort((a,b)=>{
-      if(!sortConfig.key)return b.date.localeCompare(a.date);
-      let aVal,bVal;
-      if(sortConfig.key==='number')aVal=a.number,bVal=b.number;
-      else if(sortConfig.key==='date')aVal=a.date,bVal=b.date;
-      else if(sortConfig.key==='customer')aVal=(a&&a.client&&a.client.company)||'',bVal=(b&&b.client&&b.client.company)||'';
-      else if(sortConfig.key==='quote')aVal=a.quoteNum||'',bVal=b.quoteNum||'';
-      else if(sortConfig.key==='total')aVal=dt(a.items),bVal=dt(b.items);
-      else if(sortConfig.key==='status')aVal=a.status,bVal=b.status;
-      else return 0;
-      if(typeof aVal==='string')return sortConfig.dir==='asc'?aVal.localeCompare(bVal):bVal.localeCompare(aVal);
-      return sortConfig.dir==='asc'?aVal-bVal:bVal-aVal;
-    });
+    const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,quote:d=>d.quoteNum,customer:d=>d.client&&d.client.company,total:d=>dt(d.items||[]),status:d=>d.status});
     return(<div className="content">
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder="Search customer or invoice no..."/></div>
@@ -950,19 +924,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Number','Date','Company','Contact','Total','Status','From Quote'],...filtered.map(d=>[d.number,d.date,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}><Ico n="export"/>Export</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...sorted.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}><Ico n="export"/>Export</Btn>
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="invoice" size={38}/><div className="empty-t">No sales invoices yet</div><div className="empty-s">Approve a quotation and convert it to invoice</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[0.8,1,1,2,0.9,1.3,0.9]}/>
           <thead><tr>
-            <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date {sortConfig.key==='date'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>Invoice No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('quote')} style={{cursor:'pointer',userSelect:'none'}}>From Quote {sortConfig.key==='quote'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer {sortConfig.key==='customer'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th className="tar" onClick={()=>handleSort('total')} style={{cursor:'pointer',userSelect:'none'}}>Total {sortConfig.key==='total'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+            <SortTh k="no" sort={sort} onSort={onSort}>Invoice No</SortTh>
+            <SortTh k="quote" sort={sort} onSort={onSort}>From Quote</SortTh>
+            <SortTh k="customer" sort={sort} onSort={onSort}>Customer</SortTh>
+            <SortTh k="total" sort={sort} onSort={onSort} className="tar">Total</SortTh>
             <th className="tac">Actions</th>
-            <th className="tac" onClick={()=>handleSort('status')} style={{cursor:'pointer',userSelect:'none'}}>Status {sortConfig.key==='status'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
+            <SortTh k="status" sort={sort} onSort={onSort} className="tac">Status</SortTh>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
             <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
@@ -989,12 +963,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Generic list for PQ, PO, RI
   function ProcurementList({type,items,title}){
     const[fs,setFs]=useState({q:'',s:'',dateFrom:'',dateTo:''});
-    const[sortConfig,setSortConfig]=useState({key:null,dir:'asc'});
+    const{sort,onSort}=useSort();
     const[quickView,setQuickView]=useState(null);
-    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
-    const handleSort=(key)=>{
-      setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
-    };
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
     const isRI=type==='ri',isPQ=type==='pq',isPO=type==='po';
     const filtered=items.filter(d=>{
       if(fs.q&&![d.supplierCompany||'',d.number||''].some(x=>x.toLowerCase().includes(fs.q.toLowerCase())))return false;
@@ -1003,18 +974,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(fs.dateTo&&d.date>fs.dateTo)return false;
       return true;
     });
-    const sorted=[...filtered].sort((a,b)=>{
-      if(!sortConfig.key)return b.date.localeCompare(a.date);
-      let aVal,bVal;
-      if(sortConfig.key==='number')aVal=a.number||'',bVal=b.number||'';
-      else if(sortConfig.key==='date')aVal=a.date,bVal=b.date;
-      else if(sortConfig.key==='supplier')aVal=a.supplierCompany||'',bVal=b.supplierCompany||'';
-      else if(sortConfig.key==='project')aVal=a.project||'',bVal=b.project||'';
-      else if(sortConfig.key==='total')aVal=dt(a.items||[]),bVal=dt(b.items||[]);
-      else return 0;
-      if(typeof aVal==='string')return sortConfig.dir==='asc'?aVal.localeCompare(bVal):bVal.localeCompare(aVal);
-      return sortConfig.dir==='asc'?aVal-bVal:bVal-aVal;
-    });
+    const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,project:d=>d.project,supplier:d=>d.supplierCompany,total:d=>dt(d.items||[]),
+      linked:d=>isPQ?d.linkedPO&&d.linkedPO.number:isPO?d.pqNum:d.poNum,status:d=>d.status||'unpaid'});
     const lbl=isPQ?'Received Quote':isPO?'Purchase Order':'Received Invoice';
     const linkChip=(label,num)=><span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{label} {num}</span>;
     return(<div className="content">
@@ -1026,19 +987,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
         <div style={{flex:1}}/>
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Number','Date','Supplier','Total',...(isRI?['Status']:[])],...filtered.map(d=>[d.number,d.date,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type)}><Ico n="export"/>Export</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number','Supplier','Total',...(isRI?['Status']:[])],...sorted.map(d=>[d.date,d.number,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type)}><Ico n="export"/>Export</Btn>
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isRI?'received':'po'} size={38}/><div className="empty-t">No {lbl.toLowerCase()}s yet</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={isRI?[0.8,1,1,2,0.9,0.9,0.9]:[0.8,1,1,2,0.9,0.9]}/>
           <thead><tr>
-            <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date {sortConfig.key==='date'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('number')} style={{cursor:'pointer',userSelect:'none'}}>No {sortConfig.key==='number'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project {sortConfig.key==='project'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th onClick={()=>handleSort('supplier')} style={{cursor:'pointer',userSelect:'none'}}>Supplier {sortConfig.key==='supplier'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th className="tar" onClick={()=>handleSort('total')} style={{cursor:'pointer',userSelect:'none'}}>Total {sortConfig.key==='total'&&(sortConfig.dir==='asc'?'▲':'▼')}</th>
-            <th className="tac">{isPQ?'Linked To':'Linked From'}</th>
-            {isRI&&<th className="tac">Status</th>}
+            <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+            <SortTh k="no" sort={sort} onSort={onSort}>No</SortTh>
+            <SortTh k="project" sort={sort} onSort={onSort}>Project</SortTh>
+            <SortTh k="supplier" sort={sort} onSort={onSort}>Supplier</SortTh>
+            <SortTh k="total" sort={sort} onSort={onSort} className="tar">Total</SortTh>
+            <SortTh k="linked" sort={sort} onSort={onSort} className="tac">{isPQ?'Linked To':'Linked From'}</SortTh>
+            {isRI&&<SortTh k="status" sort={sort} onSort={onSort} className="tac">Status</SortTh>}
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
             <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
@@ -1241,20 +1202,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {[{lbl:'Revenue',val:`£${fmt(revenue)}`,sub:`${pI.length} invoices`,cls:'sc-green'},{lbl:'PO Costs',val:`£${fmt(poTotal)}`,sub:`${pPO.length} orders`,cls:'sc-blue'},{lbl:'Expenses',val:`£${fmt(expTotal)}`,sub:`${pExp.length} items`,cls:'sc-purple'},{lbl:'Net',val:`£${fmt(revenue-poTotal-expTotal)}`,sub:'revenue - costs',cls:revenue-poTotal-expTotal>=0?'sc-teal':'sc-red'}].map(s=><div key={s.lbl} className={`stat-card ${s.cls}`}><div className="stat-val">{s.val}</div><div className="stat-lbl">{s.lbl}</div><div className="stat-sub">{s.sub}</div></div>)}
       </div>
       {/* Sections */}
-      {[{title:'Sales Quotations',items:pQ,cols:['Quote No','Date','Total','Status'],w:[1,0.8,0.9,0.9],vals:d=>[d.number,d.date,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
-        {title:'Sales Invoices',items:pI,cols:['Invoice No','Date','Total','Status'],w:[1,0.8,0.9,0.9],vals:d=>[d.number,d.date,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
-        {title:'Purchase Orders',items:pPO,cols:['PO No','Date','Supplier','Total','Status'],w:[1,0.8,2,0.9,0.9],vals:d=>[d.number,d.date,d.supplier,`£${fmt(dt(d.items))}`,<Badge s={d.status}/>]},
-        {title:'Expenses',items:pExp,cols:['Date','Category','Description','Amount'],w:[0.8,1,2,0.9],vals:e=>[e.date,e.category,e.description,`${CURR[e.currency]||'£'}${fmt(+(e.amount||0))}`]},
-      ].map(({title,items,cols,w,vals})=>(
-        <div key={title} style={{marginBottom:16}}>
-          <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}><div className="tcard-hdr-t">{title} ({items.length})</div></div>
-          <div className="tcard">
-            {items.length===0?<div style={{padding:'16px 18px',color:'var(--g400)',fontSize:13}}>None</div>:
-            <table className="dt"><Cg w={w}/><thead><tr>{cols.map(c=><th key={c}>{c}</th>)}</tr></thead>
-            <tbody>{items.map((d,i)=><tr key={d.id||i}>{vals(d).map((v,j)=><td key={j} style={{fontWeight:j===0?600:400,color:j===0?'var(--g900)':'var(--g600)'}}>{v}</td>)}</tr>)}</tbody></table>}
-          </div>
-        </div>
-      ))}
+      {(()=>{
+        const dateCol={k:'date',l:'Date',get:d=>d.date,show:d=>d.date};
+        const noCol=l=>({k:'no',l,get:d=>d.number,show:d=>d.number,strong:true});
+        const totalCol={k:'total',l:'Total',get:d=>dt(d.items||[]),show:d=>`£${fmt(dt(d.items||[]))}`};
+        const statusCol={k:'status',l:'Status',get:d=>d.status,show:d=><Badge s={d.status}/>};
+        return[
+          {title:'Sales Quotations',items:pQ,w:[0.8,1,0.9,0.9],cols:[dateCol,noCol('Quote No'),totalCol,statusCol]},
+          {title:'Sales Invoices',items:pI,w:[0.8,1,0.9,0.9],cols:[dateCol,noCol('Invoice No'),totalCol,statusCol]},
+          {title:'Purchase Orders',items:pPO,w:[0.8,1,2,0.9,0.9],cols:[dateCol,noCol('PO No'),{k:'supplier',l:'Supplier',get:d=>d.supplier,show:d=>d.supplier},totalCol,statusCol]},
+          {title:'Expenses',items:pExp,w:[0.8,1,2,0.9],cols:[dateCol,{k:'category',l:'Category',get:e=>e.category,show:e=>e.category},{k:'desc',l:'Description',get:e=>e.description,show:e=>e.description},
+            {k:'amount',l:'Amount',get:e=>+(e.amount||0),show:e=>`${CURR[e.currency]||'£'}${fmt(+(e.amount||0))}`}]},
+        ].map(s=><ProjDocTable key={s.title} {...s}/>);
+      })()}
     </div>);
   }
 
@@ -1298,10 +1258,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[dateTo,setDateTo]=useState('');
     const[editingItem,setEditingItem]=useState(null);
     const[tempPrice,setTempPrice]=useState('');
-    const[sortConfig,setSortConfig]=useState({key:'date',dir:'desc'});
-    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo}));
+    const{sort,onSort}=useSort();
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo,sort}));
 
-    const handleSort=(key)=>setSortConfig(prev=>({key,dir:prev.key===key&&prev.dir==='asc'?'desc':'asc'}));
     const openPriceModal=(item)=>{setEditingItem(item);setTempPrice(item.purchasePrice||'');};
     const closeModal=()=>{setEditingItem(null);setTempPrice('');};
     const savePurchasePrice=()=>{
@@ -1314,23 +1273,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(dateTo&&p.date>dateTo)return false;
       return true;
     });
-    const sorted=[...filtered].sort((a,b)=>{
-      if(!sortConfig.key)return 0;
-      let aVal,bVal;
-      if(sortConfig.key==='customer')aVal=a.customer||'',bVal=b.customer||'';
-      else if(sortConfig.key==='project')aVal=a.projectId||'',bVal=b.projectId||'';
-      else if(sortConfig.key==='code')aVal=a.code||'',bVal=b.code||'';
-      else if(sortConfig.key==='name')aVal=a.name||'',bVal=b.name||'';
-      else if(sortConfig.key==='qty')aVal=+(a.qty||0),bVal=+(b.qty||0);
-      else if(sortConfig.key==='price')aVal=+(a.price||0),bVal=+(b.price||0);
-      else if(sortConfig.key==='purchasePrice')aVal=+(a.purchasePrice||0),bVal=+(b.purchasePrice||0);
-      else if(sortConfig.key==='quoteNum')aVal=a.quoteNum||'',bVal=b.quoteNum||'';
-      else if(sortConfig.key==='date')aVal=a.date||'',bVal=b.date||'';
-      else return 0;
-      if(typeof aVal==='string')return sortConfig.dir==='asc'?aVal.localeCompare(bVal):bVal.localeCompare(aVal);
-      return sortConfig.dir==='asc'?aVal-bVal:bVal-aVal;
-    });
-    const sh=(k)=>`${sortConfig.key===k?(sortConfig.dir==='asc'?' ▲':' ▼'):''}`;
+    const sorted=sortRows(filtered,sort,{date:p=>p.date,no:p=>p.quoteNum,code:p=>p.code,name:p=>p.name,qty:p=>+(p.qty||0),price:p=>+(p.price||0),
+      purchasePrice:p=>+(p.purchasePrice||0),project:p=>p.projectId,customer:p=>p.customer});
     return(<div className="content">
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search item, customer, project..."/></div>
@@ -1342,22 +1286,24 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">Pool is empty</div><div className="empty-s">Mark quotations as Sent to populate the pool</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[1,2,0.6,0.9,0.9,1,0.8,1,2,0.6]}/>
+          <Cg w={[0.8,1,1,2,0.6,0.9,0.9,1,2,0.6]}/>
           <thead><tr>
-            <th onClick={()=>handleSort('code')} style={{cursor:'pointer',userSelect:'none'}}>Code{sh('code')}</th>
-            <th onClick={()=>handleSort('name')} style={{cursor:'pointer',userSelect:'none'}}>Description{sh('name')}</th>
-            <th className="tar" onClick={()=>handleSort('qty')} style={{cursor:'pointer',userSelect:'none'}}>Qty{sh('qty')}</th>
-            <th className="tar" onClick={()=>handleSort('price')} style={{cursor:'pointer',userSelect:'none'}}>Sale Price{sh('price')}</th>
-            <th className="tar" onClick={()=>handleSort('purchasePrice')} style={{cursor:'pointer',userSelect:'none'}}>Purchase Price{sh('purchasePrice')}</th>
-            <th onClick={()=>handleSort('quoteNum')} style={{cursor:'pointer',userSelect:'none'}}>Quote No{sh('quoteNum')}</th>
-            <th onClick={()=>handleSort('date')} style={{cursor:'pointer',userSelect:'none'}}>Date{sh('date')}</th>
-            <th onClick={()=>handleSort('project')} style={{cursor:'pointer',userSelect:'none'}}>Project{sh('project')}</th>
-            <th onClick={()=>handleSort('customer')} style={{cursor:'pointer',userSelect:'none'}}>Customer{sh('customer')}</th>
+            <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+            <SortTh k="no" sort={sort} onSort={onSort}>Quote No</SortTh>
+            <SortTh k="code" sort={sort} onSort={onSort}>Code</SortTh>
+            <SortTh k="name" sort={sort} onSort={onSort}>Description</SortTh>
+            <SortTh k="qty" sort={sort} onSort={onSort} className="tar">Qty</SortTh>
+            <SortTh k="price" sort={sort} onSort={onSort} className="tar">Sale Price</SortTh>
+            <SortTh k="purchasePrice" sort={sort} onSort={onSort} className="tar">Purchase Price</SortTh>
+            <SortTh k="project" sort={sort} onSort={onSort}>Project</SortTh>
+            <SortTh k="customer" sort={sort} onSort={onSort}>Customer</SortTh>
             <th>Actions</th>
           </tr></thead>
-          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map((p,i)=>{
-            const isDup=sorted.some((x,j)=>j!==i&&x.customer===p.customer&&x.name.toLowerCase().trim()===p.name.toLowerCase().trim());
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(p=>{
+            const isDup=sorted.some(x=>x.id!==p.id&&x.customer===p.customer&&x.name.toLowerCase().trim()===p.name.toLowerCase().trim());
             return(<tr key={p.id} style={isDup?{background:'#fff7ed',borderLeft:'3px solid var(--amber)'}:{}}>
+              <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{p.date||'—'}</td>
+              <td><span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{p.quoteNum||'—'}</span></td>
               <td style={{fontFamily:'monospace',fontSize:11,whiteSpace:'nowrap'}}>{p.code||'—'}</td>
               <td style={{maxWidth:'300px',wordBreak:'break-word',whiteSpace:'normal',lineHeight:1.4}}>{p.name||'—'}</td>
               <td className="tar">{p.qty} {p.unit||''}</td>
@@ -1365,8 +1311,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>
                 {p.purchasePrice?`£${fmt(+(p.purchasePrice||0))}`:'—'}
               </td>
-              <td><span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{p.quoteNum||'—'}</span></td>
-              <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{p.date||'—'}</td>
               <td style={{color:'var(--g500)',fontSize:12}}>{p.projectId||'—'}</td>
               <td style={{fontWeight:500,color:isDup?'var(--amber)':'var(--g900)'}}>{p.customer||'—'}</td>
               <td><button className="ab" onClick={()=>openPriceModal(p)} title="Set Purchase Price"><Ico n="edit"/></button></td>
@@ -1398,7 +1342,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Expenses
   function ExpensesView(){
     const[fs,setFs]=useState({q:'',cat:'',p:'',dateFrom:'',dateTo:''});
-    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs));
+    const{sort,onSort}=useSort();
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
     const filtered=expenses.filter(e=>{
       if(fs.q&&![e.description,e.employee].some(x=>(x||'').toLowerCase().includes(fs.q.toLowerCase())))return false;
       if(fs.cat&&e.category!==fs.cat)return false;
@@ -1407,6 +1352,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(fs.dateTo&&e.date>fs.dateTo)return false;
       return true;
     });
+    // Fed newest-first so expenses with the same date and no reference keep their newest-added-first order
+    const sorted=sortRows([...filtered].reverse(),sort,{date:e=>e.date,no:e=>e.reference,employee:e=>e.employee,category:e=>e.category,desc:e=>e.description,project:e=>e.project,amount:e=>+(e.amount||0)});
     const total=filtered.reduce((s,e)=>s+(+(e.amount||0)),0);
     const allCats=[...new Set(expenses.map(e=>e.category).filter(Boolean))];
     return(<div className="content">
@@ -1423,13 +1370,21 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <div style={{flex:1}}/>
         {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>Total: £{fmt(total)}</span>}
         <Btn v="bgh bsm" onClick={()=>go('exp_import')}><Ico n="upload"/>Import Excel</Btn>
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...filtered.map(e=>[e.date,e.employee,e.category,e.description,e.reference,e.amount,e.currency,e.project])],'expenses')}><Ico n="export"/>Export</Btn>
+        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...sorted.map(e=>[e.date,e.employee,e.category,e.description,e.reference,e.amount,e.currency,e.project])],'expenses')}><Ico n="export"/>Export</Btn>
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">No expenses yet</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[0.8,1.2,1,2.4,1.2,0.9,0.6]}/>
-          <thead><tr><th>Date</th><th>Employee</th><th>Category</th><th>Description</th><th>Project</th><th className="tar">Amount</th><th>Actions</th></tr></thead>
-          <tbody>{[...filtered].reverse().slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id}>
+          <thead><tr>
+            <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
+            <SortTh k="employee" sort={sort} onSort={onSort}>Employee</SortTh>
+            <SortTh k="category" sort={sort} onSort={onSort}>Category</SortTh>
+            <SortTh k="desc" sort={sort} onSort={onSort}>Description</SortTh>
+            <SortTh k="project" sort={sort} onSort={onSort}>Project</SortTh>
+            <SortTh k="amount" sort={sort} onSort={onSort} className="tar">Amount</SortTh>
+            <th>Actions</th>
+          </tr></thead>
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id}>
             <td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td>
             <td style={{color:'var(--g700)'}}>{e.employee||'—'}</td>
             <td>{e.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{e.category}</span>:'—'}</td>
@@ -1632,20 +1587,30 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   function CustomersView(){
     const[q,setQ]=useState('');
-    const {pg,ps,setPg,setPs}=usePagination(q);
-    const f=[...customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))].sort((a,b)=>(a.company||a.contact||'').localeCompare(b.company||b.contact||''));
+    const{sort,onSort}=useSort('company','asc');
+    const {pg,ps,setPg,setPs}=usePagination(q+JSON.stringify(sort));
+    const typeLabel=c=>c.type==='supplier'?'Supplier':c.type==='both'?'Customer & Supplier':'Customer';
+    const f=sortRows(customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()))),sort,
+      {company:c=>c.company||c.contact,contact:c=>c.contact,email:c=>c.email,phone:c=>c.phone,type:typeLabel});
     return(<div className="content">
       <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/></div>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">No customers yet</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[2,1.4,1.8,1,0.7,0.6]}/>
-          <thead><tr><th>Company</th><th>Contact</th><th>Email</th><th>Phone</th><th>Type</th><th>Actions</th></tr></thead>
+          <thead><tr>
+            <SortTh k="company" sort={sort} onSort={onSort}>Company</SortTh>
+            <SortTh k="contact" sort={sort} onSort={onSort}>Contact</SortTh>
+            <SortTh k="email" sort={sort} onSort={onSort}>Email</SortTh>
+            <SortTh k="phone" sort={sort} onSort={onSort}>Phone</SortTh>
+            <SortTh k="type" sort={sort} onSort={onSort}>Type</SortTh>
+            <th>Actions</th>
+          </tr></thead>
           <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
             <td style={{fontWeight:500}}>{c.company||'—'}</td>
             <td>{c.contact||'—'}</td>
             <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
             <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
-            <td style={{color:'var(--g600)',fontSize:12}}>{c.type==='supplier'?'Supplier':c.type==='both'?'Customer & Supplier':'Customer'}</td>
+            <td style={{color:'var(--g600)',fontSize:12}}>{typeLabel(c)}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(c);go('cust_form');}}><Ico n="edit"/></button>
               <button className="ab danger" onClick={()=>askConfirm(`Delete "${c.company||c.contact}"?`,()=>{sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');})}><Ico n="trash"/></button>
@@ -1683,7 +1648,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // Documents View
   function DocumentsView(){
-    const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
+    const{sort,onSort}=useSort();
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(sort));
+    // Fed newest-first so documents uploaded the same day keep their newest-added-first order
+    const rows=sortRows([...documents].reverse(),sort,{date:d=>d.uploadDate,name:d=>d.name,category:d=>d.category,type:d=>d.fileType});
 
     return(<div className="content">
 
@@ -1697,21 +1665,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
       {documents.length>0&&(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.4,2.2,1,0.8,0.9,0.6]}/>
+          <Cg w={[0.9,2.2,1,0.8,0.6]}/>
           <thead><tr>
-            <th style={{textAlign:'center'}}>#</th>
-            <th>Document Name</th>
-            <th>Category</th>
-            <th>Type</th>
-            <th>Upload Date</th>
+            <SortTh k="date" sort={sort} onSort={onSort}>Upload Date</SortTh>
+            <SortTh k="name" sort={sort} onSort={onSort}>Document Name</SortTh>
+            <SortTh k="category" sort={sort} onSort={onSort}>Category</SortTh>
+            <SortTh k="type" sort={sort} onSort={onSort}>Type</SortTh>
             <th>Actions</th>
           </tr></thead>
-          <tbody>{documents.slice((pg-1)*ps,pg*ps).map((d,idx)=><tr key={d.id}>
-            <td style={{textAlign:'center',color:'var(--g500)',fontSize:13,fontWeight:600}}>{idx+1}</td>
+          <tbody>{rows.slice((pg-1)*ps,pg*ps).map(d=><tr key={d.id}>
+            <td style={{color:'var(--g600)',fontSize:12}}>{d.uploadDate}</td>
             <td style={{fontWeight:500}}>{d.name}</td>
             <td style={{color:'var(--g700)',fontSize:13}}>{d.category||'—'}</td>
             <td><span style={{padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,background:d.fileType==='application/pdf'?'var(--redl)':'var(--bluel)',color:d.fileType==='application/pdf'?'var(--red)':'var(--blue)'}}>{d.fileType==='application/pdf'?'PDF':'JPG'}</span></td>
-            <td style={{color:'var(--g600)',fontSize:12}}>{d.uploadDate}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{
                 const link=document.createElement('a');
@@ -2217,6 +2183,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 // remounting it; a nested version would reset its local state (and "Save & New"'s fresh blank
 // row) on every save, since AppOperational recreating a nested function component each render
 // gives React a new component identity to mount.
+// One linked-documents table on the project detail page; cols: {k,l,get,show,strong}
+function ProjDocTable({title,items,cols,w}){
+  const{sort,onSort}=useSort();
+  const rows=sortRows(items,sort,Object.fromEntries(cols.map(c=>[c.k,c.get])));
+  return(<div style={{marginBottom:16}}>
+    <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}><div className="tcard-hdr-t">{title} ({items.length})</div></div>
+    <div className="tcard">
+      {items.length===0?<div style={{padding:'16px 18px',color:'var(--g400)',fontSize:13}}>None</div>:
+      <table className="dt"><Cg w={w}/><thead><tr>{cols.map(c=><SortTh key={c.k} k={c.k} sort={sort} onSort={onSort}>{c.l}</SortTh>)}</tr></thead>
+      <tbody>{rows.map((d,i)=><tr key={d.id||i}>{cols.map(c=><td key={c.k} style={{fontWeight:c.strong?600:400,color:c.strong?'var(--g900)':'var(--g600)'}}>{c.show(d)}</td>)}</tr>)}</tbody></table>}
+    </div>
+  </div>);
+}
 function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,onCancel,dirtyRef}){
   const[e,setE]=useState(init);const s=(k,v)=>setE(d=>({...d,[k]:v}));
   const _initStr=useRef(JSON.stringify(init));
