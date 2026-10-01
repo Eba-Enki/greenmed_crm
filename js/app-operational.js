@@ -188,7 +188,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const mkSalesInvoice=(q)=>{
     const num=docNum('si');
     const remaining=getQuoteRemainingItems(q);
-    return{id:null,number:num,quoteId:q.id,quoteNum:q.number,date:td(),dueDate:td(),terms:'Due on Receipt',currency:q.currency||'GBP',status:'draft',project:q.project||'',projectNumber:q.projectNumber||'',client:{...q.client},shipToEnabled:q.shipToEnabled||false,shipTo:q.shipTo?{...q.shipTo}:{company:'',contact:'',email:'',phone:'',address:''},items:remaining.map(it=>({id:uid(),quoteItemId:it.id,item:it.item,desc:it.desc,unit:it.unit,price:it.price,qty:String(it.remainingQty),maxQty:it.remainingQty})),notes:q.notes||''};
+    return{id:null,number:num,quoteId:q.id,quoteNum:q.number,date:td(),dueDate:td(),terms:'Due on Receipt',currency:q.currency||'GBP',bankId:q.bankId||'',status:'draft',project:q.project||'',projectNumber:q.projectNumber||'',client:{...q.client},shipToEnabled:q.shipToEnabled||false,shipTo:q.shipTo?{...q.shipTo}:{company:'',contact:'',email:'',phone:'',address:''},items:remaining.map(it=>({id:uid(),quoteItemId:it.id,item:it.item,desc:it.desc,unit:it.unit,price:it.price,qty:String(it.remainingQty),maxQty:it.remainingQty})),notes:q.notes||''};
   };
   const assignInvoiceNumber=(si)=>{
     return isAutoNum('si',si.number)?{...si,number:docNum('si')}:si;
@@ -432,7 +432,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         if(quickView.status==='sent')extraActions.push({label:'Approve',onClick:()=>{handleApproveQuote(quickView);setQuickView(null);}});
         if(['sent','approved','locked'].includes(quickView.status))extraActions.push({label:'Revise',onClick:()=>{setQuickView(null);handleNewRevision(quickView);}});
         if(quickView.status==='approved'&&remaining.length>0)extraActions.push({label:'Create Invoice',onClick:()=>{setQuickView(null);setCur(mkSalesInvoice(quickView));go('sales_invoice_form');}});
-        return(<DocQuickModal doc={quickView} co={co} docType="sales_quote" onClose={()=>setQuickView(null)}
+        return(<DocQuickModal doc={quickView} co={co} docType="sales_quote" pdfOpts={FULL_BANK} onClose={()=>setQuickView(null)}
           onEdit={quickView.status==='draft'?()=>{setQuickView(null);setCur(quickView);go('sales_quote_form');}:null}
           onDelete={()=>askConfirm('Delete this quotation?',()=>{deleteSQ(quickView.id);showToast('Deleted');setQuickView(null);})}
           extraActions={extraActions}/>);
@@ -598,7 +598,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </h2>
         <div style={{flex:1}}/>
         <Btn v="bgh bsm" onClick={()=>{setCur({...savedQ});go('sales_quote_preview','sales_quote_form')}}><Ico n="eye"/>Preview</Btn>
-        <Btn v="bgh bsm" onClick={()=>savePDF(savedQ,co,'sales_quote')}><Ico n="dl"/>PDF</Btn>
+        <Btn v="bgh bsm" onClick={()=>savePDF(savedQ,co,'sales_quote',FULL_BANK)}><Ico n="dl"/>PDF</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedQ)}>Save Quotation</Btn>
       </div>
       <div className={`fc fc-collapsible ${collapsed.details?'fc-collapsed':''}`}>
@@ -615,7 +615,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>
         <div className="fg g2" style={{marginTop:12}}>
           <Fld label="Project"><select value={q.project||''} onChange={e=>{const projName=e.target.value;const proj=projects.find(p=>p.name===projName);set('project',projName);if(proj)set('projectNumber',proj.number);else set('projectNumber','');}} className="fi" disabled={isLocked}><option value="">— None —</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
-          <div/>
+          <BankSelect doc={q} banks={co.banks} onChange={v=>set('bankId',v)} disabled={isLocked}/>
         </div>
         </div>
       </div>
@@ -805,7 +805,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{inv.id?'Edit':'New'} Sales Invoice — <span style={{fontFamily:'Inter',fontWeight:600,color:'var(--gm-500)'}}>{inv.number}</span></h2>
         <div style={{flex:1}}/>
-        <Btn v="bgh bsm" onClick={()=>savePDF(savedInv,co,'invoice')}><Ico n="dl"/>PDF</Btn>
+        <Btn v="bgh bsm" onClick={()=>savePDF(savedInv,co,'invoice',FULL_BANK)}><Ico n="dl"/>PDF</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedInv)}>Save Invoice</Btn>
       </div>
       {inv.quoteNum&&<div style={{background:'var(--bluel)',border:'1px solid #bfdbfe',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--blue)',display:'flex',alignItems:'center',gap:8}}><Ico n="quote"/>From Quotation: <strong>{inv.quoteNum}</strong></div>}
@@ -816,9 +816,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <Fld label="Due Date"><input type="date" value={inv.dueDate||''} onChange={e=>set('dueDate',e.target.value)} className="fi"/></Fld>
           <Fld label="Terms"><select value={inv.terms||'Due on Receipt'} onChange={e=>set('terms',e.target.value)} className="fi">{ITRM.map(t=><option key={t} value={t}>{t}</option>)}</select></Fld>
         </div>
-        <div className="fg g2" style={{marginTop:12}}>
+        <div className="fg g3" style={{marginTop:12}}>
           <Fld label="Currency"><select value={inv.currency||'GBP'} onChange={e=>set('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
           <Fld label="Status"><select value={inv.status||'draft'} onChange={e=>set('status',e.target.value)} className="fi"><option value="draft">Draft</option><option value="sent">Sent</option></select></Fld>
+          <BankSelect doc={inv} banks={co.banks} onChange={v=>set('bankId',v)}/>
         </div>
       </div>
       <div className="fc"><div className="fct">Bill To</div>
@@ -957,7 +958,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           ))}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
-      {quickView&&<DocQuickModal doc={quickView} co={co} docType="invoice" onClose={()=>setQuickView(null)}
+      {quickView&&<DocQuickModal doc={quickView} co={co} docType="invoice" pdfOpts={FULL_BANK} onClose={()=>setQuickView(null)}
         onEdit={()=>{const openEdit=()=>{setQuickView(null);setCur(quickView);go('sales_invoice_edit');};if(quickView.status==='sent'){askConfirm('This invoice has been marked as sent. Edit anyway?',openEdit);}else{openEdit();}}}
         onDelete={()=>askConfirm('Delete this invoice?',()=>{sSI(salesInvoices.filter(x=>x.id!==quickView.id));showToast('Deleted');setQuickView(null);})}
         extraActions={[]}/>}
@@ -2162,8 +2163,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {view==='exp_import'&&<ExpenseImportView/>}
         {view==='cust_form'&&cur&&<CustomerForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('customers')}/>}
         {/* PREVIEWS */}
-        {view==='sales_quote_preview'&&cur&&<Preview doc={cur} co={co} docType="sales_quote" onBack={()=>go(prev)} onEdit={()=>{go('sales_quote_form','sales_quote_preview');}}/>}
-        {view==='sales_invoice_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" onBack={()=>go(prev)}/>}
+        {view==='sales_quote_preview'&&cur&&<Preview doc={cur} co={co} docType="sales_quote" pdfOpts={FULL_BANK} onBack={()=>go(prev)} onEdit={()=>{go('sales_quote_form','sales_quote_preview');}}/>}
+        {view==='sales_invoice_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" pdfOpts={FULL_BANK} onBack={()=>go(prev)}/>}
         {view==='pq_preview'&&cur&&<Preview doc={cur} co={co} docType="quote" onBack={()=>go('purchase_quotes')}/>}
         {view==='po_preview'&&cur&&<Preview doc={cur} co={co} docType="po" onBack={()=>go('purchase_orders')}/>}
         {view==='ri_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" onBack={()=>go('received_invoices')}/>}
@@ -2187,6 +2188,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 // remounting it; a nested version would reset its local state (and "Save & New"'s fresh blank
 // row) on every save, since AppOperational recreating a nested function component each render
 // gives React a new component identity to mount.
+// Sales quotations and invoices print the full bank block on their PDF
+const FULL_BANK={fullBank:true};
+// Picks which of the company's accounts in the document's currency is printed on the PDF (stored as doc.bankId)
+function BankSelect({doc,banks,onChange,disabled}){
+  const cur=doc.currency||'GBP';
+  const same=(banks||[]).filter(b=>(b.currency||'GBP')===cur);
+  const sel=docBank(doc,{banks});
+  const label=b=>[b.accountName||'Account',b.bankName,b.accountNumber].filter(Boolean).join(' · ');
+  return(<Fld label="Bank Account (PDF)">{same.length?
+    <select value={sel.id||''} onChange={e=>onChange(e.target.value)} className="fi" disabled={disabled}>{same.map(b=><option key={b.id} value={b.id}>{label(b)}</option>)}</select>:
+    <input className="fi" readOnly value={sel.id?`No ${cur} account — ${label(sel)} (${sel.currency||'GBP'}) will be used`:'No bank accounts in Settings'}/>}
+  </Fld>);
+}
 // One linked-documents table on the project detail page; cols: {k,l,get,show,strong}
 function ProjDocTable({title,items,cols,w}){
   const{sort,onSort}=useSort();

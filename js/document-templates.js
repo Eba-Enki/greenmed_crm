@@ -36,7 +36,17 @@ const svgToPngDataUrl=(svgDataUrl,wmm,hmm,dpi=600)=>new Promise((resolve,reject)
 });
 
 // Standard Template Builder (jsPDF Vectorial with Arial Font)
-const buildStandardPDF=async(doc,co,type)=>{
+// Bank printed on Sales & Procurement quotations/invoices: the account picked on the document (if it is in the
+// document's currency), else the default — or first — account in that currency, else the overall default account
+const docBank=(doc,co)=>{
+  const banks=(co&&co.banks)||[];
+  const cur=doc.currency||'GBP';
+  const same=banks.filter(b=>(b.currency||'GBP')===cur);
+  return same.find(b=>b.id===doc.bankId)||same.find(b=>b.isDefault)||same[0]||banks.find(b=>b.isDefault)||banks[0]||{};
+};
+
+// opts.fullBank: print the full bank block (account name, number, IBAN, SWIFT/BIC, currency, bank name and address)
+const buildStandardPDF=async(doc,co,type,opts={})=>{
   const {jsPDF}=window.jspdf;
   const pdf=new jsPDF({
     orientation:'portrait',
@@ -360,12 +370,32 @@ const buildStandardPDF=async(doc,co,type)=>{
     // Bank Details
     pdf.setFont('Arial','normal');
     pdf.setFontSize(8);
-    pdf.text('Account Number: '+(defaultBank.accountNumber||''),13.651,bankY+2.5);
-    pdf.text('IBAN: '+(defaultBank.iban||''),13.651,bankY+3.267+2.5);
-    pdf.text('BIC: '+(defaultBank.bic||''),13.651,bankY+6.533+2.5);
-    
+    let line6Y=bankY+12;
+    if(opts.fullBank){
+      // Two columns: account details on the left, currency and bank on the right (long values wrap)
+      const b=docBank(doc,co);
+      const lh=3.267;
+      const col=(rows,lx,vx,w)=>{
+        let y=bankY+2.5;
+        rows.forEach(([label,val])=>{
+          // Colon in its own column like the Bill To block; wrapped lines align under the value
+          pdf.setFont('Arial','bold');pdf.text(label,lx,y);
+          pdf.setFont('Arial','normal');pdf.text(':',vx,y);
+          const lines=val?pdf.splitTextToSize(fixText(val),w):[''];
+          lines.forEach(t=>{pdf.text(t,vx+2,y);y+=lh;});
+        });
+        return y;
+      };
+      const endL=col([['Account Name',b.accountName||co.name||''],['Account No',b.accountNumber||''],['IBAN',b.iban||''],['SWIFT/BIC',b.bic||'']],13.651,35,65);
+      const endR=col([['Currency',b.currency||doc.currency||'GBP'],['Bank Name',b.bankName||''],['Bank Address',b.bankAddress||'']],108,128.5,64);
+      line6Y=Math.max(endL,endR)-lh+3;
+    }else{
+      pdf.text('Account Number: '+(defaultBank.accountNumber||''),13.651,bankY+2.5);
+      pdf.text('IBAN: '+(defaultBank.iban||''),13.651,bankY+3.267+2.5);
+      pdf.text('BIC: '+(defaultBank.bic||''),13.651,bankY+6.533+2.5);
+    }
+
     // Horizontal Line 6 (dynamically positioned after bank details)
-    const line6Y=bankY+12;
     pdf.line(12.025,line6Y,198.025,line6Y);
   }
   
@@ -394,9 +424,9 @@ const buildStandardPDF=async(doc,co,type)=>{
   return pdf;
 };
 
-const savePDF=async(doc,co,type='invoice')=>{
+const savePDF=async(doc,co,type='invoice',opts)=>{
   try{
-    const pdf=await buildStandardPDF(doc,co,type);
+    const pdf=await buildStandardPDF(doc,co,type,opts);
     const filename=`${type}_${doc.number||'draft'}_${td()}.pdf`;
     pdf.save(filename);
   }catch(e){
@@ -785,14 +815,14 @@ function DocSummaryBody({doc,co,docType}){
   );
 }
 
-function Preview({doc,co,docType,onBack,onEdit}){
+function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
   return(
     <div>
       <div className="pvbar no-print">
         <button className="pvbtn" onClick={onBack}><Ico n="back"/>Back</button>
         {onEdit&&<button className="pvbtn" onClick={onEdit}><Ico n="edit"/>Edit</button>}
         <div style={{flex:1}}/>
-        <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType)}><Ico n="dl"/>Save PDF</button>
+        <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>Save PDF</button>
       </div>
       <div className="pv2-outer">
         <DocSummaryBody doc={doc} co={co} docType={docType}/>
@@ -801,7 +831,7 @@ function Preview({doc,co,docType,onBack,onEdit}){
   );
 }
 
-function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions}){
+function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfOpts}){
   const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
   const statusClass=statusMap[doc.status]||'b-draft';
   const statusLabel=doc.status?(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' ')):'Draft';
@@ -823,7 +853,7 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions}){
           <Btn v="bgh bsm" onClick={onClose}>Close</Btn>
           {onEdit&&<Btn v="bgh bsm" onClick={onEdit}>Edit</Btn>}
           {(extraActions||[]).map((a,i)=><Btn key={i} v="bgh bsm" onClick={a.onClick}>{a.label}</Btn>)}
-          <Btn v="bp bsm" onClick={()=>savePDF(doc,co,docType)}><Ico n="dl"/>Download PDF</Btn>
+          <Btn v="bp bsm" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>Download PDF</Btn>
         </div>
       </div>
     </div>
