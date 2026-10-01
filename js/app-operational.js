@@ -803,7 +803,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
-        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>New Sales Invoice — <span style={{fontFamily:'Inter',fontWeight:600,color:'var(--gm-500)'}}>{inv.number}</span></h2>
+        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{inv.id?'Edit':'New'} Sales Invoice — <span style={{fontFamily:'Inter',fontWeight:600,color:'var(--gm-500)'}}>{inv.number}</span></h2>
         <div style={{flex:1}}/>
         <Btn v="bgh bsm" onClick={()=>savePDF(savedInv,co,'invoice')}><Ico n="dl"/>PDF</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedInv)}>Save Invoice</Btn>
@@ -861,6 +861,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <button className="bbgh bsm" onClick={()=>{set('shipToEnabled',false);set('shipTo.company','');set('shipTo.contact','');set('shipTo.email','');set('shipTo.phone','');set('shipTo.address','');}} style={{fontSize:12,color:'var(--red)'}}><Ico n="x"/>Remove Ship To</button>
         </div>
       </div>}
+      {/* Invoices raised directly (no quotation) get the free line editor; quote invoices only adjust qty/price */}
+      {!inv.quoteId?<div className="fc"><div className="fct">Line Items</div>
+        <ItemsEditor items={items} setItems={setItems} currency={inv.currency||'GBP'}/>
+      </div>:
       <div className="fc"><div className="fct">Line Items (from Quotation)</div>
         <div className="iw"><table className="ie">
           <thead><tr><th>Item</th><th>Description</th><th>Available Qty</th><th style={{textAlign:'right'}}>Invoice Qty</th><th>Unit</th><th style={{textAlign:'right'}}>Unit Price</th><th style={{textAlign:'right'}}>Total</th></tr></thead>
@@ -881,7 +885,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <div style={{display:'flex',justifyContent:'flex-end'}}>
           <div className="totbox"><span className="totlbl">Total</span><span className="totamt">{sym}{fmt(dt(items))}</span></div>
         </div>
-      </div>
+      </div>}
       <div className="fc"><div className="fct">Notes</div>
         <Fld label="Notes"><textarea value={inv.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi"/></Fld>
         <div style={{marginTop:12}}>
@@ -2146,7 +2150,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {view==='settings'&&<OpsSettings/>}
         {/* FORMS */}
         {view==='sales_quote_form'&&cur&&<SalesQuoteForm quote={cur} onSave={handleSaveSQ} onCancel={()=>go('sales_quotes')}/>}
-        {view==='sales_invoice_form'&&cur&&<SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go('sales_quotes')}/>}
+        {view==='sales_invoice_form'&&cur&&<SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go(cur.quoteId?'sales_quotes':'sales_invoices')}/>}
         {view==='sales_invoice_edit'&&cur&&<SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go('sales_invoices')}/>}
         {view==='pq_form'&&cur&&<ProcurementForm doc={cur} docType="pq" onSave={handleSavePQ} onCancel={()=>go('purchase_quotes')}/>}
         {view==='po_form'&&cur&&<ProcurementForm doc={cur} docType="po" onSave={handleSavePO} onCancel={()=>go('purchase_orders')}/>}
