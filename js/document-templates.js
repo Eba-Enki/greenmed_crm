@@ -77,11 +77,14 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   const billEmail=(isPO||isPQ)?(doc.supplierEmail||''):((doc.client&&doc.client.email)||'');
   const billAddr=(isPO||isPQ)?(doc.supplierAddress||''):((doc.client&&doc.client.address)||'');
   
-  const hasShipTo=((doc.shipToEnabled||doc.shipTo)&&!isPO)||isPQ||isPO; // Enable Ship To for PQ and PO
-  const shipCompany=hasShipTo?((doc.shipTo&&doc.shipTo.company)||''):'';
-  const shipContact=hasShipTo?((doc.shipTo&&doc.shipTo.contact)||''):'';
-  const shipEmail=hasShipTo?((doc.shipTo&&doc.shipTo.email)||''):'';
-  const shipAddr=hasShipTo?((doc.shipTo&&doc.shipTo.address)||''):'';
+  const ship=doc.shipTo||{};
+  const shipCompany=ship.company||'';
+  const shipContact=ship.contact||'';
+  const shipEmail=ship.email||'';
+  const shipAddr=ship.address||'';
+  // Ship To is printed only when something was filled in; otherwise the rest of the page moves up into its space
+  const hasShipTo=[shipCompany,shipContact,shipEmail,shipAddr].some(v=>String(v).trim());
+  const yo=hasShipTo?0:67.5-88.447;
   
   const defaultBank=(co.banks||[]).find(b=>b.isDefault)||(co.banks||[])[0]||{};
   const addrLines=(co.address||'').split('\n');
@@ -194,25 +197,25 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   }
   
   // Horizontal Line 2
-  pdf.line(12.025,88.447,198.025,88.447);
+  pdf.line(12.025,88.447+yo,198.025,88.447+yo);
   
   // Project No & Terms
   pdf.setFont('Arial','bold');
-  pdf.text('Project No',16.031,90.217+2.5);
+  pdf.text('Project No',16.031,90.217+yo+2.5);
   pdf.setFont('Arial','normal');
-  pdf.text(': '+fixText(doc.projectNumber||''),42.948,90.217+2.5);
+  pdf.text(': '+fixText(doc.projectNumber||''),42.948,90.217+yo+2.5);
   
   pdf.setFont('Arial','bold');
-  pdf.text('Terms',96,90.217+2.5);
+  pdf.text('Terms',96,90.217+yo+2.5);
   pdf.setFont('Arial','normal');
-  pdf.text(': '+fixText(doc.terms||''),122,90.217+2.5);
+  pdf.text(': '+fixText(doc.terms||''),122,90.217+yo+2.5);
   
   // Horizontal Line 3
-  pdf.line(12.025,94.971,198.025,94.971);
+  pdf.line(12.025,94.971+yo,198.025,94.971+yo);
   
   // Table
   const tableX=12.025;
-  const tableY=95.538;
+  const tableY=95.538+yo;
   const tableW=186;
   const headerH=5.421;
   const rowH=4.854;
@@ -254,8 +257,34 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     {x:currentX+50.045,w:24.394,align:'right',label:'Amount'}
   );
   
+  // Cell text per row: left-aligned columns (item, description, brand…) wrap onto extra lines instead of
+  // being cut off, and each row grows to fit its tallest cell
+  const lineH=3.3;
+  pdf.setFont('Arial','normal');
+  pdf.setFontSize(8);
+  const rows=(doc.items||[]).map((it,i)=>{
+    const data=[
+      String(i+1),
+      fixText(it.item||''),
+      fixText(it.desc||''),
+    ];
+    if(hasBrand)data.push(fixText(it.brand||''));
+    if(hasModel)data.push(fixText(it.model||''));
+    if(hasCategory)data.push(fixText(it.category||''));
+    data.push(
+      fmt(+(it.qty||0)),
+      fixText(it.unit||''),
+      fmt(+(it.price||0)),
+      fmt(lt(it))
+    );
+    const cells=cols.map((col,j)=>col.align==='left'?pdf.splitTextToSize(data[j],col.w-4):[data[j]]);
+    const n=Math.max(...cells.map(c=>c.length));
+    return{cells,h:Math.max(rowH,rowH+(n-1)*lineH)};
+  });
+  const bodyH=rows.reduce((s,r)=>s+r.h,0);
+
   // Table border
-  pdf.rect(tableX,tableY,tableW,headerH+(doc.items||[]).length*rowH);
+  pdf.rect(tableX,tableY,tableW,headerH+bodyH);
   
   // Header row
   pdf.setFont('Arial','bold');
@@ -275,56 +304,28 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   
   // Data rows
   pdf.setFont('Arial','normal');
-  (doc.items||[]).forEach((it,i)=>{
-    const y=tableY+headerH+(i*rowH);
-    
+  let y=tableY+headerH;
+  rows.forEach(({cells,h})=>{
     // Row horizontal line
-    pdf.line(tableX,y+rowH,tableX+tableW,y+rowH);
-    
+    pdf.line(tableX,y+h,tableX+tableW,y+h);
+
     // Row vertical lines
     cols.forEach((col,j)=>{
       if(j<cols.length-1){
-        pdf.line(tableX+col.x+col.w,y,tableX+col.x+col.w,y+rowH);
+        pdf.line(tableX+col.x+col.w,y,tableX+col.x+col.w,y+h);
       }
     });
-    
-    // Cell data
-    const data=[
-      String(i+1),
-      fixText(it.item||''),
-      fixText(it.desc||''),
-    ];
-    if(hasBrand)data.push(fixText(it.brand||''));
-    if(hasModel)data.push(fixText(it.model||''));
-    if(hasCategory)data.push(fixText(it.category||''));
-    data.push(
-      fmt(+(it.qty||0)),
-      fixText(it.unit||''),
-      fmt(+(it.price||0)),
-      fmt(lt(it))
-    );
-    
+
+    // Cell text, top-aligned; wrapped lines continue below the first
     cols.forEach((col,j)=>{
       const textX=tableX+col.x+(col.align==='center'?col.w/2:col.align==='right'?col.w-3:2);
-      const txt=data[j];
-      
-      // Smart truncation based on column width and alignment
-      if(col.align==='left'){
-        // For left-aligned text, estimate max chars that fit (1 char ≈ 1.5mm for Arial 8pt)
-        const maxChars=Math.floor(col.w/1.5)-1;
-        if(txt.length>maxChars){
-          pdf.text(txt.substring(0,maxChars-2)+'...',textX,y+rowH/2+1);
-        }else{
-          pdf.text(txt,textX,y+rowH/2+1,{align:col.align});
-        }
-      }else{
-        pdf.text(txt,textX,y+rowH/2+1,{align:col.align});
-      }
+      cells[j].forEach((t,k)=>pdf.text(t,textX,y+rowH/2+1+k*lineH,{align:col.align}));
     });
+    y+=h;
   });
-  
+
   // Notes & Totals
-  const lastRowY=tableY+headerH+((doc.items||[]).length*rowH);
+  const lastRowY=tableY+headerH+bodyH;
   const notesY=lastRowY+3;
   
   pdf.setFont('Arial','bold');
