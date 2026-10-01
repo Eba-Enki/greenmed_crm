@@ -123,11 +123,25 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     if(refs.some(r=>r.type==='invoice'))si(upd(inv,'invoice','sent'));
     if(refs.some(r=>r.type==='received'))sr(upd(rec,'received','pending'));
   };
-  const handleSaveBankTx=(tx)=>{
-    const fresh=!tx.id;
-    const saved=fresh?{...tx,id:uid()}:tx;
-    const prevTx=fresh?null:bankTx.find(t=>t.id===tx.id);
-    const next=fresh?[...bankTx,saved]:bankTx.map(t=>t.id===saved.id?saved:t);
+  // A cross-currency payment (tx.xpay) is one figure on the statement (xpay.total). The bank fee is split
+  // into its own expense row (xpayLeg 'fee'), the payment row (xpayLeg 'pay') carries the rest; together
+  // they still net to the statement figure. Out: £1,287.09 = £1,265.50 payment + £21.59 fee.
+  const handleSaveBankTx=(txIn)=>{
+    const fresh=!txIn.id;
+    const{xpayLeg,...base}=txIn;
+    const saved=fresh?{...base,id:uid()}:base;
+    const prevTx=fresh?null:bankTx.find(t=>t.id===saved.id);
+    const prevFee=prevTx&&prevTx.xpay?bankTx.find(t=>t.xpayLeg==='fee'&&t.xpay&&t.xpay.id===prevTx.xpay.id):null;
+    const legs=[saved];
+    if(saved.xpay){
+      const x=saved.xpay;
+      const accC=((co.banks||[]).find(b=>b.id===saved.accountId)||{}).currency||'GBP';
+      saved.amount=r2(saved.type==='out'?x.total-x.fee:x.total+x.fee);saved.xpayLeg='pay';
+      if(x.fee)legs.push({id:(prevFee&&prevFee.id)||uid(),accountId:saved.accountId,date:saved.date,kind:'expense',type:'out',amount:x.fee,category:x.feeCategory,
+        description:`Payment fee · ${saved.type==='out'?accC+' → '+x.currency:x.currency+' → '+accC}${saved.contactName?' · '+saved.contactName:''}`,reference:saved.reference||'',contactId:'',contactName:'',linkedDoc:null,allocations:[],xpay:x,xpayLeg:'fee'});
+    }else delete saved.xpay;
+    const drop=new Set([saved.id,prevFee&&prevFee.id].filter(Boolean));
+    const next=[...bankTx.filter(t=>!drop.has(t.id)),...legs];
     sBankTx(next);
     syncDocStatuses(next,[...(prevTx?txAllocs(prevTx):[]),...txAllocs(saved)]);
     showToast('Saved ✓');
@@ -139,6 +153,13 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
       if(!confirm('Delete this currency exchange? It is removed from both accounts.'))return;
       sBankTx(bankTx.filter(x=>!(x.fx&&x.fx.id===t.fx.id)));
       showToast('Deleted');
+      return;
+    }
+    if(t.xpay){
+      if(!confirm('Delete this payment? Its fee row is removed too.'))return;
+      const pay=bankTx.find(x=>x.xpay&&x.xpay.id===t.xpay.id&&x.xpayLeg==='pay');
+      const next=bankTx.filter(x=>!(x.xpay&&x.xpay.id===t.xpay.id));
+      sBankTx(next);syncDocStatuses(next,pay?txAllocs(pay):[]);showToast('Deleted');
       return;
     }
     if(!confirm('Delete this transaction?'))return;
@@ -173,6 +194,12 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     sBankTx([...bankTx.filter(t=>!(t.fx&&t.fx.id===fx.id)),...legs]);
     showToast('Exchange saved');
     go(prev);
+  };
+  // Rows of linked groups open the form of the whole group
+  const editTx=t=>{
+    if(t.fx){setCur(fxFormState(t));go('off_fx_form');return;}
+    if(t.xpayLeg==='fee'){const pay=bankTx.find(x=>x.xpay&&x.xpay.id===t.xpay.id&&x.xpayLeg==='pay');if(pay){setCur(pay);go('off_banktx_form');}return;}
+    setCur(t);go('off_banktx_form');
   };
   const fxFormState=t=>({id:t.fx.id,date:t.date,fromAccountId:t.fx.fromAccountId,toAccountId:t.fx.toAccountId,
     sold:String(t.fx.sold),rate:String(t.fx.rate),fee:t.fx.fee?String(t.fx.fee):'',feeCategory:t.fx.feeCategory||'',received:String(t.fx.received),
@@ -425,7 +452,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(`Delete "${p.name}"?`))return;spr(projects.filter(d=>d.id!==p.id));showToast('Deleted');}}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
-        {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{const{account,...raw}=t;if(raw.fx){setCur(fxFormState(raw));go('off_fx_form');}else{setCur(raw);go('off_banktx_form');}}} onDelete={handleDeleteBankTx}/>}
+        {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{const{account,...raw}=t;editTx(raw);}} onDelete={handleDeleteBankTx}/>}
         {view==='off_form'&&cur&&<SimpleDocForm doc={cur} onSave={d=>{handleSave({...d,type:cur.type});}} onCancel={()=>go(prev)} onPreview={d=>{setCur(d);go('off_preview','off_form');}}/>}
         {view==='off_preview'&&cur&&<Preview doc={cur} co={co} docType={cur.type} onBack={()=>go(prev)} onEdit={()=>go('off_form','off_preview')}/>}
         {view==='off_custform'&&cur&&<OffCustForm cust={cur} customers={customers} onSave={handleSaveCust} onCancel={()=>go('off_customers')} dirtyRef={dirtyCheckRef}/>}
@@ -433,7 +460,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_bank'&&<OffBankAccounts banks={co.banks||[]} accountBalance={accountBalance} onOpen={b=>{setSelectedBankId(b.id);go('off_bank_detail');}} onEdit={b=>setEditingBank(b)} onDelete={deleteBank} onSetDefault={setDefaultBank}/>}
         {view==='off_bank_detail'&&selectedBank&&<OffBankLedger account={selectedBank} banks={co.banks||[]} transactions={bankTxForAccount} onBack={()=>go('off_bank')} onNew={()=>{setCur({id:null,accountId:selectedBank.id,date:td(),type:'in',amount:'',category:'',description:'',reference:'',linkedDoc:null});go('off_banktx_form');}}
           onExchange={()=>{setCur({id:null,date:td(),fromAccountId:selectedBank.id,toAccountId:((co.banks||[]).find(b=>b.id!==selectedBank.id)||{}).id||'',sold:'',rate:'',fee:'',feeCategory:'',received:'',reference:'',description:''});go('off_fx_form');}}
-          onEdit={t=>{if(t.fx){setCur(fxFormState(t));go('off_fx_form');}else{setCur(t);go('off_banktx_form');}}} onDelete={handleDeleteBankTx}/>}
+          onEdit={editTx} onDelete={handleDeleteBankTx}/>}
         {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} bankTx={bankTx} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='settings'&&<OffSettings ns={ns} co={co} go={go} onAutoNumberChange={v=>{const newCo={...co,autoNumber:v};setCo(newCo);LS.set(ns+'co',newCo);showToast(v?'Automatic numbering on':'Automatic numbering off — type numbers by hand');}} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast('Saved ✓');go('home');}} onClose={()=>go('home')}/>}
@@ -481,15 +508,16 @@ const contactLedger=(c,{inv,rec,bankTx,banks})=>{
   sales.filter(d=>d.status!=='draft'&&d.status!=='cancelled').forEach(d=>entries.push({id:'d'+d.id,date:d.date||'',kind:'invoice',ref:d.number,desc:'Sales invoice',cur:d.currency||'GBP',amount:docTotal(d),doc:d}));
   bills.filter(d=>d.status!=='cancelled').forEach(d=>entries.push({id:'d'+d.id,date:d.date||'',kind:'bill',ref:d.number,desc:'Received invoice',cur:d.currency||'GBP',amount:-docTotal(d),doc:d}));
   bankTx.forEach(t=>{
-    if(t.fx)return;
+    if(t.fx||t.xpayLeg==='fee')return;
     let amt;
-    if(t.contactId===c.id)amt=+t.amount;
+    if(t.contactId===c.id)amt=t.xpay?+t.xpay.amount:+t.amount;
     // older payments without a contact still count for the documents they settle
     else if(!t.contactId)amt=txAllocs(t).filter(a=>own.has(docKey(a.type,a.id))).reduce((s,a)=>s+(+a.amount||0),0);
     if(!amt)return;
     const al=txAllocs(t);
     entries.push({id:'t'+t.id,date:t.date||'',kind:t.type==='in'?'in':'out',ref:al.map(a=>a.number).filter(Boolean).join(', ')||t.reference||'',
-      desc:t.description||(t.type==='in'?'Payment received':'Payment made'),cur:accCur(t.accountId),amount:t.type==='in'?-amt:amt,tx:t});
+      desc:(t.description||(t.type==='in'?'Payment received':'Payment made'))+(t.xpay?` · ${curFmt(accCur(t.accountId),t.xpay.total)} via ${accCur(t.accountId)} account`:''),
+      cur:t.xpay?t.xpay.currency:accCur(t.accountId),amount:t.type==='in'?-amt:amt,tx:t});
   });
   entries.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0);
   const byCur={};
@@ -1144,6 +1172,10 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
   // The other side of an exchange, shown under the amount like a bank statement does
   const fxCounter=t=>t.type==='out'?`${CURR[t.fx.toCurrency]||''}${fmt(+t.fx.received)}`:`${CURR[t.fx.fromCurrency]||''}${fmt(+t.fx.sold)}`;
   const fxOther=t=>(banks||[]).find(b=>b.id===(t.type==='out'?t.fx.toAccountId:t.fx.fromAccountId));
+  // Cross-currency payment row: rate/fee line and the amount in the contact's currency, as on the statement
+  const isXpay=t=>t.xpay&&t.xpayLeg==='pay';
+  const xpayDetail=t=>`FX Rate ${account.currency||'GBP'} 1 = ${t.xpay.currency} ${fxRateStr(t.xpay.rate)}${t.xpay.fee?`, Fee: ${curSym}${fmt(t.xpay.fee)}`:''}`;
+  const xpayAmt=t=>`${CURR[t.xpay.currency]||''}${fmt(t.xpay.amount)}`;
 
   const filtered=withBalance.filter(t=>{
     if(q&&![fxTitle(t),t.reference,t.category,t.contactName].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
@@ -1156,7 +1188,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
   const curSym=CURR[account.currency]||'£';
 
   const linkLabel=t=>{
-    if(t.fxLeg==='fee')return 'FX fee';
+    if(t.fxLeg==='fee'||t.xpayLeg==='fee')return 'FX fee';
     if(t.fx){const o=fxOther(t);return `${t.type==='out'?'To':'From'} ${(o&&o.accountName)||t.fx[t.type==='out'?'toCurrency':'fromCurrency']}`;}
     const al=txAllocs(t);
     return al.length?al.map(x=>x.number).filter(Boolean).join(', ')||null:null; // document numbers alone are enough
@@ -1178,7 +1210,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
       <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
       <div style={{flex:1}}/>
       {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>In: {curSym}{fmt(totalIn)} · Out: {curSym}{fmt(totalOut)}</span>}
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Contact','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.contactName||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>Export</Btn>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Contact','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.contactName||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:isXpay(t)?`${t.description||''} (${xpayAmt(t)}; ${xpayDetail(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>Export</Btn>
     </div>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.2,2,1,1,0.9,0.9,0.9,0.6]}/>
@@ -1187,11 +1219,11 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
         <tr key={t.id}>
           <td style={{color:'var(--g500)',fontSize:12}}>{t.date||'—'}</td>
           <td style={{fontWeight:500,color:'var(--g800)'}}>{t.contactName||<span style={{color:'var(--g300)'}}>—</span>}</td>
-          <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{fxTitle(t)||'—'}{isFx(t)&&<div className="fx-sub">{fxDetail(t.fx)}</div>}</td>
+          <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{fxTitle(t)||'—'}{isFx(t)&&<div className="fx-sub">{fxDetail(t.fx)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayDetail(t)}</div>}</td>
           <td>{isFx(t)?<span className="fx-badge">FX</span>:t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
           <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
-          <td className="tar" style={{color:'var(--green)'}}>{t.type==='in'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}</>}</td>
-          <td className="tar" style={{color:'var(--red)'}}>{t.type==='out'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}</>}</td>
+          <td className="tar" style={{color:'var(--green)'}}>{t.type==='in'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayAmt(t)}</div>}</>}</td>
+          <td className="tar" style={{color:'var(--red)'}}>{t.type==='out'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayAmt(t)}</div>}</>}</td>
           <td className="tar" style={{fontWeight:600}}>{curSym}{fmt(t.balance)}</td>
           <td>{!t.isOpening&&<div className="aw"><button className="ab" onClick={()=>{const{balance,...raw}=t;onEdit(raw);}}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(t)}><Ico n="trash"/></button></div>}</td>
         </tr>
@@ -1207,8 +1239,19 @@ const txKindOf=t=>t.kind||(t.type==='out'&&t.category&&!t.linkedDoc&&!t.contactI
 const TX_CONTACT_ORDER={in:['customer','both','owner','supplier','employee','expense'],out:['supplier','both','employee','owner','customer','expense'],expense:['expense']};
 
 function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receivedInvoices,bankTx,onSave,onCancel,dirtyRef}){
-  const start=()=>({...init,kind:txKindOf(init),allocations:txAllocs(init),linkedDoc:null});
+  // Cross-currency payment (e.g. GBP account → supplier paid in USD) is entered as on the statement:
+  // amount the contact paid/received in their currency, FX rate (1 account currency = ? payment currency)
+  // and the bank fee in the account currency. Saved as tx.xpay (see handleSaveBankTx).
+  const defaultFeeCat=((cats||[]).find(c=>/bank\s*(fee|charge)/i.test(c.name||''))||{}).name||'';
+  const start=()=>{
+    const x=init.xpay;
+    return{...init,kind:txKindOf(init),allocations:txAllocs(init),linkedDoc:null,
+      payCur:x?x.currency:(account.currency||'GBP'),payAmount:x?String(x.amount):'',rate:x?String(x.rate):'',fee:x&&x.fee?String(x.fee):'',
+      feeCategory:(x&&x.feeCategory)||defaultFeeCat,amount:x?String(x.total):init.amount};
+  };
   const[t,setT]=useState(start);
+  // Payment-currency amount follows the ticked invoices until typed in
+  const[payTouched,setPayTouched]=useState(!!init.xpay);
   const s=(k,v)=>setT(d=>({...d,[k]:v}));
   // Amount follows the allocated total until it is typed in (always the case when editing)
   const[amountTouched,setAmountTouched]=useState(!!init.id||!!init.amount);
@@ -1227,6 +1270,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
     // Categories and documents differ between money in and money out
     if((d.kind==='in')!==(k==='in'))next.category='';
     if(k==='expense'||(d.kind==='in')!==(k==='in'))next.allocations=[];
+    if(k==='expense')next.payCur=account.currency||'GBP';
     if(k==='expense'&&d.contactId&&!(contacts.find(c=>c.id===d.contactId&&c.type==='expense'))){next.contactId='';next.contactName='';}
     return next;
   });
@@ -1242,27 +1286,38 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
   // Open documents of the chosen contact in this account's currency (drafts included: paying one issues it).
   // Older transactions without a contact only list the documents they already settle.
   const accCur=account.currency||'GBP';
+  const xmode=kind!=='expense'&&!!t.payCur&&t.payCur!==accCur;
+  const docCur=xmode?t.payCur:accCur;
+  // Account amount = payment ÷ rate, plus the fee going out (or minus it coming in)
+  const xcalc=v=>{const a=+v.payAmount,r=+v.rate,f=+(v.fee||0);if(!(a>0&&r>0))return null;return r2(v.kind==='out'?a/r+f:a/r-f);};
+  const sx=(k,v)=>setT(d=>{const n={...d,[k]:v};if(!amountTouched){const c=xcalc(n);n.amount=c!=null?c.toFixed(2):'';}return n;});
+  const setPayCur=c=>{setPayTouched(false);setT(d=>({...d,payCur:c,allocations:[],payAmount:'',rate:'',fee:'',amount:amountTouched?d.amount:''}));};
   const allocs=t.allocations||[];
   const allocOthers=allocatedByDoc(bankTx||[],init.id);
   const openDocs=!docType?[]:(docType==='invoice'?invoices:receivedInvoices).filter(d=>{
       const mine=allocs.some(x=>x.type===docType&&x.id===d.id);
       if(mine)return true;
-      if(!t.contactName||d.status==='cancelled'||(d.currency||'GBP')!==accCur)return false;
+      if(!t.contactName||d.status==='cancelled'||(d.currency||'GBP')!==docCur)return false;
       return docType==='invoice'?(d.client&&d.client.name)===t.contactName:d.supplier===t.contactName;
     }).map(d=>{const total=docTotal(d);const mine=allocs.find(x=>x.type===docType&&x.id===d.id);
       return{d,total,remaining:r2(total-(allocOthers[docKey(docType,d.id)]||0)),mine};})
     .filter(x=>x.mine||x.remaining>0.005).sort((x,y)=>(x.d.date||'')<(y.d.date||'')?-1:1);
   const allocTotal=r2(allocs.reduce((sum,x)=>sum+(+x.amount||0),0));
+  const payTarget=xmode?(+t.payAmount||0):(+t.amount||0);
+  const xc=xmode?xcalc(t):null;
   const applyAllocs=fn=>setT(d=>{
     const allocations=fn(d.allocations||[]);
     const n={...d,allocations};
-    if(!amountTouched)n.amount=allocations.length?String(r2(allocations.reduce((sum,x)=>sum+(+x.amount||0),0))):'';
+    const sum=allocations.length?String(r2(allocations.reduce((acc,x)=>acc+(+x.amount||0),0))):'';
+    if(xmode){if(!payTouched){n.payAmount=sum;if(!amountTouched){const c=xcalc(n);n.amount=c!=null?c.toFixed(2):'';}}}
+    else if(!amountTouched)n.amount=sum;
     return n;
   });
   const toggleDoc=o=>applyAllocs(list=>{
     if(list.some(x=>x.type===docType&&x.id===o.d.id))return list.filter(x=>!(x.type===docType&&x.id===o.d.id));
     // With an amount typed in, fill up to what is left of it; otherwise take the full outstanding
-    const left=amountTouched?r2((+t.amount||0)-list.reduce((sum,x)=>sum+(+x.amount||0),0)):o.remaining;
+    const base=xmode?(payTouched?(+t.payAmount||0):null):(amountTouched?(+t.amount||0):null);
+    const left=base==null?o.remaining:r2(base-list.reduce((sum,x)=>sum+(+x.amount||0),0));
     return[...list,{type:docType,id:o.d.id,number:o.d.number,amount:String(r2(Math.min(o.remaining,left>0.005?left:o.remaining)))}];
   });
   const setAllocAmt=(o,v)=>applyAllocs(list=>list.map(x=>x.type===docType&&x.id===o.d.id?{...x,amount:v}:x));
@@ -1272,14 +1327,20 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
     if(!(+t.amount>0)){alert('Enter an amount.');return;}
     if(isNew&&kind!=='expense'&&!t.contactId){alert(`Select who the money ${kind==='in'?'came from':'went to'}.`);return;}
     if(kind==='expense'&&!t.category){alert('Select an expense category.');return;}
-    for(const o of openDocs){if(o.mine&&(!(+o.mine.amount>0)||+o.mine.amount>o.remaining+0.005)){alert(`Amount for ${o.d.number} must be between 0 and its outstanding ${curFmt(accCur,o.remaining)}.`);return;}}
-    if(allocTotal>+t.amount+0.005){alert(`The invoices total ${curFmt(accCur,allocTotal)}, more than the payment of ${curFmt(accCur,+t.amount)}.`);return;}
+    if(xmode){
+      if(!(+t.payAmount>0)||!(+t.rate>0)||+(t.fee||0)<0){alert(`Enter the amount in ${t.payCur} and the FX rate (fee cannot be negative).`);return;}
+      if(+(t.fee||0)>0&&!t.feeCategory){alert('Select an expense category for the fee.');return;}
+    }
+    for(const o of openDocs){if(o.mine&&(!(+o.mine.amount>0)||+o.mine.amount>o.remaining+0.005)){alert(`Amount for ${o.d.number} must be between 0 and its outstanding ${curFmt(docCur,o.remaining)}.`);return;}}
+    if(allocTotal>payTarget+0.005){alert(`The invoices total ${curFmt(docCur,allocTotal)}, more than the payment of ${curFmt(docCur,payTarget)}.`);return;}
     if(account.openingBalanceDate&&t.date<account.openingBalanceDate){
       alert(`This transaction is dated before the account's Opening Balance date (${account.openingBalanceDate}). Pick a later date.`);
       return;
     }
     const allocations=kind==='expense'?[]:allocs.map(x=>({...x,amount:r2(+x.amount)}));
-    onSave({...t,type:kind==='in'?'in':'out',allocations,linkedDoc:null,description:toSentenceCase(t.description)});
+    const{payCur,payAmount,rate,fee,feeCategory,...rest}=t;
+    const xpay=xmode?{id:(init.xpay&&init.xpay.id)||uid(),currency:payCur,amount:r2(+payAmount),rate:+rate,fee:r2(+fee||0),feeCategory:+fee>0?feeCategory:'',total:r2(+t.amount)}:null;
+    onSave({...rest,type:kind==='in'?'in':'out',allocations,linkedDoc:null,xpay,description:toSentenceCase(t.description)});
   };
 
   const kinds=[['in','Money In','Payment received from a contact'],['out','Money Out','Payment made to a contact'],['expense','Expense','A cost booked to an expense category']];
@@ -1303,7 +1364,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
     <div className="fc"><div className="fct">Details</div>
       <div className="fg g3">
         <Fld label="Date"><input type="date" value={t.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
-        <Fld label={`Amount (${account.currency||'GBP'})`}><input type="number" value={t.amount||''} onChange={x=>{setAmountTouched(true);s('amount',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+        <Fld label={xmode?`Amount ${kind==='out'?'Out of':'Into'} Account (${accCur})`:`Amount (${accCur})`}><input type="number" value={t.amount||''} onChange={x=>{setAmountTouched(true);s('amount',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
         <Fld label="Reference"><input value={t.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Ref No"/></Fld>
       </div>
       <div className="fg g2" style={{marginTop:12}}>
@@ -1317,9 +1378,26 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
         </Fld>
         <Fld label={kind==='expense'?'Expense Category *':`${kind==='in'?'Income':'Expense'} Category (optional)`}>{catSelect}</Fld>
       </div>
+      {kind!=='expense'&&<div className={xmode?'tx-xpay':''} style={{marginTop:12}}>
+        <div className="fg g4">
+          <Fld label="Payment Currency"><select value={t.payCur||accCur} onChange={x=>setPayCur(x.target.value)} className="fi">{Object.keys(CURR).map(k=><option key={k} value={k}>{k}{k===accCur?' (account)':''}</option>)}</select></Fld>
+          {xmode&&<>
+            <Fld label={`${kind==='out'?'Received by Payee':'Paid by Contact'} (${t.payCur})`}><input type="number" value={t.payAmount} onChange={x=>{setPayTouched(true);sx('payAmount',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+            <Fld label={`FX Rate (1 ${accCur} = ? ${t.payCur})`}><input type="number" value={t.rate} onChange={x=>sx('rate',x.target.value)} className="fi" placeholder="0.000000" min="0" step="any"/></Fld>
+            <Fld label={`Fee (${accCur})`}><input type="number" value={t.fee} onChange={x=>sx('fee',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+          </>}
+        </div>
+        {xmode&&xc!=null&&<div className="fx-calc">{curFmt(t.payCur,+t.payAmount)} ÷ {fxRateStr(t.rate)}{+t.fee?` ${kind==='out'?'+':'−'} ${curFmt(accCur,+t.fee)} fee`:''} = <strong>{curFmt(accCur,xc)}</strong> {kind==='out'?'out of':'into'} the account
+          {Math.abs(xc-(+t.amount||0))>0.005&&<span className="fx-warn"> · the amount above differs — check it against the statement</span>}
+        </div>}
+        {xmode&&+t.fee>0&&<div className="fg g2" style={{marginTop:12}}>
+          <Fld label="Fee Expense Category"><select value={t.feeCategory||''} onChange={x=>s('feeCategory',x.target.value)} className="fi"><option value="">— Select —</option>{groupCats(cats||[]).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>
+            <span className="fx-hint">The fee is booked as a separate expense row.</span></Fld>
+        </div>}
+      </div>}
       {docType&&(t.contactId||allocs.length>0)&&<div className="tx-alloc">
-        <div className="tx-alloc-t">{kind==='in'?'Invoices settled by this payment':'Received invoices settled by this payment'} <span>(optional · {accCur})</span></div>
-        {openDocs.length===0?<div className="fx-hint">No open {kind==='in'?'invoices':'received invoices'} in {accCur} for this contact.</div>:(
+        <div className="tx-alloc-t">{kind==='in'?'Invoices settled by this payment':'Received invoices settled by this payment'} <span>(optional · {docCur})</span></div>
+        {openDocs.length===0?<div className="fx-hint">No open {kind==='in'?'invoices':'received invoices'} in {docCur} for this contact.</div>:(
         <table className="tx-alloc-tbl">
           <thead><tr><th/><th>Document</th><th>Date</th><th className="tar">Total</th><th className="tar">Outstanding</th><th className="tar">This payment</th></tr></thead>
           <tbody>{openDocs.map(o=>(
@@ -1327,14 +1405,14 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
               <td><input type="checkbox" checked={!!o.mine} onChange={()=>toggleDoc(o)} aria-label={'Settle '+o.d.number}/></td>
               <td style={{fontWeight:600}}>{o.d.number||'—'}{o.d.status==='draft'&&<span className="tx-draft">Draft</span>}</td>
               <td style={{color:'var(--g500)'}}>{o.d.date||'—'}</td>
-              <td className="tar">{curFmt(accCur,o.total)}</td>
-              <td className="tar">{curFmt(accCur,o.remaining)}</td>
+              <td className="tar">{curFmt(docCur,o.total)}</td>
+              <td className="tar">{curFmt(docCur,o.remaining)}</td>
               <td className="tar">{o.mine?<input type="number" value={o.mine.amount} onChange={x=>setAllocAmt(o,x.target.value)} className="fi tx-alloc-in" min="0" step=".01"/>:<span style={{color:'var(--g300)'}}>—</span>}</td>
             </tr>))}</tbody>
         </table>)}
-        {allocs.length>0&&<div className={`tx-alloc-sum${allocTotal>(+t.amount||0)+0.005?' over':''}`}>
-          Allocated <strong>{curFmt(accCur,allocTotal)}</strong> of {curFmt(accCur,+t.amount||0)}
-          {allocTotal>(+t.amount||0)+0.005?' — more than the payment':(+t.amount||0)-allocTotal>0.005?` · ${curFmt(accCur,r2((+t.amount||0)-allocTotal))} on account`:''}
+        {allocs.length>0&&<div className={`tx-alloc-sum${allocTotal>payTarget+0.005?' over':''}`}>
+          Allocated <strong>{curFmt(docCur,allocTotal)}</strong> of {curFmt(docCur,payTarget)}
+          {allocTotal>payTarget+0.005?' — more than the payment':payTarget-allocTotal>0.005?` · ${curFmt(docCur,r2(payTarget-allocTotal))} on account`:''}
         </div>}
       </div>}
       <div className="fg g1" style={{marginTop:12}}>
