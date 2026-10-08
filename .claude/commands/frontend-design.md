@@ -15,8 +15,8 @@ Read the `:root` block in `index.html` and note the current values for:
 
 ## 3. Apply logo usage rule
 Every section that shows a logo must use the correct variant:
-- **Light background** (white, light grey, pale tints) → `brand_assets/green_med_logo.svg`
-- **Dark background** (dark gradients, deep colors) → dark logo variant (check brand_assets/)
+- **Light background** (white, light grey, pale tints) → `brand_assets/logo/` (`logo_fl.svg` mark, `logo_horizontal.svg`, `logo_vertical.svg`)
+- **Dark background** → no dark variant exists yet; avoid placing the logo on dark surfaces
 Never mix these up. Check navbar, sidebar brand area, footer, and any cards.
 
 ## 4. Design constraints to apply

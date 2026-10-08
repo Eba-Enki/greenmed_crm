@@ -3,7 +3,7 @@
 // STARTUP SPLASH — same markup as the static one in index.html, so the hand-over to React is seamless
 // ==========================
 function Splash(){
-  return <div className="splash splash-app" role="status" aria-label={tr('Loading')}><img className="splash-logo" src="brand_assets/Greenmed_Logo_General_Favicon.svg" alt=""/><span className="splash-ring"/></div>;
+  return <div className="splash splash-app" role="status" aria-label={tr('Loading')}><img className="splash-logo" src="brand_assets/logo/logo_fl.svg" alt=""/><span className="splash-ring"/></div>;
 }
 
 // ==========================

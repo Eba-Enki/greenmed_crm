@@ -1,9 +1,6 @@
 const {useState,useEffect,useRef,useCallback}=React;
-// Brand mark (leaf icon only, no wordmark) recolored per background context.
-// Light backgrounds use the primary brand green; dark backgrounds use the light sage tint.
-const logoMarkSVG=color=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="27 -2 219 274"><path fill="${color}" fill-rule="evenodd" d="M38.84,0s9.75,16.5-6.75,95.25c0,0-13.5,70.5,14.25,100.5,0,0,5.25-37.5,51-69,0,0-9.75-52.5-26.25-84.75,0,0,30.75,33.75,34.5,76.5,0,0,13.5-8.25,36-12.75,0,0-5.25-57-102.75-105.75"/><path fill="${color}" fill-rule="evenodd" d="M51.13,252.75S25.63,82.5,243.88,116.25c0,0-24,18.75-46.5,71.25s-79.5,101.25-138,75c0,0,50-97.5,132.75-129.75,0,0-78,2.25-141,120"/></svg>`;
-const LOGO='data:image/svg+xml;base64,'+btoa(logoMarkSVG('#608425'));
-const LOGO_DARK='data:image/svg+xml;base64,'+btoa(logoMarkSVG('#a8c070'));
+// Brand mark (leaf icon only, no wordmark) from the brand logo folder.
+const LOGO='brand_assets/logo/logo_fl.svg';
 const CURR={GBP:'£',USD:'$',EUR:'€',TRY:'₺'};
 const td=()=>new Date().toISOString().slice(0,10);
 const addD=(n,f=td())=>{const d=new Date(f);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};

@@ -27,8 +27,10 @@
 
 ### Logo Usage Rule (strict)
 
-- `brand_assets/green_med_logo.svg` — full logo, for light backgrounds.
-- `brand_assets/Greenmed_Logo_General_Favicon.svg` — the mark alone (favicon, loading splash).
+All logos live in `brand_assets/logo/`:
+- `logo_fl.svg` — the leaf mark alone (favicon, loading splash, sidebar, login).
+- `logo_horizontal.svg` — mark + wordmark side by side, for wide/short spaces.
+- `logo_vertical.svg` — mark above the wordmark, for square spaces.
 - There is no dark-background logo variant yet; don't place the logo on dark surfaces until one is added.
 
 ## Anti-Generic Guardrails
