@@ -778,7 +778,8 @@ body{background:var(--bz-canvas);background-attachment:fixed;color:var(--bz-ink)
 @keyframes bzPop{from{opacity:0;transform:scale(.96) translateY(4px)}to{opacity:1;transform:none}}
 
 /* ── Floating main panel ─────────────────────────────────────────────────── */
-.main{position:fixed;top:8px;right:8px;bottom:8px;left:var(--sidebar);width:auto;min-height:0;margin:0;background:#fff;border-radius:var(--bz-panel-r);border:1px solid rgba(31,32,35,.07);box-shadow:0 1px 2px rgba(26,42,10,.04),0 10px 30px rgba(26,42,10,.06);overflow-y:auto;overflow-x:hidden}
+/* z-index above the sidebar (200): the fixed panel is a stacking context, so pop-ups inside it must outrank the sidebar */
+.main{position:fixed;z-index:300;top:8px;right:8px;bottom:8px;left:var(--sidebar);width:auto;min-height:0;margin:0;background:#fff;border-radius:var(--bz-panel-r);border:1px solid rgba(31,32,35,.07);box-shadow:0 1px 2px rgba(26,42,10,.04),0 10px 30px rgba(26,42,10,.06);overflow-y:auto;overflow-x:hidden}
 .content{padding:16px 22px 28px;animation:bzFade .22s var(--bz-ease)}
 @keyframes bzFade{from{opacity:0}to{opacity:1}}
 
