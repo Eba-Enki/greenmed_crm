@@ -36,7 +36,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
       // Login matches usernames case-insensitively, so two accounts differing only by case
       // would be ambiguous at sign-in — block that outright rather than just warning.
       if(findCaseInsensitiveDup(users,'username',norm.username,norm.id)){
-        alert(`A user named "${norm.username}" already exists. Usernames must be unique (case doesn't matter).`);
+        alert(tr("A user named \"{0}\" already exists. Usernames must be unique (case doesn't matter).", norm.username));
         return;
       }
       onSave(norm);
@@ -48,45 +48,45 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
     return(
       <div>
         <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12}}>
-          <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
+          <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
           <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
-          <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)'}}>{init.id?'Edit User':'New User'}</h2>
+          <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)'}}>{init.id?tr('Edit User'):tr('New User')}</h2>
           <div style={{flex:1}}/>
-          <Btn v="bp bsm" onClick={handleSave} disabled={!u.username||(init.id?false:!u.password)}>Save</Btn>
+          <Btn v="bp bsm" onClick={handleSave} disabled={!u.username||(init.id?false:!u.password)}>{tr("Save")}</Btn>
         </div>
 
         <div className="fc">
-          <div className="fct">User Information</div>
+          <div className="fct">{tr("User Information")}</div>
           <div className="fg g2">
-            <Fld label="First Name"><input value={u.firstName||''} onChange={e=>s('firstName',e.target.value)} className="fi" placeholder="First name"/></Fld>
-            <Fld label="Last Name"><input value={u.lastName||''} onChange={e=>s('lastName',e.target.value)} className="fi" placeholder="Last name"/></Fld>
+            <Fld label={tr("First Name")}><input value={u.firstName||''} onChange={e=>s('firstName',e.target.value)} className="fi" placeholder={tr("First name")}/></Fld>
+            <Fld label={tr("Last Name")}><input value={u.lastName||''} onChange={e=>s('lastName',e.target.value)} className="fi" placeholder={tr("Last name")}/></Fld>
           </div>
           <div className="fg g1" style={{marginTop:14}}>
-            <Fld label="Email"><input type="email" value={u.email||''} onChange={e=>s('email',e.target.value)} className="fi" placeholder="Email"/></Fld>
+            <Fld label={tr("Email")}><input type="email" value={u.email||''} onChange={e=>s('email',e.target.value)} className="fi" placeholder={tr("Email")}/></Fld>
           </div>
           <div className="fg g2" style={{marginTop:14}}>
-            <Fld label="Username"><input value={u.username||''} onChange={e=>s('username',e.target.value)} className="fi" placeholder="Username"/></Fld>
-            <Fld label="Password"><input type="password" value={u.password||''} onChange={e=>s('password',e.target.value)} className="fi" placeholder={init.id?'Leave blank to keep current':'Password'} autoComplete="new-password"/></Fld>
+            <Fld label={tr("Username")}><input value={u.username||''} onChange={e=>s('username',e.target.value)} className="fi" placeholder={tr("Username")}/></Fld>
+            <Fld label={tr("Password")}><input type="password" value={u.password||''} onChange={e=>s('password',e.target.value)} className="fi" placeholder={init.id?tr('Leave blank to keep current'):tr('Password')} autoComplete="new-password"/></Fld>
           </div>
           <div className="fg g1" style={{marginTop:14}}>
-            <Fld label="Status">
+            <Fld label={tr("Status")}>
               <select value={u.active?'active':'inactive'} onChange={e=>s('active',e.target.value==='active')} className="fi">
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="active">{tr("Active")}</option>
+                <option value="inactive">{tr("Inactive")}</option>
               </select>
             </Fld>
           </div>
         </div>
 
         <div className="fc" style={{marginTop:16}}>
-          <div className="fct">Portal Permissions</div>
-          <p style={{fontSize:13,color:'var(--g500)',marginBottom:16,padding:'0 16px'}}>If "No Access" is selected, the user cannot access that portal.</p>
+          <div className="fct">{tr("Portal Permissions")}</div>
+          <p style={{fontSize:13,color:'var(--g500)',marginBottom:16,padding:'0 16px'}}>{tr("If \"No Access\" is selected, the user cannot access that portal.")}</p>
           <div className="fg g2" style={{padding:'0 16px 16px'}}>
             {[['off','Official — Finance & Accounting'],['ops','Sales & Procurement']].map(([key,label])=>(
-              <Fld key={key} label={label}>
+              <Fld key={key} label={tr(label)}>
                 <select value={portals[key]||''} onChange={e=>sp(key,e.target.value||null)} className="fi">
-                  <option value="">— No Access —</option>
-                  {roleOpts.filter(r=>r).map(r=><option key={r} value={r}>{r}</option>)}
+                  <option value="">{tr("— No Access —")}</option>
+                  {roleOpts.filter(r=>r).map(r=><option key={r} value={r}>{tr(r)}</option>)}
                 </select>
               </Fld>
             ))}
@@ -94,8 +94,8 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
         </div>
 
         <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginTop:16}}>
-          <Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn>
-          <Btn v="bp bsm" onClick={handleSave} disabled={!u.username||(init.id?false:!u.password)}>Save</Btn>
+          <Btn v="bgh bsm" onClick={onCancel}>{tr("Cancel")}</Btn>
+          <Btn v="bp bsm" onClick={handleSave} disabled={!u.username||(init.id?false:!u.password)}>{tr("Save")}</Btn>
         </div>
       </div>
     );
@@ -103,7 +103,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
 
   const handleSaveUser=async u=>{
     const{id,username,password,firstName,lastName,email,active,portals}=u;
-    if(await callUsers('save',{user:{id,username,password,firstName,lastName,email,active,portals}},'User saved')){
+    if(await callUsers('save',{user:{id,username,password,firstName,lastName,email,active,portals}},tr('User saved'))){
       setView('users');setCur(null);
     }
   };
@@ -121,14 +121,14 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
     <>
       <div className="sys-head">
         <div>
-          <h2 className="sys-h2">Users</h2>
-          <p className="sys-sub">Access and permissions for all portals</p>
+          <h2 className="sys-h2">{tr("Users")}</h2>
+          <p className="sys-sub">{tr("Access and permissions for all portals")}</p>
         </div>
         <Btn v="bp bsm" onClick={()=>{setCur({id:null,username:'',password:'',firstName:'',lastName:'',email:'',active:true,createdAt:td(),portals:{off:null,ops:null}});setView('user_form');}}>
-          <Ico n="plus" size={13}/>New User
+          <Ico n="plus" size={13}/>{tr("New User")}
         </Btn>
       </div>
-      {users.length===0&&<div className="sys-card sys-empty">No users yet</div>}
+      {users.length===0&&<div className="sys-card sys-empty">{tr("No users yet")}</div>}
       {users.map(u=>{
         const role=topRole(u);
         const name=fullName(u)||u.username;
@@ -138,14 +138,14 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
             <div className="sys-info">
               <div className="sys-name">{name}<span className="sys-uname">@{u.username}</span></div>
               <div className="sys-tags">
-                {role?<span className={`sys-role ${ROLE_CLS[role]||''}`}>{role}</span>:<span className="sys-role r-none">No Access</span>}
-                {!u.active&&<span className="sys-role r-inactive">Inactive</span>}
-                {Object.entries(PORTAL_LABEL).filter(([k])=>u.portals?.[k]).map(([k,l])=><span key={k} className="sys-chip" title={u.portals[k]}>{l}</span>)}
+                {role?<span className={`sys-role ${ROLE_CLS[role]||''}`}>{tr(role)}</span>:<span className="sys-role r-none">{tr("No Access")}</span>}
+                {!u.active&&<span className="sys-role r-inactive">{tr("Inactive")}</span>}
+                {Object.entries(PORTAL_LABEL).filter(([k])=>u.portals?.[k]).map(([k,l])=><span key={k} className="sys-chip" title={tr(u.portals[k])}>{tr(l)}</span>)}
               </div>
             </div>
             <div className="sys-actions">
-              <button className="sys-ab" onClick={()=>{setCur(u);setView('user_form');}} title="Edit" aria-label="Edit"><Ico n="edit" size={13}/></button>
-              {u.id!==session.userId&&<button className="sys-ab danger" onClick={()=>askConfirm(`Do you want to delete user "${u.username}"?`,()=>callUsers('delete',{id:u.id},'User deleted'))} title="Delete" aria-label="Delete"><Ico n="trash" size={13}/></button>}
+              <button className="sys-ab" onClick={()=>{setCur(u);setView('user_form');}} title={tr("Edit")} aria-label={tr("Edit")}><Ico n="edit" size={13}/></button>
+              {u.id!==session.userId&&<button className="sys-ab danger" onClick={()=>askConfirm(tr("Do you want to delete user \"{0}\"?", u.username),()=>callUsers('delete',{id:u.id},tr('User deleted')))} title={tr("Delete")} aria-label={tr("Delete")}><Ico n="trash" size={13}/></button>}
             </div>
           </div>
         );
@@ -160,11 +160,12 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
       <header className="sys-bar no-print">
         <div className="sys-brand">
           <img src={getLogo()||LOGO} alt="Green Med Ltd"/>
-          <span>System Management</span>
+          <span>{tr("System Management")}</span>
         </div>
         <div className="sys-bar-right">
-          <button className="sys-me" onClick={onOpenProfile} title="Profile">{displayName}</button>
-          <button className="sys-logout" onClick={onLogout}>Log Out</button>
+          <LangSwitch/>
+          <button className="sys-me" onClick={onOpenProfile} title={tr("Profile")}>{displayName}</button>
+          <button className="sys-logout" onClick={onLogout}>{tr("Log Out")}</button>
         </div>
       </header>
 
@@ -179,8 +180,8 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
           <div style={{background:'#fff',borderRadius:12,padding:28,maxWidth:360,width:'90%',boxShadow:'0 8px 32px rgba(0,0,0,.18)'}}>
             <p style={{fontSize:14,color:'var(--dk)',marginBottom:20,lineHeight:1.5}}>{confirmDlg.msg}</p>
             <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <Btn v="bgh bsm" onClick={()=>setConfirmDlg(null)}>Cancel</Btn>
-              <Btn v="bgr bsm" onClick={()=>{confirmDlg.onYes();setConfirmDlg(null);}}>Yes, Delete</Btn>
+              <Btn v="bgh bsm" onClick={()=>setConfirmDlg(null)}>{tr("Cancel")}</Btn>
+              <Btn v="bgr bsm" onClick={()=>{confirmDlg.onYes();setConfirmDlg(null);}}>{tr("Yes, Delete")}</Btn>
             </div>
           </div>
         </div>

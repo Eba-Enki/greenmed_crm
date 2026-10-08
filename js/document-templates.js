@@ -735,7 +735,7 @@ function DocSummaryBody({doc,co,docType}){
   const statusLabel=doc.status?(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' ')):'Draft';
 
   return(
-        <div className="pv2-wrap">
+        <div className="pv2-wrap" lang="en">
 
           <div className="pv2-hdr">
             <div className="pv2-hdr-left">
@@ -823,10 +823,10 @@ function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
   return(
     <div>
       <div className="pvbar no-print">
-        <button className="pvbtn" onClick={onBack}><Ico n="back"/>Back</button>
-        {onEdit&&<button className="pvbtn" onClick={onEdit}><Ico n="edit"/>Edit</button>}
+        <button className="pvbtn" onClick={onBack}><Ico n="back"/>{tr("Back")}</button>
+        {onEdit&&<button className="pvbtn" onClick={onEdit}><Ico n="edit"/>{tr("Edit")}</button>}
         <div style={{flex:1}}/>
-        <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>Save PDF</button>
+        <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>{tr("Save PDF")}</button>
       </div>
       <div className="pv2-outer">
         <DocSummaryBody doc={doc} co={co} docType={docType}/>
@@ -838,7 +838,7 @@ function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
 function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfOpts}){
   const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
   const statusClass=statusMap[doc.status]||'b-draft';
-  const statusLabel=doc.status?(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' ')):'Draft';
+  const statusLabel=doc.status?((SM[doc.status]&&SM[doc.status].l)||(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' '))):tr('Draft');
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:14,width:900,maxWidth:'100%',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,.25)'}}>
@@ -854,10 +854,10 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
         <div style={{display:'flex',alignItems:'center',gap:8,padding:'14px 24px',borderTop:'1px solid var(--g200)',flexShrink:0}}>
           {onDelete&&<button className="ab danger" onClick={onDelete}><Ico n="trash"/></button>}
           <div style={{flex:1}}/>
-          <Btn v="bgh bsm" onClick={onClose}>Close</Btn>
-          {onEdit&&<Btn v="bgh bsm" onClick={onEdit}>Edit</Btn>}
+          <Btn v="bgh bsm" onClick={onClose}>{tr("Close")}</Btn>
+          {onEdit&&<Btn v="bgh bsm" onClick={onEdit}>{tr("Edit")}</Btn>}
           {(extraActions||[]).map((a,i)=><Btn key={i} v="bgh bsm" onClick={a.onClick}>{a.label}</Btn>)}
-          <Btn v="bp bsm" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>Download PDF</Btn>
+          <Btn v="bp bsm" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>{tr("Download PDF")}</Btn>
         </div>
       </div>
     </div>
@@ -874,10 +874,10 @@ function ItemsEditor({items,setItems,currency,readOnly}){
   return(<>
     <div className="iw">
       <table className="ie">
-        <thead><tr>{['Item','Description','Qty','Unit','Unit Price','Total',readOnly?'':''].map((h,i)=><th key={i} style={{textAlign:i>=2&&i<=5?'right':'left',width:i===0?'13%':i===1?'27%':i===2?'8%':i===3?'9%':i===4?'12%':i===5?'11%':'4%'}}>{h}</th>)}</tr></thead>
+        <thead><tr>{['Item','Description','Qty','Unit','Unit Price','Total',readOnly?'':''].map((h,i)=><th key={i} style={{textAlign:i>=2&&i<=5?'right':'left',width:i===0?'13%':i===1?'27%':i===2?'8%':i===3?'9%':i===4?'12%':i===5?'11%':'4%'}}>{h&&tr(h)}</th>)}</tr></thead>
         <tbody>{items.map(it=><tr key={it.id}>
-          <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder="Product..." readOnly={readOnly}/></td>
-          <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder="Description..." readOnly={readOnly}/></td>
+          <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Product...")} readOnly={readOnly}/></td>
+          <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/></td>
           <td><input type="number" value={it.qty} onChange={e=>si(it.id,'qty',e.target.value)} min="0" step=".01" style={{textAlign:'right'}} readOnly={readOnly}/></td>
           <td><input value={it.unit||''} onChange={e=>si(it.id,'unit',e.target.value)} placeholder="pcs" readOnly={readOnly}/></td>
           <td><input type="number" value={it.price} onChange={e=>si(it.id,'price',e.target.value)} min="0" step=".01" placeholder="0.00" style={{textAlign:'right'}} readOnly={readOnly}/></td>
@@ -887,8 +887,8 @@ function ItemsEditor({items,setItems,currency,readOnly}){
       </table>
     </div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-      {!readOnly?<Btn v="bgh bsm" onClick={addL}><Ico n="plus"/>Add Line</Btn>:<div/>}
-      <div className="totbox"><span className="totlbl">Total</span><span className="totamt">{sym}{fmt(total)}</span></div>
+      {!readOnly?<Btn v="bgh bsm" onClick={addL}><Ico n="plus"/>{tr("Add Line")}</Btn>:<div/>}
+      <div className="totbox"><span className="totlbl">{tr("Total")}</span><span className="totamt">{sym}{fmt(total)}</span></div>
     </div>
   </>);
 }

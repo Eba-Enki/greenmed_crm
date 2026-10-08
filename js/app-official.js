@@ -37,6 +37,11 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)onLogout();});
     else onLogout();
   };
+  // Switching language reloads the page, so an open form's unsaved edits need the same guard
+  const guardedLang=l=>{
+    if(dirtyCheckRef.current&&dirtyCheckRef.current())askUnsaved().then(ok=>{if(ok)setLang(l);});
+    else setLang(l);
+  };
 
   useEffect(()=>{
     const a=LS.get(ns+'i'),b=LS.get(ns+'q'),c=LS.get(ns+'p'),d=LS.get(ns+'r'),
@@ -79,7 +84,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     setter(idx>=0?list.map((c,i)=>i===idx?rest:c):[...list,{...rest,id:rest.id||uid()}]);
   };
   const deleteCategory=(direction,id,hasChildren)=>{
-    if(hasChildren&&!confirm('Delete this category and its sub-categories?'))return;
+    if(hasChildren&&!confirm(tr('Delete this category and its sub-categories?')))return;
     const list=direction==='in'?incomeCats:expCats;
     const setter=direction==='in'?sIncomeCats:sExpCats;
     setter(list.filter(c=>c.id!==id&&c.parentId!==id));
@@ -96,11 +101,11 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     setCo(newCo);LS.set(ns+'co',newCo);
   };
   const deleteBank=(id)=>{
-    if(!confirm('Delete this bank account? Its transactions will also be deleted.'))return;
+    if(!confirm(tr('Delete this bank account? Its transactions will also be deleted.')))return;
     const newCo={...co,banks:(co.banks||[]).filter(b=>b.id!==id)};
     setCo(newCo);LS.set(ns+'co',newCo);
     sBankTx(bankTx.filter(t=>t.accountId!==id));
-    showToast('Deleted');
+    showToast(tr('Deleted'));
   };
   const setDefaultBank=(id)=>{
     const newCo={...co,banks:(co.banks||[]).map(b=>({...b,isDefault:b.id===id}))};
@@ -144,29 +149,29 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     const next=[...bankTx.filter(t=>!drop.has(t.id)),...legs];
     sBankTx(next);
     syncDocStatuses(next,[...(prevTx?txAllocs(prevTx):[]),...txAllocs(saved)]);
-    showToast('Saved ✓');
+    showToast(tr('Saved ✓'));
     go(prev);
   };
   const handleDeleteBankTx=(t)=>{
     if(t.fx){
       // Both legs of a currency exchange go together, so balances never end up one-sided
-      if(!confirm('Delete this currency exchange? It is removed from both accounts.'))return;
+      if(!confirm(tr('Delete this currency exchange? It is removed from both accounts.')))return;
       sBankTx(bankTx.filter(x=>!(x.fx&&x.fx.id===t.fx.id)));
-      showToast('Deleted');
+      showToast(tr('Deleted'));
       return;
     }
     if(t.xpay){
-      if(!confirm('Delete this payment? Its fee row is removed too.'))return;
+      if(!confirm(tr('Delete this payment? Its fee row is removed too.')))return;
       const pay=bankTx.find(x=>x.xpay&&x.xpay.id===t.xpay.id&&x.xpayLeg==='pay');
       const next=bankTx.filter(x=>!(x.xpay&&x.xpay.id===t.xpay.id));
-      sBankTx(next);syncDocStatuses(next,pay?txAllocs(pay):[]);showToast('Deleted');
+      sBankTx(next);syncDocStatuses(next,pay?txAllocs(pay):[]);showToast(tr('Deleted'));
       return;
     }
-    if(!confirm('Delete this transaction?'))return;
+    if(!confirm(tr('Delete this transaction?')))return;
     const next=bankTx.filter(x=>x.id!==t.id);
     sBankTx(next);
     syncDocStatuses(next,txAllocs(t));
-    showToast('Deleted');
+    showToast(tr('Deleted'));
   };
 
   // Currency exchange (e.g. USD → EUR) is stored as linked transactions sharing fx.id (fxLeg marks the role):
@@ -192,7 +197,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     if(fee)legs.push({...common,id:legId('fee'),fxLeg:'fee',accountId:fx.toAccountId,type:'out',amount:fee,
       description:`Exchange fee · ${fx.fromCurrency} → ${fx.toCurrency}`,category:fx.feeCategory});
     sBankTx([...bankTx.filter(t=>!(t.fx&&t.fx.id===fx.id)),...legs]);
-    showToast('Exchange saved');
+    showToast(tr('Exchange saved'));
     go(prev);
   };
   // Rows of linked groups open the form of the whole group
@@ -229,9 +234,9 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const handleSave=docIn=>{
     const doc={...docIn,number:(docIn.number||'').trim()};
     if(doc.type!=='received'){
-      if(!doc.number){alert('Enter a document number.');return;}
+      if(!doc.number){alert(tr('Enter a document number.'));return;}
       const dup=docsOfType(doc.type).find(d=>d.id!==doc.id&&(d.number||'').trim().toLowerCase()===doc.number.toLowerCase());
-      if(dup){alert(`Number "${doc.number}" is already used by another ${doc.type==='po'?'purchase order':doc.type}. Enter a different number.`);return;}
+      if(dup){alert(tr("Number \"{0}\" is already used by another {1}. Enter a different number.", doc.number, doc.type==='po'?tr('purchase order'):doc.type));return;}
     }
     const fresh=!doc.id;const saved=fresh?{...doc,id:uid()}:doc;
     if(doc.type==='invoice')si(fresh?[...inv,saved]:inv.map(d=>d.id===saved.id?saved:d));
@@ -240,21 +245,21 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     else sr(fresh?[...rec,saved]:rec.map(d=>d.id===saved.id?saved:d));
     // Hand-typed numbers (automatic numbering off) don't consume a counter position
     if(fresh&&autoNumber&&doc.type!=='received')sc({...cnt,[cntKey(doc.type)]:nextSeq(doc.type)+1});
-    showToast('Saved ✓');
+    showToast(tr('Saved ✓'));
     go(doc.type==='invoice'?'off_invoices':doc.type==='po'?'off_pos':doc.type==='received'?'off_received':'off_quotes');
   };
   const handleDel=doc=>{
-    if(!confirm(`Delete ${doc.number||doc.supplier}?`))return false;
+    if(!confirm(tr("Delete {0}?", doc.number||doc.supplier)))return false;
     if(doc.type==='invoice')si(inv.filter(d=>d.id!==doc.id));
     else if(doc.type==='quote')sq(quo.filter(d=>d.id!==doc.id));
     else if(doc.type==='po')sp(pos.filter(d=>d.id!==doc.id));
     else sr(rec.filter(d=>d.id!==doc.id));
     if(doc.type==='invoice'||doc.type==='received')sBankTx(bankTx.map(t=>{const al=txAllocs(t);if(!al.some(x=>x.type===doc.type&&x.id===doc.id))return t;return{...t,linkedDoc:null,allocations:al.filter(x=>!(x.type===doc.type&&x.id===doc.id))};}));
-    showToast('Deleted');
+    showToast(tr('Deleted'));
     return true;
   };
-  const handleSavePrj=p=>{const fresh=!p.id;const saved=fresh?{...p,id:uid()}:p;spr(fresh?[...projects,saved]:projects.map(d=>d.id===saved.id?saved:d));showToast('Saved ✓');go('projects');};
-  const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));showToast('Saved ✓');go('off_customers');};
+  const handleSavePrj=p=>{const fresh=!p.id;const saved=fresh?{...p,id:uid()}:p;spr(fresh?[...projects,saved]:projects.map(d=>d.id===saved.id?saved:d));showToast(tr('Saved ✓'));go('projects');};
+  const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));showToast(tr('Saved ✓'));go('off_customers');};
 
   // Simple generic form
   function SimpleDocForm({doc:init,onSave,onCancel,onPreview}){
@@ -264,7 +269,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     const isInv=doc.type==='invoice';const isPO=doc.type==='po';const isRec=doc.type==='received';
     const trms=isInv||isRec?ITRM:['Due on Receipt','Valid for 30 days','Valid for 14 days'];
     const sts=isInv?['draft','sent','partial','paid','overdue','cancelled']:isPO?['draft','sent','approved','received','cancelled']:isRec?['pending','partial','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
-    const typeLabel=isInv?'Invoice':isPO?'Purchase Order':isRec?'Received Invoice':'Quotation';
+    const typeLabel=isInv?tr('Invoice'):isPO?tr('Purchase Order'):isRec?tr('Received Invoice'):tr('Quotation');
     const savedDoc={...doc,items};
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify(savedDoc)!==_initStr.current;
@@ -273,52 +278,52 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     return(
       <div className="content"><div className="fw">
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-          <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>Back</button>
-          <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?`Edit ${typeLabel}`:`New ${typeLabel}`}</h2>
+          <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Back")}</button>
+          <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}", typeLabel):tr("New {0}", typeLabel)}</h2>
           <div style={{flex:1}}/>
-          {onPreview&&<Btn v="bgh bsm" onClick={()=>onPreview(savedDoc)}><Ico n="eye"/>Preview</Btn>}
-          <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,doc.type)}><Ico n="dl"/>PDF</Btn>
-          <Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>Save {typeLabel}</Btn>
+          {onPreview&&<Btn v="bgh bsm" onClick={()=>onPreview(savedDoc)}><Ico n="eye"/>{tr("Preview")}</Btn>}
+          <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,doc.type)}><Ico n="dl"/>{tr("PDF")}</Btn>
+          <Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>{tr("Save {0}", typeLabel)}</Btn>
         </div>
-        <div className="fc"><div className="fct">Document Details</div>
+        <div className="fc"><div className="fct">{tr("Document Details")}</div>
           <div className="fg g3">
-            <Fld label="No"><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={!isRec&&autoNumber} placeholder={!isRec&&!autoNumber?'Type the document number':''} style={!isRec?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld>
-            <Fld label="Date"><input type="date" value={doc.date||''} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
-            <Fld label={isInv?"Due Date":isRec?"Due Date":"Valid Until"}><input type="date" value={doc.dueDate||addD(30)} onChange={e=>set('dueDate',e.target.value)} className="fi"/></Fld>
+            <Fld label={tr("No")}><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={!isRec&&autoNumber} placeholder={!isRec&&!autoNumber?tr('Type the document number'):''} style={!isRec?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld>
+            <Fld label={tr("Date")}><input type="date" value={doc.date||''} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
+            <Fld label={isInv?tr("Due Date"):isRec?tr("Due Date"):tr("Valid Until")}><input type="date" value={doc.dueDate||addD(30)} onChange={e=>set('dueDate',e.target.value)} className="fi"/></Fld>
           </div>
           <div className="fg g4" style={{marginTop:12}}>
-            <Fld label="Currency"><select value={doc.currency||'GBP'} onChange={e=>set('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
-            <Fld label="Terms"><select value={doc.terms||''} onChange={e=>set('terms',e.target.value)} className="fi">{trms.map(t=><option key={t} value={t}>{t}</option>)}</select></Fld>
-            <Fld label="Status"><select value={doc.status||'draft'} onChange={e=>set('status',e.target.value)} className="fi">{sts.map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}</select></Fld>
-            <Fld label="Project"><select value={doc.project||''} onChange={e=>set('project',e.target.value)} className="fi"><option value="">— None —</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}</select></Fld>
+            <Fld label={tr("Currency")}><select value={doc.currency||'GBP'} onChange={e=>set('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+            <Fld label={tr("Terms")}><select value={doc.terms||''} onChange={e=>set('terms',e.target.value)} className="fi">{trms.map(t=><option key={t} value={t}>{t}</option>)}</select></Fld>
+            <Fld label={tr("Status")}><select value={doc.status||'draft'} onChange={e=>set('status',e.target.value)} className="fi">{sts.map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}</select></Fld>
+            <Fld label={tr("Project")}><select value={doc.project||''} onChange={e=>set('project',e.target.value)} className="fi"><option value="">{tr("— None —")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}</select></Fld>
           </div>
         </div>
-        <div className="fc"><div className="fct">{isRec||isPO?'Vendor / Supplier':'Bill To'}</div>
+        <div className="fc"><div className="fct">{isRec||isPO?tr('Vendor / Supplier'):tr('Bill To')}</div>
           {(()=>{const pickList=customers.filter(c=>{const t=c.type||'customer';return(isRec||isPO)?(t==='supplier'||t==='both'):(t==='customer'||t==='both');});return pickList.length>0&&<div style={{marginBottom:12}}>
             <select className="fi" style={{maxWidth:320}} onChange={e=>{const c=pickList.find(x=>x.id===e.target.value);if(c){if(isRec||isPO){set('supplier',c.company||c.name);set('supplierAddress',c.address||'');}else{set('client.name',c.company||c.name);set('client.email',c.email||'');set('client.address',c.address||'');}}}}>
-              <option value="">— Quick fill from {isRec||isPO?'Suppliers':'Customers'} —</option>
+              <option value="">{tr("— Quick fill from {0} —", isRec||isPO?tr('Suppliers'):tr('Customers'))}</option>
               {pickList.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
             </select>
           </div>;})()}
           {(isRec||isPO)?(<div className="fg g2">
-            <Fld label="Supplier Name"><input value={doc.supplier||''} onChange={e=>set('supplier',e.target.value)} placeholder="Supplier" className="fi"/></Fld>
-            <Fld label="Email"><input value={doc.email||''} onChange={e=>set('email',e.target.value)} placeholder="email@supplier.com" className="fi"/></Fld>
+            <Fld label={tr("Supplier Name")}><input value={doc.supplier||''} onChange={e=>set('supplier',e.target.value)} placeholder={tr("Supplier")} className="fi"/></Fld>
+            <Fld label={tr("Email")}><input value={doc.email||''} onChange={e=>set('email',e.target.value)} placeholder="email@supplier.com" className="fi"/></Fld>
           </div>):(<div className="fg g2">
-            <Fld label="Customer Name"><input value={(doc.client&&doc.client.name)||''} onChange={e=>set('client.name',e.target.value)} placeholder="Customer" className="fi"/></Fld>
-            <Fld label="Email"><input value={(doc.client&&doc.client.email)||''} onChange={e=>set('client.email',e.target.value)} placeholder="email@customer.com" className="fi"/></Fld>
+            <Fld label={tr("Customer Name")}><input value={(doc.client&&doc.client.name)||''} onChange={e=>set('client.name',e.target.value)} placeholder={tr("Customer")} className="fi"/></Fld>
+            <Fld label={tr("Email")}><input value={(doc.client&&doc.client.email)||''} onChange={e=>set('client.email',e.target.value)} placeholder="email@customer.com" className="fi"/></Fld>
           </div>)}
           <div className="fg g2" style={{marginTop:12}}>
-            <Fld label="Address"><textarea value={(isRec||isPO)?doc.supplierAddress||'':(doc.client&&doc.client.address)||''} onChange={e=>(isRec||isPO)?set('supplierAddress',e.target.value):set('client.address',e.target.value)} rows={2} className="fi" placeholder="Address..."/></Fld>
-            <Fld label="Reference"><input value={(isRec||isPO)?doc.ref||'':(doc.client&&doc.client.ref)||''} onChange={e=>(isRec||isPO)?set('ref',e.target.value):set('client.ref',e.target.value)} placeholder="Ref/PO No" className="fi"/></Fld>
+            <Fld label={tr("Address")}><textarea value={(isRec||isPO)?doc.supplierAddress||'':(doc.client&&doc.client.address)||''} onChange={e=>(isRec||isPO)?set('supplierAddress',e.target.value):set('client.address',e.target.value)} rows={2} className="fi" placeholder={tr("Address...")}/></Fld>
+            <Fld label={tr("Reference")}><input value={(isRec||isPO)?doc.ref||'':(doc.client&&doc.client.ref)||''} onChange={e=>(isRec||isPO)?set('ref',e.target.value):set('client.ref',e.target.value)} placeholder={tr("Ref/PO No")} className="fi"/></Fld>
           </div>
         </div>
-        <div className="fc"><div className="fct">Line Items</div>
+        <div className="fc"><div className="fct">{tr("Line Items")}</div>
           <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'}/>
         </div>
-        <div className="fc"><div className="fct">Notes</div>
-          <Fld label="Notes"><textarea value={doc.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi" placeholder="Notes..."/></Fld>
+        <div className="fc"><div className="fct">{tr("Notes")}</div>
+          <Fld label={tr("Notes")}><textarea value={doc.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi" placeholder={tr("Notes...")}/></Fld>
         </div>
-        <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn><Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>Save {typeLabel}</Btn></div>
+        <div className="fact"><Btn v="bgh bsm" onClick={onCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>{tr("Save {0}", typeLabel)}</Btn></div>
       </div></div>
     );
   }
@@ -329,7 +334,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     const{sort,onSort}=useSort();
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
     const isRec=type==='received';
-    const lbl=type==='invoice'?'Invoice':type==='po'?'Purchase Order':isRec?'Received Invoice':'Quotation';
+    const lbl=type==='invoice'?tr('Invoice'):type==='po'?tr('Purchase Order'):isRec?tr('Received Invoice'):tr('Quotation');
     const sts=type==='invoice'?['draft','sent','partial','paid','overdue','cancelled']:type==='po'?['draft','sent','approved','received','cancelled']:isRec?['pending','partial','paid','overdue','cancelled']:['draft','sent','accepted','declined','cancelled'];
     const filtered=items.filter(d=>{
       const name=(isRec?d.supplier:(d&&d.client&&d.client.name))||'';
@@ -344,35 +349,35 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     return(
       <div className="content">
         <div className="fbar">
-          <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={`Search ${isRec?'supplier':'customer'} or ref...`}/></div>
+          <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search {0} or ref...", isRec?tr('supplier'):tr('customer'))}/></div>
           <select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
-            <option value="">All Statuses</option>{sts.map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}
+            <option value="">{tr("All Statuses")}</option>{sts.map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}
           </select>
-          <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder="From" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-          <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder="To" style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
+          <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder={tr("From")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
+          <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder={tr("To")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
           <div style={{flex:1}}/>
-          <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number',isRec?'Supplier':'Customer','Amount','Status'],...sorted.map(d=>[d.date,d.number,partyName(d),fmt(dt(d.items||[])),d.status])],type)}><Ico n="export"/>Export</Btn>
+          <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number',isRec?'Supplier':'Customer','Amount','Status'],...sorted.map(d=>[d.date,d.number,partyName(d),fmt(dt(d.items||[])),d.status])],type)}><Ico n="export"/>{tr("Export")}</Btn>
         </div>
         {filtered.length===0?(
-          <div className="tcard"><div className="empty"><Ico n={type==='invoice'?'invoice':isRec?'received':type==='po'?'po':'quote'} size={40}/><div className="empty-t">No {lbl.toLowerCase()}s yet</div><div className="empty-s">Get started by creating one</div><Btn v="bp bsm" onClick={()=>{setCur(isRec?mkRec():mkDoc(type));go('off_form');}}><Ico n="plus"/>New {lbl}</Btn></div></div>
+          <div className="tcard"><div className="empty"><Ico n={type==='invoice'?'invoice':isRec?'received':type==='po'?'po':'quote'} size={40}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div><div className="empty-s">{tr("Get started by creating one")}</div><Btn v="bp bsm" onClick={()=>{setCur(isRec?mkRec():mkDoc(type));go('off_form');}}><Ico n="plus"/>{tr("New {0}", lbl)}</Btn></div></div>
         ):(
           <div className="tcard">
             <table className="dt">
               <Cg w={type==='po'?[0.8,1,2,1,0.9,0.9]:[0.8,1,2,0.9,0.9]}/>
               <thead><tr>
-                <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
-                <SortTh k="no" sort={sort} onSort={onSort}>No</SortTh>
-                <SortTh k="party" sort={sort} onSort={onSort}>{isRec?'Supplier':'Customer'}</SortTh>
-                {type==='po'&&<SortTh k="project" sort={sort} onSort={onSort}>Project</SortTh>}
-                <SortTh k="amount" sort={sort} onSort={onSort} className="tar">Amount</SortTh>
-                <SortTh k="status" sort={sort} onSort={onSort} className="tac">Status</SortTh>
+                <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
+                <SortTh k="no" sort={sort} onSort={onSort}>{tr("No")}</SortTh>
+                <SortTh k="party" sort={sort} onSort={onSort}>{isRec?tr('Supplier'):tr('Customer')}</SortTh>
+                {type==='po'&&<SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>}
+                <SortTh k="amount" sort={sort} onSort={onSort} className="tar">{tr("Amount")}</SortTh>
+                <SortTh k="status" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>
               </tr></thead>
               <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
                 <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
                   <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
                   <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number||'—'}</span></td>
                   <td>{isRec?d.supplier:(d&&d.client&&d.client.name)||'—'}</td>
-                  {type==='po'&&<td style={{color:'var(--g500)',fontSize:11}}>{d.project||'—'}{d.sourceRef&&<div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>from {d.sourceRef}</div>}</td>}
+                  {type==='po'&&<td style={{color:'var(--g500)',fontSize:11}}>{d.project||'—'}{d.sourceRef&&<div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>{tr("from {0}", d.sourceRef)}</div>}</td>}
                   <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items||[]))}</td>
                   <td className="tac"><Badge s={d.status}/></td>
                 </tr>
@@ -387,32 +392,32 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   }
 
   const SB=[
-    {sec:'Documents'},
-    {k:'off_invoices',ico:'invoice',lbl:'Invoices',cnt:inv.length},
-    {k:'off_quotes',ico:'quote',lbl:'Quotations',cnt:quo.length},
-    {k:'off_pos',ico:'po',lbl:'Purchase Orders',cnt:pos.length},
-    {k:'off_received',ico:'received',lbl:'Received Invoices',cnt:rec.length},
+    {sec:tr('Documents')},
+    {k:'off_invoices',ico:'invoice',lbl:tr('Invoices'),cnt:inv.length},
+    {k:'off_quotes',ico:'quote',lbl:tr('Quotations'),cnt:quo.length},
+    {k:'off_pos',ico:'po',lbl:tr('Purchase Orders'),cnt:pos.length},
+    {k:'off_received',ico:'received',lbl:tr('Received Invoices'),cnt:rec.length},
     {div:true},
-    {sec:'Management'},
-    {k:'off_customers',ico:'customers',lbl:'Contacts',cnt:customers.length},
-    {k:'off_projects',ico:'project',lbl:'Projects',cnt:projects.length},
-    {k:'off_expenses',ico:'expense',lbl:'Expenses',cnt:expCats.length},
-    {k:'off_incomes',ico:'income',lbl:'Incomes',cnt:incomeCats.length},
-    {k:'off_bank',ico:'bank',lbl:'Bank',cnt:(co.banks||[]).length},
-    {k:'settings',ico:'settings',lbl:'Settings'},
+    {sec:tr('Management')},
+    {k:'off_customers',ico:'customers',lbl:tr('Contacts'),cnt:customers.length},
+    {k:'off_projects',ico:'project',lbl:tr('Projects'),cnt:projects.length},
+    {k:'off_expenses',ico:'expense',lbl:tr('Expenses'),cnt:expCats.length},
+    {k:'off_incomes',ico:'income',lbl:tr('Incomes'),cnt:incomeCats.length},
+    {k:'off_bank',ico:'bank',lbl:tr('Bank'),cnt:(co.banks||[]).length},
+    {k:'settings',ico:'settings',lbl:tr('Settings')},
   ];
 
   const selectedBank=(co.banks||[]).find(b=>b.id===selectedBankId)||null;
   const bankTxForAccount=selectedBank?bankTx.filter(t=>t.accountId===selectedBank.id):[];
 
-  const titles={off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Contacts',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings',home:'Dashboard'};
+  const titles={off_invoices:tr('Invoices'),off_quotes:tr('Quotations'),off_pos:tr('Purchase Orders'),off_received:tr('Received Invoices'),off_customers:tr('Contacts'),off_projects:tr('Projects'),off_expenses:tr('Expenses'),off_incomes:tr('Incomes'),off_bank:tr('Bank Accounts'),settings:tr('Settings'),home:tr('Dashboard')};
 
   dirtyCheckRef.current=null;
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <div className="sidebar no-print">
         <div className="sb-brand" onClick={()=>goGuarded('home')}>
-          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">Official Records</div></div>
+          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">{tr("Official Records")}</div></div>
         </div>
         <PortalDropdown session={session} onPortalSwitch={guardedPortalSwitch} onLogout={guardedLogout} onOpenProfile={onOpenProfile}/>
         {SB.map((it,i)=>{
@@ -421,29 +426,29 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           return <div key={it.k} className={`sb-item${view===it.k?' active':''}`} onClick={()=>goGuarded(it.k)}><Ico n={it.ico} size={14}/><span className="lbl">{it.lbl}</span>{it.cnt>0&&<span className="sb-cnt">{it.cnt}</span>}</div>;
         })}
         <div className="sb-pinned">
-          <SidebarUserFooter session={session} onOpenProfile={onOpenProfile} onLogout={guardedLogout}/>
+          <SidebarUserFooter session={session} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
         </div>
       </div>
       <div className="main">
         {!['off_preview','off_form','off_custform','off_projform','off_bank_detail','off_banktx_form','off_fx_form','off_cat_detail','off_contact'].includes(view)&&(()=>{
-          const offTitles={home:'Dashboard',off_invoices:'Invoices',off_quotes:'Quotations',off_pos:'Purchase Orders',off_received:'Received Invoices',off_customers:'Contacts',off_projects:'Projects',off_expenses:'Expenses',off_incomes:'Incomes',off_bank:'Bank Accounts',settings:'Settings'};
+          const offTitles={home:tr('Dashboard'),off_invoices:tr('Invoices'),off_quotes:tr('Quotations'),off_pos:tr('Purchase Orders'),off_received:tr('Received Invoices'),off_customers:tr('Contacts'),off_projects:tr('Projects'),off_expenses:tr('Expenses'),off_incomes:tr('Incomes'),off_bank:tr('Bank Accounts'),settings:tr('Settings')};
           return(<div className="topbar no-print">
             <h1 className="topbar-title">{offTitles[view]||''}</h1>
             <div style={{flex:1}}/>
-            {view==='off_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('invoice'));go('off_form');}}><Ico n="plus"/>New Invoice</Btn>}
-            {view==='off_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('quote'));go('off_form');}}><Ico n="plus"/>New Quotation</Btn>}
-            {view==='off_pos'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('po'));go('off_form');}}><Ico n="plus"/>New Purchase Order</Btn>}
-            {view==='off_received'&&<Btn v="bp bsm" onClick={()=>{setCur(mkRec());go('off_form');}}><Ico n="plus"/>New Received Invoice</Btn>}
-            {view==='off_customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('off_custform');}}><Ico n="plus"/>New Contact</Btn>}
-            {view==='off_projects'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}}><Ico n="plus"/>New Project</Btn>}
-            {view==='off_expenses'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'out'})}><Ico n="plus"/>New Expense</Btn>}
-            {view==='off_incomes'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'in'})}><Ico n="plus"/>New Income</Btn>}
-            {view==='off_bank'&&<Btn v="bp bsm" onClick={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})}><Ico n="plus"/>New Account</Btn>}
+            {view==='off_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('invoice'));go('off_form');}}><Ico n="plus"/>{tr("New Invoice")}</Btn>}
+            {view==='off_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('quote'));go('off_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
+            {view==='off_pos'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('po'));go('off_form');}}><Ico n="plus"/>{tr("New Purchase Order")}</Btn>}
+            {view==='off_received'&&<Btn v="bp bsm" onClick={()=>{setCur(mkRec());go('off_form');}}><Ico n="plus"/>{tr("New Received Invoice")}</Btn>}
+            {view==='off_customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('off_custform');}}><Ico n="plus"/>{tr("New Contact")}</Btn>}
+            {view==='off_projects'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}}><Ico n="plus"/>{tr("New Project")}</Btn>}
+            {view==='off_expenses'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'out'})}><Ico n="plus"/>{tr("New Expense")}</Btn>}
+            {view==='off_incomes'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'in'})}><Ico n="plus"/>{tr("New Income")}</Btn>}
+            {view==='off_bank'&&<Btn v="bp bsm" onClick={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})}><Ico n="plus"/>{tr("New Account")}</Btn>}
           </div>);
         })()}
-        {view==='home'&&<div className="content"><div style={{marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:'var(--g900)',marginBottom:2}}>Dashboard</div><div style={{fontSize:12,color:'var(--g500)'}}>Official Account</div></div>
+        {view==='home'&&<div className="content"><div style={{marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:'var(--g900)',marginBottom:2}}>{tr("Dashboard")}</div><div style={{fontSize:12,color:'var(--g500)'}}>{tr("Official Account")}</div></div>
           <div className="nav-cards">
-            {[{k:'off_invoices',ico:'invoice',lbl:'Invoices',val:inv.length},{k:'off_quotes',ico:'quote',lbl:'Quotations',val:quo.length},{k:'off_pos',ico:'po',lbl:'POs',val:pos.length},{k:'off_received',ico:'received',lbl:'Received',val:rec.length},{k:'off_customers',ico:'customers',lbl:'Customers',val:customers.length},{k:'off_projects',ico:'project',lbl:'Projects',val:projects.length},{k:'off_expenses',ico:'expense',lbl:'Expenses',val:expCats.length},{k:'off_incomes',ico:'income',lbl:'Incomes',val:incomeCats.length},{k:'off_bank',ico:'bank',lbl:'Bank',val:(co.banks||[]).length}].map(c=><div key={c.k} className="nav-card" onClick={()=>go(c.k)}><div className="nc-ico"><Ico n={c.ico} size={16}/></div><div className="nc-val">{c.val}</div><div className="nc-lbl">{c.lbl}</div></div>)}
+            {[{k:'off_invoices',ico:'invoice',lbl:tr('Invoices'),val:inv.length},{k:'off_quotes',ico:'quote',lbl:tr('Quotations'),val:quo.length},{k:'off_pos',ico:'po',lbl:tr('POs'),val:pos.length},{k:'off_received',ico:'received',lbl:tr('Received'),val:rec.length},{k:'off_customers',ico:'customers',lbl:tr('Customers'),val:customers.length},{k:'off_projects',ico:'project',lbl:tr('Projects'),val:projects.length},{k:'off_expenses',ico:'expense',lbl:tr('Expenses'),val:expCats.length},{k:'off_incomes',ico:'income',lbl:tr('Incomes'),val:incomeCats.length},{k:'off_bank',ico:'bank',lbl:tr('Bank'),val:(co.banks||[]).length}].map(c=><div key={c.k} className="nav-card" onClick={()=>go(c.k)}><div className="nc-ico"><Ico n={c.ico} size={16}/></div><div className="nc-val">{c.val}</div><div className="nc-lbl">{c.lbl}</div></div>)}
           </div>
         </div>}
         {view==='off_invoices'&&<OffListView type="invoice" items={inv}/>}
@@ -451,8 +456,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_pos'&&<OffListView type="po" items={pos}/>}
         {view==='off_received'&&<OffListView type="received" items={rec}/>}
         {view==='off_contact'&&customers.find(c=>c.id===selectedContactId)&&<OffContactStatement contact={customers.find(c=>c.id===selectedContactId)} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go('off_customers')} onEdit={c=>{setCur(c);go('off_custform');}}/>}
-        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(`Delete "${c.company||c.contact}"?`))return;sCust(customers.filter(x=>x.id!==c.id));showToast('Deleted');}}/>}
-        {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(`Delete "${p.name}"?`))return;spr(projects.filter(d=>d.id!==p.id));showToast('Deleted');}}/>}
+        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(tr("Delete \"{0}\"?", c.company||c.contact)))return;sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));}}/>}
+        {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(tr("Delete \"{0}\"?", p.name)))return;spr(projects.filter(d=>d.id!==p.id));showToast(tr('Deleted'));}}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
         {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{const{account,...raw}=t;editTx(raw);}} onDelete={handleDeleteBankTx}/>}
@@ -466,7 +471,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           onEdit={editTx} onDelete={handleDeleteBankTx}/>}
         {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} bankTx={bankTx} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
-        {view==='settings'&&<OffSettings ns={ns} co={co} go={go} onAutoNumberChange={v=>{const newCo={...co,autoNumber:v};setCo(newCo);LS.set(ns+'co',newCo);showToast(v?'Automatic numbering on':'Automatic numbering off — type numbers by hand');}} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast('Saved ✓');go('home');}} onClose={()=>go('home')}/>}
+        {view==='settings'&&<OffSettings ns={ns} co={co} go={go} onAutoNumberChange={v=>{const newCo={...co,autoNumber:v};setCo(newCo);LS.set(ns+'co',newCo);showToast(v?tr('Automatic numbering on'):tr('Automatic numbering off — type numbers by hand'));}} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast(tr('Saved ✓'));go('home');}} onClose={()=>go('home')}/>}
       </div>
       {toast&&<div className="toast">{toast}</div>}
       {editingBank&&<BankAccountModal bank={editingBank} onSave={b=>{saveBank(b);setEditingBank(null);}} onCancel={()=>setEditingBank(null)}/>}
@@ -478,7 +483,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
 // Simple Official sub-components
 // Contact relationships (stored in contact.type; "both" = customer and supplier)
 const CONTACT_TYPES=[['customer','Customer'],['supplier','Supplier'],['both','Customer & Supplier'],['employee','Employee'],['owner','Owner'],['expense','Expense']];
-const contactTypeLabel=t=>(CONTACT_TYPES.find(([k])=>k===(t||'customer'))||[])[1]||'Customer';
+const contactTypeLabel=(t,en)=>{const l=(CONTACT_TYPES.find(([k])=>k===(t||'customer'))||[])[1]||'Customer';return en?l:tr(l);}; // en: for Excel exports
 const contactName=c=>c.company||c.contact||'';
 
 // ── Payment allocation ──
@@ -568,7 +573,7 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
   const stRows=sortRows([...rows].reverse(),stSort,{date:e=>e.date,no:e=>e.ref,type:e=>e.kind,desc:e=>e.desc,debit:e=>e.amount>0?e.amount:0,credit:e=>e.amount<0?-e.amount:0,balance:e=>e.balance});
   const name=contactName(c);
   const kindLabel={invoice:'Invoice',bill:'Received Invoice',in:'Money In',out:'Money Out'};
-  const balLabel=b=>Math.abs(b)<0.005?'Settled':b>0?`${name} owes us`:'We owe '+name;
+  const balLabel=b=>Math.abs(b)<0.005?tr('Settled'):b>0?tr("{0} owes us", name):tr('We owe ')+name;
   const cards=[
     ...(s.invoiced?[['Invoiced',s.invoiced]]:[]),...(s.received?[['Received',s.received]]:[]),
     ...(s.billed?[['Billed to us',s.billed]]:[]),...(s.paid?[['Paid',s.paid]]:[]),
@@ -577,37 +582,37 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
 
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap'}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
+      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
       <div style={{width:1,height:24,background:'var(--g200)'}}/>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{name}</h2>
       <span className="ct-type">{contactTypeLabel(c.type)}</span>
       <div style={{flex:1}}/>
-      {rows.length>0&&<Btn v="bex bsm" onClick={exportRows}><Ico n="export"/>Export Statement</Btn>}
-      <Btn v="bgh bsm" onClick={()=>onEdit(c)}><Ico n="edit"/>Edit Contact</Btn>
+      {rows.length>0&&<Btn v="bex bsm" onClick={exportRows}><Ico n="export"/>{tr("Export Statement")}</Btn>}
+      <Btn v="bgh bsm" onClick={()=>onEdit(c)}><Ico n="edit"/>{tr("Edit Contact")}</Btn>
     </div>
     {curs.length>1&&<div className="st-tabs" style={{marginBottom:14}}>{curs.map(k=><button key={k} className={`st-tab${k===cur?' active':''}`} onClick={()=>setCur(k)}>{k}</button>)}</div>}
-    {entries.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">No invoices or payments yet</div><div className="empty-s">Invoices in this name and bank transactions with this contact appear here</div></div></div>:(<>
+    {entries.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{tr("No invoices or payments yet")}</div><div className="empty-s">{tr("Invoices in this name and bank transactions with this contact appear here")}</div></div></div>:(<>
       <div className="ct-cards">
         {cards.map(([l,v])=><div key={l} className="ct-card"><div className="ct-card-l">{l}</div><div className="ct-card-v">{curFmt(cur,v)}</div></div>)}
         {trading&&<div className={`ct-card ct-bal${s.balance>0.005?' pos':s.balance<-0.005?' neg':''}`}><div className="ct-card-l">{balLabel(s.balance)}</div><div className="ct-card-v">{curFmt(cur,Math.abs(s.balance))}</div></div>}
       </div>
       {openRows.length>0&&<div className="tcard" style={{marginBottom:16}}>
-        <div className="tcard-hdr"><span className="tcard-hdr-t">Open Documents</span></div>
+        <div className="tcard-hdr"><span className="tcard-hdr-t">{tr("Open Documents")}</span></div>
         <table className="dt"><Cg w={[0.9,1.2,1.3,0.9,1,1,1]}/>
           <thead><tr>
-            <SortTh k="date" sort={oSort} onSort={onOSort}>Date</SortTh>
-            <SortTh k="no" sort={oSort} onSort={onOSort}>Number</SortTh>
-            <SortTh k="type" sort={oSort} onSort={onOSort}>Type</SortTh>
-            <SortTh k="due" sort={oSort} onSort={onOSort}>Due</SortTh>
-            <SortTh k="total" sort={oSort} onSort={onOSort} className="tar">Total</SortTh>
-            <SortTh k="paid" sort={oSort} onSort={onOSort} className="tar">Paid</SortTh>
-            <SortTh k="outstanding" sort={oSort} onSort={onOSort} className="tar">Outstanding</SortTh>
+            <SortTh k="date" sort={oSort} onSort={onOSort}>{tr("Date")}</SortTh>
+            <SortTh k="no" sort={oSort} onSort={onOSort}>{tr("Number")}</SortTh>
+            <SortTh k="type" sort={oSort} onSort={onOSort}>{tr("Type")}</SortTh>
+            <SortTh k="due" sort={oSort} onSort={onOSort}>{tr("Due")}</SortTh>
+            <SortTh k="total" sort={oSort} onSort={onOSort} className="tar">{tr("Total")}</SortTh>
+            <SortTh k="paid" sort={oSort} onSort={onOSort} className="tar">{tr("Paid")}</SortTh>
+            <SortTh k="outstanding" sort={oSort} onSort={onOSort} className="tar">{tr("Outstanding")}</SortTh>
           </tr></thead>
           <tbody>{openRows.map(o=><tr key={o.type+o.d.id}>
             <td style={{fontSize:12,color:'var(--g500)'}}>{o.d.date||'—'}</td>
             <td style={{fontWeight:600}}>{o.d.number||'—'}</td>
-            <td style={{fontSize:12,color:'var(--g600)'}}>{o.type==='invoice'?'Sales Invoice':'Received Invoice'}</td>
-            <td style={{fontSize:12,color:o.overdue?'var(--red)':'var(--g500)',fontWeight:o.overdue?600:400}}>{o.d.dueDate||'—'}{o.overdue&&' · overdue'}</td>
+            <td style={{fontSize:12,color:'var(--g600)'}}>{o.type==='invoice'?tr('Sales Invoice'):tr('Received Invoice')}</td>
+            <td style={{fontSize:12,color:o.overdue?'var(--red)':'var(--g500)',fontWeight:o.overdue?600:400}}>{o.d.dueDate||'—'}{o.overdue&&tr(' · overdue')}</td>
             <td className="tar">{curFmt(cur,o.total)}</td>
             <td className="tar" style={{color:'var(--g500)'}}>{o.paid?curFmt(cur,o.paid):'—'}</td>
             <td className="tar" style={{fontWeight:700}}>{curFmt(cur,o.outstanding)}</td>
@@ -615,21 +620,21 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
         </table>
       </div>}
       <div className="tcard">
-        <div className="tcard-hdr"><span className="tcard-hdr-t">Statement ({cur})</span><span style={{fontSize:11.5,color:'var(--g400)'}}>Debit = owed to us · Credit = owed by us or paid to us</span></div>
+        <div className="tcard-hdr"><span className="tcard-hdr-t">{tr("Statement ({0})", cur)}</span><span style={{fontSize:11.5,color:'var(--g400)'}}>{tr("Debit = owed to us · Credit = owed by us or paid to us")}</span></div>
         <table className="dt"><Cg w={[0.8,1.3,1.1,1.8,0.9,0.9,1]}/>
           <thead><tr>
-            <SortTh k="date" sort={stSort} onSort={onStSort}>Date</SortTh>
-            <SortTh k="no" sort={stSort} onSort={onStSort}>Reference</SortTh>
-            <SortTh k="type" sort={stSort} onSort={onStSort}>Type</SortTh>
-            <SortTh k="desc" sort={stSort} onSort={onStSort}>Description</SortTh>
-            <SortTh k="debit" sort={stSort} onSort={onStSort} className="tar">Debit</SortTh>
-            <SortTh k="credit" sort={stSort} onSort={onStSort} className="tar">Credit</SortTh>
-            <SortTh k="balance" sort={stSort} onSort={onStSort} className="tar">Balance</SortTh>
+            <SortTh k="date" sort={stSort} onSort={onStSort}>{tr("Date")}</SortTh>
+            <SortTh k="no" sort={stSort} onSort={onStSort}>{tr("Reference")}</SortTh>
+            <SortTh k="type" sort={stSort} onSort={onStSort}>{tr("Type")}</SortTh>
+            <SortTh k="desc" sort={stSort} onSort={onStSort}>{tr("Description")}</SortTh>
+            <SortTh k="debit" sort={stSort} onSort={onStSort} className="tar">{tr("Debit")}</SortTh>
+            <SortTh k="credit" sort={stSort} onSort={onStSort} className="tar">{tr("Credit")}</SortTh>
+            <SortTh k="balance" sort={stSort} onSort={onStSort} className="tar">{tr("Balance")}</SortTh>
           </tr></thead>
           <tbody>{stRows.map(e=><tr key={e.id}>
             <td style={{fontSize:12,color:'var(--g500)'}}>{e.date||'—'}</td>
             <td style={{fontWeight:500}}>{e.ref||'—'}</td>
-            <td><span className={`ct-kind ct-k-${e.kind}`}>{kindLabel[e.kind]}</span></td>
+            <td><span className={`ct-kind ct-k-${e.kind}`}>{tr(kindLabel[e.kind])}</span></td>
             <td style={{color:'var(--g600)'}}>{e.desc}</td>
             <td className="tar">{e.amount>0?curFmt(cur,e.amount):''}</td>
             <td className="tar">{e.amount<0?curFmt(cur,-e.amount):''}</td>
@@ -655,23 +660,23 @@ function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete}){
     return{a:curList(Object.fromEntries(Object.entries(byCur).map(([k,s])=>[k,s.received]))),b:curList(Object.fromEntries(Object.entries(byCur).map(([k,s])=>[k,s.paid]))),plain:true};
   };
   const cell=(list,cls,prefix)=>list.length?list.map(([cur,v])=><div key={cur} className={cls}>{prefix}{curFmt(cur,v)}</div>):<span style={{color:'var(--g300)'}}>—</span>;
-  const exportList=()=>exportExcel([['Company','Contact','Relationship','Email','Phone','Receivable / Received','Payable / Paid'],...f.map(c=>{const p=pos(c);const txt=l=>l.map(([cur,v])=>curFmt(cur,v)).join(' · ');return[c.company||'',c.contact||'',contactTypeLabel(c.type),c.email||'',c.phone||'',txt(p.a),txt(p.b)];})],'contacts');
+  const exportList=()=>exportExcel([['Company','Contact','Relationship','Email','Phone','Receivable / Received','Payable / Paid'],...f.map(c=>{const p=pos(c);const txt=l=>l.map(([cur,v])=>curFmt(cur,v)).join(' · ');return[c.company||'',c.contact||'',contactTypeLabel(c.type,true),c.email||'',c.phone||'',txt(p.a),txt(p.b)];})],'contacts');
   return(<div className="content">
-    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div>
-      <select value={typeF} onChange={e=>setTypeF(e.target.value)}><option value="">All relationships</option>{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
+    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search...")}/></div>
+      <select value={typeF} onChange={e=>setTypeF(e.target.value)}><option value="">{tr("All relationships")}</option>{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{tr(l)}</option>)}</select>
       <div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={exportList}><Ico n="export"/>Export</Btn>
+      <Btn v="bex bsm" onClick={exportList}><Ico n="export"/>{tr("Export")}</Btn>
     </div>
-    {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{customers.length?'No contacts match':'No contacts yet'}</div></div></div>:(
+    {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{customers.length?tr('No contacts match'):tr('No contacts yet')}</div></div></div>:(
     <div className="tcard"><table className="dt">
       <Cg w={[2,1.3,1.7,1,0.9,1.2,1.2,0.8]}/>
       <thead><tr>
-        <SortTh k="company" sort={sort} onSort={onSort}>Company</SortTh>
-        <SortTh k="contact" sort={sort} onSort={onSort}>Contact</SortTh>
-        <SortTh k="email" sort={sort} onSort={onSort}>Email</SortTh>
-        <SortTh k="phone" sort={sort} onSort={onSort}>Phone</SortTh>
-        <SortTh k="type" sort={sort} onSort={onSort}>Type</SortTh>
-        <th className="tar">Receivable</th><th className="tar">Payable</th><th>Actions</th>
+        <SortTh k="company" sort={sort} onSort={onSort}>{tr("Company")}</SortTh>
+        <SortTh k="contact" sort={sort} onSort={onSort}>{tr("Contact")}</SortTh>
+        <SortTh k="email" sort={sort} onSort={onSort}>{tr("Email")}</SortTh>
+        <SortTh k="phone" sort={sort} onSort={onSort}>{tr("Phone")}</SortTh>
+        <SortTh k="type" sort={sort} onSort={onSort}>{tr("Type")}</SortTh>
+        <th className="tar">{tr("Receivable")}</th><th className="tar">{tr("Payable")}</th><th>{tr("Actions")}</th>
       </tr></thead>
       <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=>{const p=pos(c);return(<tr key={c.id} className="ct-row" onClick={()=>onOpen(c)}>
         <td style={{fontWeight:500}}>{c.company||'—'}</td>
@@ -681,7 +686,7 @@ function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete}){
         <td style={{color:'var(--g600)',fontSize:12}}>{contactTypeLabel(c.type)}</td>
         <td className="tar">{p.plain?cell(p.a,'ct-plain','Received '):cell(p.a,'ct-recv','')}</td>
         <td className="tar">{p.plain?cell(p.b,'ct-plain','Paid '):cell(p.b,'ct-pay','')}</td>
-        <td onClick={e=>e.stopPropagation()}><div className="aw"><button className="ab" onClick={()=>onOpen(c)} title="Statement" aria-label="Statement"><Ico n="eye"/></button><button className="ab" onClick={()=>onEdit(c)} title="Edit" aria-label="Edit"><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(c)} title="Delete" aria-label="Delete"><Ico n="trash"/></button></div></td>
+        <td onClick={e=>e.stopPropagation()}><div className="aw"><button className="ab" onClick={()=>onOpen(c)} title={tr("Statement")} aria-label={tr("Statement")}><Ico n="eye"/></button><button className="ab" onClick={()=>onEdit(c)} title={tr("Edit")} aria-label={tr("Edit")}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(c)} title={tr("Delete")} aria-label={tr("Delete")}><Ico n="trash"/></button></div></td>
       </tr>);})}</tbody>
     </table><Pagination total={f.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
     )}
@@ -702,15 +707,15 @@ function OffCustForm({cust:init,customers,onSave,onCancel,dirtyRef}){
     onSave(norm);
   };
   return(<div className="content"><div className="fw" style={{maxWidth:640}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?'Edit Contact':'New Contact'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
-    <div className="fc"><div className="fct">Contact Info</div>
-      <div className="fg g2"><Fld label="Company / Name *"><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder="Acme Ltd" required/></Fld><Fld label="Contact Person"><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder="John Smith"/></Fld></div>
-      <div className="fg g2" style={{marginTop:12}}><Fld label="Email"><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
-      <div style={{marginTop:12}}><Fld label="Relationship"><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi">{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></Fld></div>
-      <div style={{marginTop:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
-      <div style={{marginTop:12}}><Fld label="Notes"><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Contact'):tr('New Contact')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+    <div className="fc"><div className="fct">{tr("Contact Info")}</div>
+      <div className="fg g2"><Fld label={tr("Company / Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Contact Person")}><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder={tr("John Smith")}/></Fld></div>
+      <div className="fg g2" style={{marginTop:12}}><Fld label={tr("Email")}><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
+      <div style={{marginTop:12}}><Fld label={tr("Relationship")}><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi">{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{tr(l)}</option>)}</select></Fld></div>
+      <div style={{marginTop:12}}><Fld label={tr("Address")}><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={3} className="fi"/></Fld></div>
+      <div style={{marginTop:12}}><Fld label={tr("Notes")}><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={2} className="fi"/></Fld></div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
   </div></div>);
 }
 function OffProjects({projects,onNew,onEdit,onDelete}){
@@ -719,18 +724,18 @@ function OffProjects({projects,onNew,onEdit,onDelete}){
   const rows=sortRows(projects,sort,{date:p=>p.startDate,name:p=>p.name,client:p=>p.client,status:p=>p.status||'active'});
   return(<div className="content">
     <div className="fbar"><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Start Date','Name','Client','Status'],...rows.map(p=>[p.startDate||'',p.name||'',p.client||'',p.status||''])],'projects')}><Ico n="export"/>Export</Btn>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Start Date','Name','Client','Status'],...rows.map(p=>[p.startDate||'',p.name||'',p.client||'',p.status||''])],'projects')}><Ico n="export"/>{tr("Export")}</Btn>
     </div>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.8,1.8,0.9,0.6]}/>
       <thead><tr>
-        <SortTh k="date" sort={sort} onSort={onSort}>Start</SortTh>
-        <SortTh k="name" sort={sort} onSort={onSort}>Name</SortTh>
-        <SortTh k="client" sort={sort} onSort={onSort}>Client</SortTh>
-        <SortTh k="status" sort={sort} onSort={onSort}>Status</SortTh>
-        <th>Actions</th>
+        <SortTh k="date" sort={sort} onSort={onSort}>{tr("Start")}</SortTh>
+        <SortTh k="name" sort={sort} onSort={onSort}>{tr("Name")}</SortTh>
+        <SortTh k="client" sort={sort} onSort={onSort}>{tr("Client")}</SortTh>
+        <SortTh k="status" sort={sort} onSort={onSort}>{tr("Status")}</SortTh>
+        <th>{tr("Actions")}</th>
       </tr></thead>
-      <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">No projects yet</div></div></td></tr>:rows.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id}><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
+      <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">{tr("No projects yet")}</div></div></td></tr>:rows.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id}><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
       </tbody>
     </table><Pagination total={projects.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
@@ -748,13 +753,13 @@ function OffProjForm({proj:init,projects,onSave,onCancel,dirtyRef}){
     onSave(norm);
   };
   return(<div className="content"><div className="fw" style={{maxWidth:580}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?'Edit Project':'New Project'}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
-    <div className="fc"><div className="fct">Project Details</div>
-      <div className="fg g2"><Fld label="Name"><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder="Project name"/></Fld><Fld label="Client"><input value={p.client||''} onChange={e=>s('client',e.target.value)} className="fi" placeholder="Client"/></Fld></div>
-      <div className="fg g2" style={{marginTop:12}}><Fld label="Start Date"><input type="date" value={p.startDate||''} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld><Fld label="Status"><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">Active</option><option value="completed">Completed</option><option value="on-hold">On Hold</option><option value="cancelled">Cancelled</option></select></Fld></div>
-      <div style={{marginTop:12}}><Fld label="Description"><textarea value={p.desc||''} onChange={e=>s('desc',e.target.value)} rows={2} className="fi"/></Fld></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?tr('Edit Project'):tr('New Project')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+    <div className="fc"><div className="fct">{tr("Project Details")}</div>
+      <div className="fg g2"><Fld label={tr("Name")}><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder={tr("Project name")}/></Fld><Fld label={tr("Client")}><input value={p.client||''} onChange={e=>s('client',e.target.value)} className="fi" placeholder={tr("Client")}/></Fld></div>
+      <div className="fg g2" style={{marginTop:12}}><Fld label={tr("Start Date")}><input type="date" value={p.startDate||''} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld><Fld label={tr("Status")}><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">{tr("Active")}</option><option value="completed">{tr("Completed")}</option><option value="on-hold">{tr("On Hold")}</option><option value="cancelled">{tr("Cancelled")}</option></select></Fld></div>
+      <div style={{marginTop:12}}><Fld label={tr("Description")}><textarea value={p.desc||''} onChange={e=>s('desc',e.target.value)} rows={2} className="fi"/></Fld></div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={handleSave}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
   </div></div>);
 }
 function CategoryList({cats,direction,bankTx,banks,onOpen,onEdit,onDelete}){
@@ -771,17 +776,17 @@ function CategoryList({cats,direction,bankTx,banks,onOpen,onEdit,onDelete}){
   };
   const fmtTotal=(acc)=>Object.keys(acc).length===0?'—':Object.entries(acc).map(([c,amt])=>`${CURR[c]||c}${fmt(amt)}`).join(' · ');
   const groups=groupCats(cats).map(({main,children})=>({main,children:children.filter(ch=>matches(main.name)||matches(ch.name))})).filter(({main,children})=>matches(main.name)||children.length>0);
-  const label=direction==='out'?'Expense':'Income';
+  const label=direction==='out'?tr('Expense'):tr('Income');
   return(<div className="content">
-    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..."/></div><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Code','Name','Total'],...groups.flatMap(({main,children})=>[[main.code||'',main.name,fmtTotal(catTotal([main.name,...children.map(c=>c.name)]))],...children.map(ch=>[ch.code||'',ch.name,fmtTotal(catTotal([ch.name]))])])],direction==='out'?'expense-categories':'income-categories')}><Ico n="export"/>Export</Btn>
+    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search...")}/></div><div style={{flex:1}}/>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Code','Name','Total'],...groups.flatMap(({main,children})=>[[main.code||'',main.name,fmtTotal(catTotal([main.name,...children.map(c=>c.name)]))],...children.map(ch=>[ch.code||'',ch.name,fmtTotal(catTotal([ch.name]))])])],direction==='out'?'expense-categories':'income-categories')}><Ico n="export"/>{tr("Export")}</Btn>
     </div>
     {groups.length===0?(
-      <div className="tcard"><div className="empty"><Ico n={direction==='out'?'expense':'income'} size={36}/><div className="empty-t">No {label.toLowerCase()} categories yet</div></div></div>
+      <div className="tcard"><div className="empty"><Ico n={direction==='out'?'expense':'income'} size={36}/><div className="empty-t">{tr("No {0} categories yet", label.toLowerCase())}</div></div></div>
     ):(
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,2.2,0.9,0.6]}/>
-      <thead><tr><th>Code</th><th>Name</th><th className="tar">Total</th><th>Actions</th></tr></thead>
+      <thead><tr><th>{tr("Code")}</th><th>{tr("Name")}</th><th className="tar">{tr("Total")}</th><th>{tr("Actions")}</th></tr></thead>
       <tbody>{groups.map(({main,children})=>(<React.Fragment key={main.id}>
         <tr>
           <td style={{fontWeight:700,color:'var(--g500)',fontFamily:'monospace',fontSize:12}}>{main.code||'—'}</td>
@@ -812,7 +817,7 @@ function CategoryModal({cat,cats,onSave,onCancel}){
   const[code,setCode]=useState(cat.code||'');
   const[name,setName]=useState(cat.name||'');
   const mains=cats.filter(x=>!x.parentId&&x.id!==cat.id);
-  const label=cat.direction==='in'?'Income':'Expense';
+  const label=cat.direction==='in'?tr('Income'):tr('Expense');
   const handleMainSelect=(v)=>{
     if(v==='__new__'){setMode('main');setParentId('');}
     else{setMode('sub');setParentId(v);}
@@ -820,31 +825,31 @@ function CategoryModal({cat,cats,onSave,onCancel}){
   const canSave=name.trim()&&(mode==='main'||(mode==='sub'&&parentId));
   return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={onCancel}>
     <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:440,maxWidth:'90vw'}}>
-      <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{isNew?`New ${label}`:(isEditingMain?'Edit Main Category':'Edit Sub-Category')}</div>
+      <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{isNew?tr("New {0}", label):(isEditingMain?tr('Edit Main Category'):tr('Edit Sub-Category'))}</div>
       {!isEditingMain&&(
-        <div style={{marginBottom:16}}><Fld label="Main Category">
+        <div style={{marginBottom:16}}><Fld label={tr("Main Category")}>
           <select value={mode==='main'?'__new__':parentId} onChange={e=>handleMainSelect(e.target.value)} className="fi">
-            <option value="" disabled>— Choose a Main Category —</option>
-            <option value="__new__">+ Add New Main Category</option>
+            <option value="" disabled>{tr("— Choose a Main Category —")}</option>
+            <option value="__new__">{tr("+ Add New Main Category")}</option>
             {mains.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </Fld></div>
       )}
       {mode&&(<>
-        {!isEditingMain&&<div style={{fontSize:11,fontWeight:700,color:'var(--g500)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>{mode==='main'?'New Main Category':'Sub-Category'}</div>}
+        {!isEditingMain&&<div style={{fontSize:11,fontWeight:700,color:'var(--g500)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:8}}>{mode==='main'?tr('New Main Category'):tr('Sub-Category')}</div>}
         <div className="fg g2" style={{marginBottom:16}}>
-          <Fld label="Code"><input value={code} onChange={e=>setCode(e.target.value)} className="fi" placeholder="e.g. AR.01"/></Fld>
-          <Fld label="Name"><input value={name} onChange={e=>setName(e.target.value)} className="fi" autoFocus/></Fld>
+          <Fld label={tr("Code")}><input value={code} onChange={e=>setCode(e.target.value)} className="fi" placeholder={tr("e.g. AR.01")}/></Fld>
+          <Fld label={tr("Name")}><input value={name} onChange={e=>setName(e.target.value)} className="fi" autoFocus/></Fld>
         </div>
       </>)}
       <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-        <Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn>
+        <Btn v="bgh bsm" onClick={onCancel}>{tr("Cancel")}</Btn>
         <Btn v="bp bsm" disabled={!canSave} onClick={async()=>{
           if(!canSave)return;
           const dup=findCaseInsensitiveDup(cats,'name',name,cat.id);
           if(dup&&!(await askDuplicateOk('category',name.trim())))return;
           onSave({id:cat.id,direction:cat.direction,name:toTitleCase(name),code:code.trim(),parentId:mode==='sub'?parentId:null});
-        }}>Save</Btn>
+        }}>{tr("Save")}</Btn>
       </div>
     </div>
   </div>);
@@ -865,25 +870,25 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
   const totalsByCurrency=filtered.reduce((acc,t)=>{const c=(t.account&&t.account.currency)||'GBP';acc[c]=(acc[c]||0)+(+t.amount||0);return acc;},{});
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
+      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
       <div style={{width:1,height:24,background:'var(--g200)'}}/>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{mainName}</h2>
       {filtered.length>0&&<span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{Object.entries(totalsByCurrency).map(([c,amt])=>`${CURR[c]||c}${fmt(amt)}`).join(' · ')}</span>}
     </div>
-    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search description, reference, account..."/></div><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Account','Description','Linked','Amount'],...filtered.map(t=>[t.date||'',(t.account&&t.account.accountName)||'',t.description||'',linkLabel(t)||'',+t.amount])],`${mainName.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-transactions`)}><Ico n="export"/>Export</Btn>
+    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search description, reference, account...")}/></div><div style={{flex:1}}/>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Account','Description','Linked','Amount'],...filtered.map(t=>[t.date||'',(t.account&&t.account.accountName)||'',t.description||'',linkLabel(t)||'',+t.amount])],`${mainName.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-transactions`)}><Ico n="export"/>{tr("Export")}</Btn>
     </div>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.6,2.2,1,0.9,0.6]}/>
       <thead><tr>
-        <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
-        <SortTh k="account" sort={sort} onSort={onSort}>Account</SortTh>
-        <SortTh k="desc" sort={sort} onSort={onSort}>Description</SortTh>
-        <SortTh k="linked" sort={sort} onSort={onSort}>Linked</SortTh>
-        <SortTh k="amount" sort={sort} onSort={onSort} className="tar">Amount</SortTh>
-        <th>Actions</th>
+        <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
+        <SortTh k="account" sort={sort} onSort={onSort}>{tr("Account")}</SortTh>
+        <SortTh k="desc" sort={sort} onSort={onSort}>{tr("Description")}</SortTh>
+        <SortTh k="linked" sort={sort} onSort={onSort}>{tr("Linked")}</SortTh>
+        <SortTh k="amount" sort={sort} onSort={onSort} className="tar">{tr("Amount")}</SortTh>
+        <th>{tr("Actions")}</th>
       </tr></thead>
-      <tbody>{filtered.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:filtered.map(t=>{
+      <tbody>{filtered.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">{tr("No transactions yet")}</div></div></td></tr>:filtered.map(t=>{
         const curSym=CURR[(t.account&&t.account.currency)]||'£';
         return(
         <tr key={t.id}>
@@ -910,7 +915,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
   const handleLogoUpload=(e)=>{
     const f=e.target.files[0];
     if(!f)return;
-    if(!f.type.startsWith('image/')){alert('Please select an image file');return;}
+    if(!f.type.startsWith('image/')){alert(tr('Please select an image file'));return;}
     const r=new FileReader();
     r.onload=()=>{
       const data=r.result;
@@ -921,24 +926,24 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
   };
 
   const menuItems=[
-    {id:'company',icon:'settings',label:'Company Information'},
-    {id:'pdf',icon:'dl',label:'PDF Templates'},
-    {id:'numbering',icon:'hash',label:'Document Numbering'},
-    {id:'bank',icon:'card',label:'Bank Details'}
+    {id:'company',icon:'settings',label:tr('Company Information')},
+    {id:'pdf',icon:'dl',label:tr('PDF Templates')},
+    {id:'numbering',icon:'hash',label:tr('Document Numbering')},
+    {id:'bank',icon:'card',label:tr('Bank Details')}
   ];
   
   return(<div className="content" style={{padding:0,display:'flex',height:'calc(100vh - 54px)'}}>
     {/* Back Button & Title Bar */}
     <div style={{position:'fixed',top:54,left:'var(--sidebar)',right:0,background:'var(--g50)',borderBottom:'1px solid var(--g200)',padding:'12px 24px',display:'flex',alignItems:'center',gap:10,zIndex:50}}>
-      <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back" size={14}/>Back to Dashboard</button>
-      <h2 style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginLeft:10}}>Settings</h2>
+      <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back" size={14}/>{tr("Back to Dashboard")}</button>
+      <h2 style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginLeft:10}}>{tr("Settings")}</h2>
       <div style={{flex:1}}/>
-      <Btn v="bp bsm" onClick={handleSave}>Save</Btn>
+      <Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn>
     </div>
 
     {/* Left Menu */}
     <div style={{width:280,background:'var(--white)',borderRight:'1px solid var(--g200)',paddingTop:70,flexShrink:0}}>
-      <div style={{padding:'8px 16px',fontSize:10,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:4}}>Settings</div>
+      <div style={{padding:'8px 16px',fontSize:10,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:4}}>{tr("Settings")}</div>
       {menuItems.map(m=>(
         <div key={m.id} onClick={()=>{setActiveMenu(m.id);LS.set(ns+'settingsMenu',m.id);}} style={{padding:'10px 16px',margin:'2px 8px',borderRadius:8,cursor:'pointer',display:'flex',alignItems:'center',gap:10,background:activeMenu===m.id?'var(--g100)':'transparent',color:activeMenu===m.id?'var(--g900)':'var(--g600)',fontWeight:activeMenu===m.id?600:500,fontSize:13,transition:'background 0.15s,border-color 0.15s,box-shadow 0.15s,color 0.15s,transform 0.15s'}}>
           <Ico n={m.icon} size={16}/>
@@ -953,26 +958,26 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
         
         {/* Company Information */}
         {activeMenu==='company'&&(<>
-          <div style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:20}}>Company Information</div>
+          <div style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:20}}>{tr("Company Information")}</div>
           <div className="fc">
-            <div style={{marginBottom:12}}><Fld label="Company Name"><input value={c.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
-            <div style={{marginBottom:12}}><Fld label="Address"><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld></div>
-            <div className="fg g2"><Fld label="Email"><input value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label="Phone"><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
+            <div style={{marginBottom:12}}><Fld label={tr("Company Name")}><input value={c.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
+            <div style={{marginBottom:12}}><Fld label={tr("Address")}><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld></div>
+            <div className="fg g2"><Fld label={tr("Email")}><input value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
             <div style={{marginTop:16}}>
-              <Fld label="Company Logo">
+              <Fld label={tr("Company Logo")}>
                 <input type="file" accept="image/*" onChange={handleLogoUpload} className="fi" style={{padding:'8px'}}/>
                 {c.logo&&<div style={{marginTop:8,padding:12,background:'var(--g50)',borderRadius:8,display:'flex',alignItems:'center',gap:12}}>
                   <img src={c.logo} alt="Logo" style={{maxWidth:120,maxHeight:60,objectFit:'contain'}}/>
-                  <button onClick={()=>{setLogo('');s('logo','');}} style={{padding:'4px 10px',background:'var(--red)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>Remove</button>
+                  <button onClick={()=>{setLogo('');s('logo','');}} style={{padding:'4px 10px',background:'var(--red)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>{tr("Remove")}</button>
                 </div>}
               </Fld>
             </div>
             <div style={{marginTop:16}}>
-              <Fld label="Signature">
+              <Fld label={tr("Signature")}>
                 <input type="file" accept="image/png,image/jpeg,image/jpg" onChange={(e)=>{
                   const f=e.target.files[0];
                   if(!f)return;
-                  if(!f.type.match(/^image\/(png|jpeg|jpg)$/)){alert('Please select a PNG or JPG file');return;}
+                  if(!f.type.match(/^image\/(png|jpeg|jpg)$/)){alert(tr('Please select a PNG or JPG file'));return;}
                   const r=new FileReader();
                   r.onload=()=>{
                     const data=r.result;
@@ -983,7 +988,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
                 }} className="fi" style={{padding:'8px'}}/>
                 {c.signature&&<div style={{marginTop:8,padding:12,background:'var(--g50)',borderRadius:8,display:'flex',alignItems:'center',gap:12}}>
                   <img src={c.signature} alt="Signature" style={{maxWidth:120,maxHeight:60,objectFit:'contain'}}/>
-                  <button onClick={()=>{setSignature('');s('signature','');}} style={{padding:'4px 10px',background:'var(--red)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>Remove</button>
+                  <button onClick={()=>{setSignature('');s('signature','');}} style={{padding:'4px 10px',background:'var(--red)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>{tr("Remove")}</button>
                 </div>}
               </Fld>
             </div>
@@ -992,12 +997,12 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
         
         {/* PDF Templates */}
         {activeMenu==='pdf'&&(<>
-          <div style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:20}}>PDF Templates</div>
-          <div style={{marginBottom:16,fontSize:13,color:'var(--g600)'}}>Select a template for your invoices and quotations</div>
+          <div style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:20}}>{tr("PDF Templates")}</div>
+          <div style={{marginBottom:16,fontSize:13,color:'var(--g600)'}}>{tr("Select a template for your invoices and quotations")}</div>
           
           {Object.values(TEMPLATES).map(tpl=>(
             <div key={tpl.id} onClick={()=>s('selectedTemplate',tpl.id)} style={{background:'var(--white)',border:c.selectedTemplate===tpl.id?'2px solid var(--gm-400)':'1px solid var(--g200)',borderRadius:10,padding:20,marginBottom:12,cursor:'pointer',transition:'background 0.15s,border-color 0.15s,box-shadow 0.15s,color 0.15s,transform 0.15s',position:'relative'}}>
-              {c.selectedTemplate===tpl.id&&<div style={{position:'absolute',top:12,right:12,background:'var(--gm-400)',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:700}}>ACTIVE</div>}
+              {c.selectedTemplate===tpl.id&&<div style={{position:'absolute',top:12,right:12,background:'var(--gm-400)',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:700}}>{tr("ACTIVE")}</div>}
               <div style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginBottom:6}}>{tpl.name}</div>
               <div style={{fontSize:12,color:'var(--g600)'}}>{tpl.description}</div>
             </div>
@@ -1007,21 +1012,21 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
         {/* Document Numbering */}
         {activeMenu==='numbering'&&(<>
           <div style={{display:'flex',alignItems:'center',marginBottom:20}}>
-            <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>Document Numbering</div>
+            <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>{tr("Document Numbering")}</div>
             <div style={{flex:1}}/>
             {numLocked?
-              <Btn v="bgh bsm" onClick={()=>setNumLocked(false)}><Ico n="edit" size={13}/>Edit</Btn>:
-              <Btn v="bp bsm" onClick={()=>setNumLocked(true)}><Ico n="check" size={13}/>Done</Btn>
+              <Btn v="bgh bsm" onClick={()=>setNumLocked(false)}><Ico n="edit" size={13}/>{tr("Edit")}</Btn>:
+              <Btn v="bp bsm" onClick={()=>setNumLocked(true)}><Ico n="check" size={13}/>{tr("Done")}</Btn>
             }
           </div>
           <label className="num-switch">
             <input type="checkbox" checked={c.autoNumber!==false} onChange={e=>{s('autoNumber',e.target.checked);onAutoNumberChange(e.target.checked);}}/>
             <span className="num-switch-track" aria-hidden="true"/>
             <span className="num-switch-text">
-              <span className="num-switch-t">Automatic numbering {c.autoNumber!==false?'on':'off'}</span>
+              <span className="num-switch-t">{tr("Automatic numbering {0}", c.autoNumber!==false?tr('on'):tr('off'))}</span>
               <span className="num-switch-h">{c.autoNumber!==false
-                ?'New quotations, invoices and purchase orders get the next number from the prefixes below.'
-                :'Numbers are typed by hand on each quotation, invoice and purchase order — use this to enter old documents. The counters stay where they are; turn this back on to continue automatically.'}</span>
+                ?tr('New quotations, invoices and purchase orders get the next number from the prefixes below.')
+                :tr('Numbers are typed by hand on each quotation, invoice and purchase order — use this to enter old documents. The counters stay where they are; turn this back on to continue automatically.')}</span>
             </span>
           </label>
           <div style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,overflow:'hidden',opacity:c.autoNumber!==false?1:.55}}>
@@ -1029,14 +1034,14 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
             <div style={{padding:'16px 20px',borderBottom:'1px solid var(--g200)',display:'flex',alignItems:'center',gap:16}}>
               <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>1</div>
               <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>Sales Quotation</div>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>{tr("Sales Quotation")}</div>
                 <div style={{display:'flex',gap:12,alignItems:'center'}}>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Prefix</div>
+                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Prefix")}</div>
                     <input value={c.quoPfx||'QUO'} onChange={e=>s('quoPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Start Number</div>
+                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Start Number")}</div>
                     <input type="number" value={c.quoStart||'1'} onChange={e=>s('quoStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
                   </div>
                 </div>
@@ -1046,14 +1051,14 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
             <div style={{padding:'16px 20px',borderBottom:'1px solid var(--g200)',display:'flex',alignItems:'center',gap:16}}>
               <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>2</div>
               <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>Sales Invoice</div>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>{tr("Sales Invoice")}</div>
                 <div style={{display:'flex',gap:12,alignItems:'center'}}>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Prefix</div>
+                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Prefix")}</div>
                     <input value={c.invPfx||'INV'} onChange={e=>s('invPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Start Number</div>
+                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Start Number")}</div>
                     <input type="number" value={c.invStart||'1'} onChange={e=>s('invStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
                   </div>
                 </div>
@@ -1063,14 +1068,14 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
             <div style={{padding:'16px 20px',display:'flex',alignItems:'center',gap:16}}>
               <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>3</div>
               <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>Purchase Order</div>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>{tr("Purchase Order")}</div>
                 <div style={{display:'flex',gap:12,alignItems:'center'}}>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Prefix</div>
+                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Prefix")}</div>
                     <input value={c.poPfx||'PO'} onChange={e=>s('poPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>Start Number</div>
+                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Start Number")}</div>
                     <input type="number" value={c.poStart||'1'} onChange={e=>s('poStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
                   </div>
                 </div>
@@ -1082,38 +1087,38 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
         {/* Bank Details */}
         {activeMenu==='bank'&&(<>
           <div style={{display:'flex',alignItems:'center',marginBottom:20}}>
-            <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>Bank Details</div>
+            <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>{tr("Bank Details")}</div>
             <div style={{flex:1}}/>
-            <Btn v="bp bsm" onClick={onAddBank}><Ico n="plus" size={13}/>Add Bank</Btn>
+            <Btn v="bp bsm" onClick={onAddBank}><Ico n="plus" size={13}/>{tr("Add Bank")}</Btn>
           </div>
 
           {/* Bank List */}
           {(!banks||banks.length===0)&&(
             <div style={{padding:40,background:'var(--g50)',borderRadius:12,textAlign:'center',color:'var(--g500)',fontSize:13}}>
               <div style={{fontSize:40,marginBottom:12}}>🏦</div>
-              <div style={{fontWeight:600,marginBottom:6}}>No Bank Accounts</div>
-              <div>Add your first bank account to start.</div>
+              <div style={{fontWeight:600,marginBottom:6}}>{tr("No Bank Accounts")}</div>
+              <div>{tr("Add your first bank account to start.")}</div>
             </div>
           )}
 
           {(banks||[]).map(bank=>(
             <div key={bank.id} style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,padding:20,marginBottom:12}}>
               <div style={{display:'flex',alignItems:'center',marginBottom:12}}>
-                <div style={{fontSize:14,fontWeight:700,color:'var(--g900)'}}>{ bank.accountName||'Unnamed Account'}</div>
-                {bank.isDefault&&<span style={{marginLeft:8,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,background:'var(--greenl)',color:'var(--green)'}}>DEFAULT</span>}
+                <div style={{fontSize:14,fontWeight:700,color:'var(--g900)'}}>{ bank.accountName||tr('Unnamed Account')}</div>
+                {bank.isDefault&&<span style={{marginLeft:8,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,background:'var(--greenl)',color:'var(--green)'}}>{tr("DEFAULT")}</span>}
                 <div style={{flex:1}}/>
                 <div style={{display:'flex',gap:6}}>
-                  {!bank.isDefault&&<button onClick={()=>onSetDefaultBank(bank.id)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,background:'var(--g100)',border:'none',borderRadius:6,cursor:'pointer',color:'var(--g700)'}}>Set Default</button>}
+                  {!bank.isDefault&&<button onClick={()=>onSetDefaultBank(bank.id)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,background:'var(--g100)',border:'none',borderRadius:6,cursor:'pointer',color:'var(--g700)'}}>{tr("Set Default")}</button>}
                   <button onClick={()=>onEditBank(bank)} className="ab"><Ico n="edit"/></button>
                   <button onClick={()=>onDeleteBank(bank.id)} className="ab danger"><Ico n="trash"/></button>
                 </div>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,fontSize:12,color:'var(--g600)'}}>
-                <div><span style={{fontWeight:600}}>Account Number:</span> {bank.accountNumber||'—'}</div>
-                <div><span style={{fontWeight:600}}>IBAN:</span> {bank.iban||'—'}</div>
-                <div><span style={{fontWeight:600}}>BIC:</span> {bank.bic||'—'}</div>
-                <div><span style={{fontWeight:600}}>Currency:</span> {bank.currency||'GBP'}</div>
-                <div><span style={{fontWeight:600}}>Opening Balance:</span> {CURR[bank.currency]||'£'}{fmt(+(bank.openingBalance||0))}</div>
+                <div><span style={{fontWeight:600}}>{tr("Account Number:")}</span> {bank.accountNumber||'—'}</div>
+                <div><span style={{fontWeight:600}}>{tr("IBAN:")}</span> {bank.iban||'—'}</div>
+                <div><span style={{fontWeight:600}}>{tr("BIC:")}</span> {bank.bic||'—'}</div>
+                <div><span style={{fontWeight:600}}>{tr("Currency:")}</span> {bank.currency||tr('GBP')}</div>
+                <div><span style={{fontWeight:600}}>{tr("Opening Balance:")}</span> {CURR[bank.currency]||'£'}{fmt(+(bank.openingBalance||0))}</div>
               </div>
             </div>
           ))}
@@ -1132,29 +1137,29 @@ function BankAccountModal({bank,onSave,onCancel}){
   const s=(k,v)=>setB(d=>({...d,[k]:v}));
   return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={onCancel}>
     <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:500,maxWidth:'90vw'}}>
-      <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{b.id?'Edit Bank Account':'New Bank Account'}</div>
-      <div style={{marginBottom:12}}><Fld label="Account Name"><input value={b.accountName||''} onChange={e=>s('accountName',e.target.value)} className="fi"/></Fld></div>
+      <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{b.id?tr('Edit Bank Account'):tr('New Bank Account')}</div>
+      <div style={{marginBottom:12}}><Fld label={tr("Account Name")}><input value={b.accountName||''} onChange={e=>s('accountName',e.target.value)} className="fi"/></Fld></div>
       <div className="fg g2" style={{marginBottom:12}}>
-        <Fld label="Account Number"><input value={b.accountNumber||''} onChange={e=>s('accountNumber',e.target.value)} className="fi"/></Fld>
-        <Fld label="BIC"><input value={b.bic||''} onChange={e=>s('bic',e.target.value)} className="fi"/></Fld>
+        <Fld label={tr("Account Number")}><input value={b.accountNumber||''} onChange={e=>s('accountNumber',e.target.value)} className="fi"/></Fld>
+        <Fld label={tr("BIC")}><input value={b.bic||''} onChange={e=>s('bic',e.target.value)} className="fi"/></Fld>
       </div>
-      <div style={{marginBottom:12}}><Fld label="IBAN"><input value={b.iban||''} onChange={e=>s('iban',e.target.value)} className="fi"/></Fld></div>
+      <div style={{marginBottom:12}}><Fld label={tr("IBAN")}><input value={b.iban||''} onChange={e=>s('iban',e.target.value)} className="fi"/></Fld></div>
       <div className="fg g2" style={{marginBottom:12}}>
-        <Fld label="Currency"><select value={b.currency||'GBP'} onChange={e=>s('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld>
-        <Fld label="Opening Balance"><input type="number" value={b.openingBalance||''} onChange={e=>s('openingBalance',e.target.value)} className="fi" placeholder="0.00" step=".01"/></Fld>
+        <Fld label={tr("Currency")}><select value={b.currency||'GBP'} onChange={e=>s('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld>
+        <Fld label={tr("Opening Balance")}><input type="number" value={b.openingBalance||''} onChange={e=>s('openingBalance',e.target.value)} className="fi" placeholder="0.00" step=".01"/></Fld>
       </div>
       <div style={{marginBottom:16}}>
-        <Fld label="Opening Balance Date"><input type="date" value={b.openingBalanceDate||''} onChange={e=>s('openingBalanceDate',e.target.value)} className="fi"/></Fld>
+        <Fld label={tr("Opening Balance Date")}><input type="date" value={b.openingBalanceDate||''} onChange={e=>s('openingBalanceDate',e.target.value)} className="fi"/></Fld>
       </div>
       <div style={{marginBottom:16}}>
         <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,cursor:'pointer'}}>
           <input type="checkbox" checked={b.isDefault||false} onChange={e=>s('isDefault',e.target.checked)}/>
-          <span>Set as default bank account</span>
+          <span>{tr("Set as default bank account")}</span>
         </label>
       </div>
       <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-        <Btn v="bgh bsm" onClick={onCancel}>Cancel</Btn>
-        <Btn v="bp bsm" onClick={()=>onSave({...b,id:b.id||uid(),accountName:toTitleCase(b.accountName),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase()})}>Save</Btn>
+        <Btn v="bgh bsm" onClick={onCancel}>{tr("Cancel")}</Btn>
+        <Btn v="bp bsm" onClick={()=>onSave({...b,id:b.id||uid(),accountName:toTitleCase(b.accountName),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase()})}>{tr("Save")}</Btn>
       </div>
     </div>
   </div>);
@@ -1163,10 +1168,10 @@ function BankAccountModal({bank,onSave,onCancel}){
 function OffBankAccounts({banks,accountBalance,onOpen,onEdit,onDelete,onSetDefault}){
   return(<div className="content">
     <div className="fbar"><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Account Name','Account Number','IBAN','BIC','Currency','Balance','Default'],...banks.map(b=>[b.accountName||'',b.accountNumber||'',b.iban||'',b.bic||'',b.currency||'',accountBalance(b),b.isDefault?'Yes':'No'])],'bank-accounts')}><Ico n="export"/>Export</Btn>
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Account Name','Account Number','IBAN','BIC','Currency','Balance','Default'],...banks.map(b=>[b.accountName||'',b.accountNumber||'',b.iban||'',b.bic||'',b.currency||'',accountBalance(b),b.isDefault?'Yes':'No'])],'bank-accounts')}><Ico n="export"/>{tr("Export")}</Btn>
     </div>
     {banks.length===0?(
-      <div className="tcard"><div className="empty"><Ico n="bank" size={40}/><div className="empty-t">No bank accounts yet</div><div className="empty-s">Add a bank account to start tracking transactions</div></div></div>
+      <div className="tcard"><div className="empty"><Ico n="bank" size={40}/><div className="empty-t">{tr("No bank accounts yet")}</div><div className="empty-s">{tr("Add a bank account to start tracking transactions")}</div></div></div>
     ):(
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:14}}>
         {banks.map(bank=>{
@@ -1174,13 +1179,13 @@ function OffBankAccounts({banks,accountBalance,onOpen,onEdit,onDelete,onSetDefau
           return(<div key={bank.id} style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,padding:20,cursor:'pointer'}} onClick={()=>onOpen(bank)}>
             <div style={{display:'flex',alignItems:'center',marginBottom:10}}>
               <Ico n="bank" size={16} style={{color:'var(--gm-500)'}}/>
-              <div style={{fontSize:14,fontWeight:700,color:'var(--g900)',marginLeft:8}}>{bank.accountName||'Unnamed Account'}</div>
-              {bank.isDefault&&<span style={{marginLeft:8,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,background:'var(--greenl)',color:'var(--green)'}}>DEFAULT</span>}
+              <div style={{fontSize:14,fontWeight:700,color:'var(--g900)',marginLeft:8}}>{bank.accountName||tr('Unnamed Account')}</div>
+              {bank.isDefault&&<span style={{marginLeft:8,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,background:'var(--greenl)',color:'var(--green)'}}>{tr("DEFAULT")}</span>}
             </div>
             <div style={{fontSize:22,fontWeight:800,color:bal<0?'var(--red)':'var(--g900)',marginBottom:4}}>{CURR[bank.currency]||'£'}{fmt(bal)}</div>
-            <div style={{fontSize:12,color:'var(--g500)',marginBottom:14}}>{bank.iban||bank.accountNumber||'No account number'}</div>
+            <div style={{fontSize:12,color:'var(--g500)',marginBottom:14}}>{bank.iban||bank.accountNumber||tr('No account number')}</div>
             <div style={{display:'flex',alignItems:'center',gap:6}} onClick={e=>e.stopPropagation()}>
-              {!bank.isDefault&&<button onClick={()=>onSetDefault(bank.id)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,background:'var(--g100)',border:'none',borderRadius:6,cursor:'pointer',color:'var(--g700)'}}>Set Default</button>}
+              {!bank.isDefault&&<button onClick={()=>onSetDefault(bank.id)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,background:'var(--g100)',border:'none',borderRadius:6,cursor:'pointer',color:'var(--g700)'}}>{tr("Set Default")}</button>}
               <div style={{flex:1}}/>
               <button onClick={()=>onEdit(bank)} className="ab"><Ico n="edit"/></button>
               <button onClick={()=>onDelete(bank.id)} className="ab danger"><Ico n="trash"/></button>
@@ -1250,41 +1255,41 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
 
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>Back</button>
+      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
       <div style={{width:1,height:24,background:'var(--g200)'}}/>
-      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{account.accountName||'Bank Account'}</h2>
-      <span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>Current: {curSym}{fmt(running)}</span>
+      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{account.accountName||tr('Bank Account')}</h2>
+      <span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{tr("Current: {0}{1}", curSym, fmt(running))}</span>
       <div style={{flex:1}}/>
-      {(banks||[]).length>1&&<Btn v="bgh bsm" onClick={onExchange}><Ico n="convert"/>Exchange</Btn>}
-      <Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>New Transaction</Btn>
+      {(banks||[]).length>1&&<Btn v="bgh bsm" onClick={onExchange}><Ico n="convert"/>{tr("Exchange")}</Btn>}
+      <Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>{tr("New Transaction")}</Btn>
     </div>
     <div className="fbar">
-      <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search description, reference..."/></div>
+      <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search description, reference...")}/></div>
       <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
       <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
       <div style={{flex:1}}/>
-      {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>In: {curSym}{fmt(totalIn)} · Out: {curSym}{fmt(totalOut)}</span>}
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Contact','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.contactName||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:isXpay(t)?`${t.description||''} (${xpayAmt(t)}; ${xpayDetail(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>Export</Btn>
+      {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>{tr("In: {0}{1} · Out: {2}{3}", curSym, fmt(totalIn), curSym, fmt(totalOut))}</span>}
+      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Contact','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.contactName||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:isXpay(t)?`${t.description||''} (${xpayAmt(t)}; ${xpayDetail(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>{tr("Export")}</Btn>
     </div>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.2,2,1,1,0.9,0.9,0.9,0.6]}/>
       <thead><tr>
-        <SortTh k="date" sort={sort} onSort={onSort}>Date</SortTh>
-        <SortTh k="contact" sort={sort} onSort={onSort}>Contact</SortTh>
-        <SortTh k="desc" sort={sort} onSort={onSort}>Description</SortTh>
-        <SortTh k="category" sort={sort} onSort={onSort}>Category</SortTh>
-        <SortTh k="linked" sort={sort} onSort={onSort}>Linked</SortTh>
-        <SortTh k="in" sort={sort} onSort={onSort} className="tar">In</SortTh>
-        <SortTh k="out" sort={sort} onSort={onSort} className="tar">Out</SortTh>
-        <SortTh k="balance" sort={sort} onSort={onSort} className="tar">Balance</SortTh>
-        <th>Actions</th>
+        <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
+        <SortTh k="contact" sort={sort} onSort={onSort}>{tr("Contact")}</SortTh>
+        <SortTh k="desc" sort={sort} onSort={onSort}>{tr("Description")}</SortTh>
+        <SortTh k="category" sort={sort} onSort={onSort}>{tr("Category")}</SortTh>
+        <SortTh k="linked" sort={sort} onSort={onSort}>{tr("Linked")}</SortTh>
+        <SortTh k="in" sort={sort} onSort={onSort} className="tar">{tr("In")}</SortTh>
+        <SortTh k="out" sort={sort} onSort={onSort} className="tar">{tr("Out")}</SortTh>
+        <SortTh k="balance" sort={sort} onSort={onSort} className="tar">{tr("Balance")}</SortTh>
+        <th>{tr("Actions")}</th>
       </tr></thead>
-      <tbody>{filtered.length===0?<tr><td colSpan={9}><div className="empty"><div className="empty-t">No transactions yet</div></div></td></tr>:shown.slice((pg-1)*ps,pg*ps).map(t=>(
+      <tbody>{filtered.length===0?<tr><td colSpan={9}><div className="empty"><div className="empty-t">{tr("No transactions yet")}</div></div></td></tr>:shown.slice((pg-1)*ps,pg*ps).map(t=>(
         <tr key={t.id}>
           <td style={{color:'var(--g500)',fontSize:12}}>{t.date||'—'}</td>
           <td style={{fontWeight:500,color:'var(--g800)'}}>{t.contactName||<span style={{color:'var(--g300)'}}>—</span>}</td>
           <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{fxTitle(t)||'—'}{isFx(t)&&<div className="fx-sub">{fxDetail(t.fx)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayDetail(t)}</div>}</td>
-          <td>{isFx(t)?<span className="fx-badge">FX</span>:t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
+          <td>{isFx(t)?<span className="fx-badge">{tr("FX")}</span>:t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
           <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
           <td className="tar" style={{color:'var(--green)'}}>{t.type==='in'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayAmt(t)}</div>}</>}</td>
           <td className="tar" style={{color:'var(--red)'}}>{t.type==='out'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayAmt(t)}</div>}</>}</td>
@@ -1387,18 +1392,18 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
   const setAllocAmt=(o,v)=>applyAllocs(list=>list.map(x=>x.type===docType&&x.id===o.d.id?{...x,amount:v}:x));
 
   const trySave=()=>{
-    if(!t.date){alert('Enter a valid date.');return;}
-    if(!(+t.amount>0)){alert('Enter an amount.');return;}
-    if(isNew&&kind!=='expense'&&!t.contactId){alert(`Select who the money ${kind==='in'?'came from':'went to'}.`);return;}
-    if(kind==='expense'&&!t.category){alert('Select an expense category.');return;}
+    if(!t.date){alert(tr('Enter a valid date.'));return;}
+    if(!(+t.amount>0)){alert(tr('Enter an amount.'));return;}
+    if(isNew&&kind!=='expense'&&!t.contactId){alert(tr("Select who the money {0}.", kind==='in'?tr('came from'):tr('went to')));return;}
+    if(kind==='expense'&&!t.category){alert(tr('Select an expense category.'));return;}
     if(xmode){
-      if(!(+t.payAmount>0)||!(+t.rate>0)||+(t.fee||0)<0){alert(`Enter the amount in ${t.payCur} and the FX rate (fee cannot be negative).`);return;}
-      if(+(t.fee||0)>0&&!t.feeCategory){alert('Select an expense category for the fee.');return;}
+      if(!(+t.payAmount>0)||!(+t.rate>0)||+(t.fee||0)<0){alert(tr("Enter the amount in {0} and the FX rate (fee cannot be negative).", t.payCur));return;}
+      if(+(t.fee||0)>0&&!t.feeCategory){alert(tr('Select an expense category for the fee.'));return;}
     }
-    for(const o of openDocs){if(o.mine&&(!(+o.mine.amount>0)||+o.mine.amount>o.remaining+0.005)){alert(`Amount for ${o.d.number} must be between 0 and its outstanding ${curFmt(docCur,o.remaining)}.`);return;}}
-    if(allocTotal>payTarget+0.005){alert(`The invoices total ${curFmt(docCur,allocTotal)}, more than the payment of ${curFmt(docCur,payTarget)}.`);return;}
+    for(const o of openDocs){if(o.mine&&(!(+o.mine.amount>0)||+o.mine.amount>o.remaining+0.005)){alert(tr("Amount for {0} must be between 0 and its outstanding {1}.", o.d.number, curFmt(docCur,o.remaining)));return;}}
+    if(allocTotal>payTarget+0.005){alert(tr("The invoices total {0}, more than the payment of {1}.", curFmt(docCur,allocTotal), curFmt(docCur,payTarget)));return;}
     if(account.openingBalanceDate&&t.date<account.openingBalanceDate){
-      alert(`This transaction is dated before the account's Opening Balance date (${account.openingBalanceDate}). Pick a later date.`);
+      alert(tr("This transaction is dated before the account's Opening Balance date ({0}). Pick a later date.", account.openingBalanceDate));
       return;
     }
     const allocations=kind==='expense'?[]:allocs.map(x=>({...x,amount:r2(+x.amount)}));
@@ -1408,66 +1413,66 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
   };
 
   const kinds=[['in','Money In','Payment received from a contact'],['out','Money Out','Payment made to a contact'],['expense','Expense','A cost booked to an expense category']];
-  const catSelect=(<select value={t.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">{kind==='expense'?'— Select —':'— None —'}</option>{groupCats(catList).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>);
+  const catSelect=(<select value={t.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">{kind==='expense'?tr('— Select —'):tr('— None —')}</option>{groupCats(catList).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>);
 
   return(<div className="content"><div className="fw">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
-      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{t.id?'Edit Transaction':'New Transaction'}</h2>
-      <span style={{fontSize:13,color:'var(--g500)'}}>{account.accountName||'Account'} · {curSym}</span>
+      <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{t.id?tr('Edit Transaction'):tr('New Transaction')}</h2>
+      <span style={{fontSize:13,color:'var(--g500)'}}>{account.accountName||tr('Account')} · {curSym}</span>
       <div style={{flex:1}}/>
-      <Btn v="bp bsm" onClick={trySave}>Save</Btn>
+      <Btn v="bp bsm" onClick={trySave}>{tr("Save")}</Btn>
     </div>
-    <div className="tx-kinds" role="radiogroup" aria-label="Transaction type">
+    <div className="tx-kinds" role="radiogroup" aria-label={tr("Transaction type")}>
       {kinds.map(([k,label,hint])=>(
         <button key={k} type="button" role="radio" aria-checked={kind===k} className={`tx-kind tx-${k}${kind===k?' active':''}`} onClick={()=>setKind(k)}>
           <span className="tx-kind-l">{label}</span><span className="tx-kind-h">{hint}</span>
         </button>
       ))}
     </div>
-    <div className="fc"><div className="fct">Details</div>
+    <div className="fc"><div className="fct">{tr("Details")}</div>
       <div className="fg g3">
-        <Fld label="Date"><input type="date" value={t.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
-        <Fld label={xmode?`Amount ${kind==='out'?'Out of':'Into'} Account (${accCur})`:`Amount (${accCur})`}><input type="number" value={t.amount||''} onChange={x=>{setAmountTouched(true);s('amount',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
-        <Fld label="Reference"><input value={t.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Ref No"/></Fld>
+        <Fld label={tr("Date")}><input type="date" value={t.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
+        <Fld label={xmode?tr("Amount {0} Account ({1})", kind==='out'?tr('Out of'):tr('Into'), accCur):tr("Amount ({0})", accCur)}><input type="number" value={t.amount||''} onChange={x=>{setAmountTouched(true);s('amount',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+        <Fld label={tr("Reference")}><input value={t.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder={tr("Ref No")}/></Fld>
       </div>
       <div className="fg g2" style={{marginTop:12}}>
-        <Fld label={kind==='in'?'Received From *':kind==='out'?'Paid To *':'Payee (optional)'}>
+        <Fld label={kind==='in'?tr('Received From *'):kind==='out'?tr('Paid To *'):tr('Payee (optional)')}>
           <select value={t.contactId||''} onChange={x=>setContact(x.target.value)} className="fi">
-            <option value="">{kind==='expense'?'— None —':'— Select contact —'}</option>
+            <option value="">{kind==='expense'?tr('— None —'):tr('— Select contact —')}</option>
             {contactGroups.map(g=><optgroup key={g.type} label={g.label}>{g.list.map(c=><option key={c.id} value={c.id}>{contactName(c)}</option>)}</optgroup>)}
-            {t.contactId&&!contacts.some(c=>c.id===t.contactId)&&<option value={t.contactId}>{t.contactName} (deleted)</option>}
+            {t.contactId&&!contacts.some(c=>c.id===t.contactId)&&<option value={t.contactId}>{tr("{0} (deleted)", t.contactName)}</option>}
           </select>
-          {contactGroups.length===0&&<span className="fx-hint">{kind==='expense'?'Add contacts with the Expense relationship under Contacts.':'No contacts yet. Add them under Contacts.'}</span>}
+          {contactGroups.length===0&&<span className="fx-hint">{kind==='expense'?tr('Add contacts with the Expense relationship under Contacts.'):tr('No contacts yet. Add them under Contacts.')}</span>}
         </Fld>
-        <Fld label={kind==='expense'?'Expense Category *':`${kind==='in'?'Income':'Expense'} Category (optional)`}>{catSelect}</Fld>
+        <Fld label={kind==='expense'?tr('Expense Category *'):tr("{0} Category (optional)", kind==='in'?tr('Income'):tr('Expense'))}>{catSelect}</Fld>
       </div>
       {kind!=='expense'&&<div className={xmode?'tx-xpay':''} style={{marginTop:12}}>
         <div className="fg g4">
-          <Fld label="Payment Currency"><select value={t.payCur||accCur} onChange={x=>setPayCur(x.target.value)} className="fi">{Object.keys(CURR).map(k=><option key={k} value={k}>{k}{k===accCur?' (account)':''}</option>)}</select></Fld>
+          <Fld label={tr("Payment Currency")}><select value={t.payCur||accCur} onChange={x=>setPayCur(x.target.value)} className="fi">{Object.keys(CURR).map(k=><option key={k} value={k}>{k}{k===accCur?tr(' (account)'):''}</option>)}</select></Fld>
           {xmode&&<>
             <Fld label={`${kind==='out'?'Received by Payee':'Paid by Contact'} (${t.payCur})`}><input type="number" value={t.payAmount} onChange={x=>{setPayTouched(true);sx('payAmount',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
-            <Fld label={`FX Rate (1 ${accCur} = ? ${t.payCur})`}><input type="number" value={t.rate} onChange={x=>sx('rate',x.target.value)} className="fi" placeholder="0.000000" min="0" step="any"/></Fld>
-            <Fld label={`Fee (${accCur})`}><input type="number" value={t.fee} onChange={x=>sx('fee',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+            <Fld label={tr("FX Rate (1 {0} = ? {1})", accCur, t.payCur)}><input type="number" value={t.rate} onChange={x=>sx('rate',x.target.value)} className="fi" placeholder="0.000000" min="0" step="any"/></Fld>
+            <Fld label={tr("Fee ({0})", accCur)}><input type="number" value={t.fee} onChange={x=>sx('fee',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
           </>}
         </div>
-        {xmode&&xc!=null&&<div className="fx-calc">{curFmt(t.payCur,+t.payAmount)} ÷ {fxRateStr(t.rate)}{+t.fee?` ${kind==='out'?'+':'−'} ${curFmt(accCur,+t.fee)} fee`:''} = <strong>{curFmt(accCur,xc)}</strong> {kind==='out'?'out of':'into'} the account
-          {Math.abs(xc-(+t.amount||0))>0.005&&<span className="fx-warn"> · the amount above differs — check it against the statement</span>}
+        {xmode&&xc!=null&&<div className="fx-calc">{curFmt(t.payCur,+t.payAmount)} ÷ {fxRateStr(t.rate)}{+t.fee?tr(" {0} {1} fee", kind==='out'?'+':'−', curFmt(accCur,+t.fee)):''} = <strong>{curFmt(accCur,xc)}</strong> {kind==='out'?tr('out of the account'):tr('into the account')}
+          {Math.abs(xc-(+t.amount||0))>0.005&&<span className="fx-warn"> {tr("· the amount above differs — check it against the statement")}</span>}
         </div>}
         {xmode&&+t.fee>0&&<div className="fg g2" style={{marginTop:12}}>
-          <Fld label="Fee Expense Category"><select value={t.feeCategory||''} onChange={x=>s('feeCategory',x.target.value)} className="fi"><option value="">— Select —</option>{groupCats(cats||[]).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>
-            <span className="fx-hint">The fee is booked as a separate expense row.</span></Fld>
+          <Fld label={tr("Fee Expense Category")}><select value={t.feeCategory||''} onChange={x=>s('feeCategory',x.target.value)} className="fi"><option value="">{tr("— Select —")}</option>{groupCats(cats||[]).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>
+            <span className="fx-hint">{tr("The fee is booked as a separate expense row.")}</span></Fld>
         </div>}
       </div>}
       {docType&&(t.contactId||allocs.length>0)&&<div className="tx-alloc">
-        <div className="tx-alloc-t">{kind==='in'?'Invoices settled by this payment':'Received invoices settled by this payment'} <span>(optional · {docCur})</span></div>
-        {openDocs.length===0?<div className="fx-hint">No open {kind==='in'?'invoices':'received invoices'} in {docCur} for this contact.</div>:(
+        <div className="tx-alloc-t">{kind==='in'?tr('Invoices settled by this payment'):tr('Received invoices settled by this payment')} <span>{tr("(optional · {0})", docCur)}</span></div>
+        {openDocs.length===0?<div className="fx-hint">{tr("No open {0} in {1} for this contact.", kind==='in'?tr('invoices'):tr('received invoices'), docCur)}</div>:(
         <table className="tx-alloc-tbl">
-          <thead><tr><th/><th>Document</th><th>Date</th><th className="tar">Total</th><th className="tar">Outstanding</th><th className="tar">This payment</th></tr></thead>
+          <thead><tr><th/><th>{tr("Document")}</th><th>{tr("Date")}</th><th className="tar">{tr("Total")}</th><th className="tar">{tr("Outstanding")}</th><th className="tar">{tr("This payment")}</th></tr></thead>
           <tbody>{openDocs.map(o=>(
             <tr key={o.d.id} className={o.mine?'on':''}>
-              <td><input type="checkbox" checked={!!o.mine} onChange={()=>toggleDoc(o)} aria-label={'Settle '+o.d.number}/></td>
-              <td style={{fontWeight:600}}>{o.d.number||'—'}{o.d.status==='draft'&&<span className="tx-draft">Draft</span>}</td>
+              <td><input type="checkbox" checked={!!o.mine} onChange={()=>toggleDoc(o)} aria-label={tr('Settle ')+o.d.number}/></td>
+              <td style={{fontWeight:600}}>{o.d.number||'—'}{o.d.status==='draft'&&<span className="tx-draft">{tr("Draft")}</span>}</td>
               <td style={{color:'var(--g500)'}}>{o.d.date||'—'}</td>
               <td className="tar">{curFmt(docCur,o.total)}</td>
               <td className="tar">{curFmt(docCur,o.remaining)}</td>
@@ -1475,15 +1480,15 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
             </tr>))}</tbody>
         </table>)}
         {allocs.length>0&&<div className={`tx-alloc-sum${allocTotal>payTarget+0.005?' over':''}`}>
-          Allocated <strong>{curFmt(docCur,allocTotal)}</strong> of {curFmt(docCur,payTarget)}
-          {allocTotal>payTarget+0.005?' — more than the payment':payTarget-allocTotal>0.005?` · ${curFmt(docCur,r2(payTarget-allocTotal))} on account`:''}
+          {tr("Allocated")} <strong>{curFmt(docCur,allocTotal)}</strong> {tr("of")} {curFmt(docCur,payTarget)}
+          {allocTotal>payTarget+0.005?tr(' — more than the payment'):payTarget-allocTotal>0.005?tr(" · {0} on account", curFmt(docCur,r2(payTarget-allocTotal))):''}
         </div>}
       </div>}
       <div className="fg g1" style={{marginTop:12}}>
-        <Fld label="Description"><input value={t.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="What was this for?"/></Fld>
+        <Fld label={tr("Description")}><input value={t.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder={tr("What was this for?")}/></Fld>
       </div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={trySave}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={trySave}>{tr("Save")}</Btn></div>
   </div></div>);
 }
 
@@ -1514,60 +1519,60 @@ function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,dirtyRef})
   const mismatch=calculated!=null&&f.received!==''&&Math.abs(calculated-+f.received)>0.005;
   // When editing, this exchange's own outflow is already in the balance
   const available=from?accountBalance(from)+(init.id&&init.fromAccountId===from.id?+init.sold:0):0;
-  const accOpt=b=><option key={b.id} value={b.id}>{b.accountName||'Unnamed'} ({b.currency||'GBP'})</option>;
+  const accOpt=b=><option key={b.id} value={b.id}>{b.accountName||tr('Unnamed')} ({b.currency||tr('GBP')})</option>;
 
   const trySave=()=>{
-    if(!f.date){alert('Enter a valid date.');return;}
-    if(!from||!to){alert('Select both accounts.');return;}
-    if(from.id===to.id){alert('Choose two different accounts.');return;}
-    if(!(+f.sold>0)||!(+f.rate>0)||!(+f.received>0)||+(f.fee||0)<0){alert('Enter the amount out, FX rate and amount in (fee cannot be negative).');return;}
-    if(+(f.fee||0)>0&&!f.feeCategory){alert('Select an expense category for the fee.');return;}
+    if(!f.date){alert(tr('Enter a valid date.'));return;}
+    if(!from||!to){alert(tr('Select both accounts.'));return;}
+    if(from.id===to.id){alert(tr('Choose two different accounts.'));return;}
+    if(!(+f.sold>0)||!(+f.rate>0)||!(+f.received>0)||+(f.fee||0)<0){alert(tr('Enter the amount out, FX rate and amount in (fee cannot be negative).'));return;}
+    if(+(f.fee||0)>0&&!f.feeCategory){alert(tr('Select an expense category for the fee.'));return;}
     const early=[from,to].find(b=>b.openingBalanceDate&&f.date<b.openingBalanceDate);
-    if(early){alert(`This exchange is dated before the Opening Balance date of ${early.accountName} (${early.openingBalanceDate}). Pick a later date.`);return;}
+    if(early){alert(tr("This exchange is dated before the Opening Balance date of {0} ({1}). Pick a later date.", early.accountName, early.openingBalanceDate));return;}
     onSave(f);
   };
 
   return(<div className="content"><div className="fw">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>Back</button>
-      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{init.id?'Edit Currency Exchange':'Currency Exchange'}</h2>
+      <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{init.id?tr('Edit Currency Exchange'):tr('Currency Exchange')}</h2>
       <div style={{flex:1}}/>
-      <Btn v="bp bsm" onClick={trySave}>Save</Btn>
+      <Btn v="bp bsm" onClick={trySave}>{tr("Save")}</Btn>
     </div>
-    <div className="fc"><div className="fct">Accounts</div>
+    <div className="fc"><div className="fct">{tr("Accounts")}</div>
       <div className="fx-accounts">
-        <Fld label="From Account (money out)">
-          <select value={f.fromAccountId||''} onChange={x=>s('fromAccountId',x.target.value)} className="fi"><option value="">— Select —</option>{banks.map(accOpt)}</select>
-          {from&&<span className={`fx-hint${+f.sold>available?' fx-warn':''}`}>Balance: {fromSym}{fmt(available)}{+f.sold>available?' — lower than the amount out':''}</span>}
+        <Fld label={tr("From Account (money out)")}>
+          <select value={f.fromAccountId||''} onChange={x=>s('fromAccountId',x.target.value)} className="fi"><option value="">{tr("— Select —")}</option>{banks.map(accOpt)}</select>
+          {from&&<span className={`fx-hint${+f.sold>available?' fx-warn':''}`}>{tr("Balance: {0}{1}{2}", fromSym, fmt(available), +f.sold>available?tr(' — lower than the amount out'):'')}</span>}
         </Fld>
-        <button type="button" className="fx-swap" title="Swap accounts" aria-label="Swap accounts" onClick={()=>setF(d=>({...d,fromAccountId:d.toAccountId,toAccountId:d.fromAccountId}))}><Ico n="convert" size={15}/></button>
-        <Fld label="To Account (money in)">
-          <select value={f.toAccountId||''} onChange={x=>s('toAccountId',x.target.value)} className="fi"><option value="">— Select —</option>{banks.map(accOpt)}</select>
+        <button type="button" className="fx-swap" title={tr("Swap accounts")} aria-label={tr("Swap accounts")} onClick={()=>setF(d=>({...d,fromAccountId:d.toAccountId,toAccountId:d.fromAccountId}))}><Ico n="convert" size={15}/></button>
+        <Fld label={tr("To Account (money in)")}>
+          <select value={f.toAccountId||''} onChange={x=>s('toAccountId',x.target.value)} className="fi"><option value="">{tr("— Select —")}</option>{banks.map(accOpt)}</select>
         </Fld>
       </div>
       <div className="fg g2" style={{marginTop:12}}>
-        <Fld label="Date"><input type="date" value={f.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
-        <Fld label="Reference"><input value={f.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder="Statement reference"/></Fld>
+        <Fld label={tr("Date")}><input type="date" value={f.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
+        <Fld label={tr("Reference")}><input value={f.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder={tr("Statement reference")}/></Fld>
       </div>
     </div>
-    <div className="fc"><div className="fct">Amounts (as on the bank statement)</div>
+    <div className="fc"><div className="fct">{tr("Amounts (as on the bank statement)")}</div>
       <div className="fg g4">
-        <Fld label={`Amount Out (${fromCur})`}><input type="number" value={f.sold} onChange={x=>s('sold',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
-        <Fld label={`FX Rate (1 ${fromCur} = ? ${toCur})`}><input type="number" value={f.rate} onChange={x=>s('rate',x.target.value)} className="fi" placeholder="0.000000" min="0" step="any"/></Fld>
-        <Fld label={`Fee (${toCur})`}><input type="number" value={f.fee} onChange={x=>s('fee',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
-        <Fld label={`Amount In (${toCur})`}><input type="number" value={f.received} onChange={x=>{setReceivedTouched(true);s('received',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+        <Fld label={tr("Amount Out ({0})", fromCur)}><input type="number" value={f.sold} onChange={x=>s('sold',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+        <Fld label={tr("FX Rate (1 {0} = ? {1})", fromCur, toCur)}><input type="number" value={f.rate} onChange={x=>s('rate',x.target.value)} className="fi" placeholder="0.000000" min="0" step="any"/></Fld>
+        <Fld label={tr("Fee ({0})", toCur)}><input type="number" value={f.fee} onChange={x=>s('fee',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
+        <Fld label={tr("Amount In ({0})", toCur)}><input type="number" value={f.received} onChange={x=>{setReceivedTouched(true);s('received',x.target.value);}} className="fi" placeholder="0.00" min="0" step=".01"/></Fld>
       </div>
-      {calculated!=null&&<div className="fx-calc">{fromSym}{fmt(+f.sold)} × {fxRateStr(f.rate)}{+f.fee?` − ${toSym}${fmt(+f.fee)} fee`:''} = <strong>{toSym}{fmt(calculated)}</strong>
-        {mismatch&&<span className="fx-warn"> · Amount In differs from this — check it against the statement</span>}
+      {calculated!=null&&<div className="fx-calc">{fromSym}{fmt(+f.sold)} × {fxRateStr(f.rate)}{+f.fee?tr(" − {0}{1} fee", toSym, fmt(+f.fee)):''} = <strong>{toSym}{fmt(calculated)}</strong>
+        {mismatch&&<span className="fx-warn"> {tr("· Amount In differs from this — check it against the statement")}</span>}
       </div>}
       <div className="fg g2" style={{marginTop:12}}>
-        {+f.fee>0&&<Fld label="Fee Expense Category">
-          <select value={f.feeCategory||''} onChange={x=>s('feeCategory',x.target.value)} className="fi"><option value="">— Select —</option>{groupCats(cats||[]).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>
-          <span className="fx-hint">The fee is booked as a separate expense: {toSym}{fmt(+f.received+ +f.fee)} in, {toSym}{fmt(+f.fee)} fee out.</span>
+        {+f.fee>0&&<Fld label={tr("Fee Expense Category")}>
+          <select value={f.feeCategory||''} onChange={x=>s('feeCategory',x.target.value)} className="fi"><option value="">{tr("— Select —")}</option>{groupCats(cats||[]).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>
+          <span className="fx-hint">{tr("The fee is booked as a separate expense: {0}{1} in, {2}{3} fee out.", toSym, fmt(+f.received+ +f.fee), toSym, fmt(+f.fee))}</span>
         </Fld>}
-        <Fld label="Description (optional)"><input value={f.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder="e.g. Supplier payment funding"/></Fld>
+        <Fld label={tr("Description (optional)")}><input value={f.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder={tr("e.g. Supplier payment funding")}/></Fld>
       </div>
     </div>
-    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>Cancel</Btn><Btn v="bp bsm" onClick={trySave}>Save</Btn></div>
+    <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={trySave}>{tr("Save")}</Btn></div>
   </div></div>);
 }

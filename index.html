@@ -78,6 +78,15 @@ button.sb-item{border-top:0;border-right:0;border-bottom:0;background:transparen
 .sb-cnt{background:var(--g100);color:var(--g500);font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px}
 .sb-item.active .sb-cnt{background:rgba(96,132,37,.15);color:var(--gm-500)}
 .sb-pinned{margin-top:auto;flex-shrink:0}
+.sb-lang{display:flex;justify-content:flex-end;padding:8px 12px 0;border-top:1px solid #e2e8f0}
+.sb-lang+.sb-user{border-top:none}
+.lang-sw{display:inline-flex;gap:2px;padding:2px;background:#fff;border:1px solid var(--g300);border-radius:var(--r-sm);box-shadow:0 1px 2px rgba(26,42,10,.05)}
+.lang-sw button{border:none;background:transparent;color:var(--g500);font:600 11px/1 'Inter',sans-serif;letter-spacing:.4px;padding:5px 9px;border-radius:4px;cursor:pointer;transition:background .15s,color .15s,transform .15s}
+.lang-sw button:hover{background:var(--g100);color:var(--g800)}
+.lang-sw button:focus-visible{outline:2px solid var(--gm-400);outline-offset:1px}
+.lang-sw button:active{transform:scale(.96)}
+.lang-sw button.on{background:var(--greenl);color:var(--gm-600);cursor:default}
+.lang-sw-corner{position:absolute;top:16px;right:16px;transform:none}/* opt out of the .acc-screen>* lift */
 .sb-user{padding:10px 10px 10px 12px;border-top:1px solid #e2e8f0;flex-shrink:0;display:flex;align-items:center;gap:6px}
 .sb-user-info{flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:transparent;border:none;padding:4px;border-radius:8px;cursor:pointer;text-align:left;transition:background .15s}
 .sb-user-info:hover{background:var(--g100)}
@@ -705,12 +714,13 @@ table.pv2-tbl tbody tr:last-child td{border-bottom:none}
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.22.5/babel.min.js"></script>
-<script type="text/babel" src="js/utils.js?v=20261008"></script>
-<script type="text/babel" src="js/fonts.js?v=20261008"></script>
-<script type="text/babel" src="js/document-templates.js?v=20261008"></script>
-<script type="text/babel" src="js/app-official.js?v=20261008"></script>
-<script type="text/babel" src="js/app-operational.js?v=20261008"></script>
-<script type="text/babel" src="js/app-system.js?v=20261008"></script>
-<script type="text/babel" src="js/app-shell.js?v=20261008"></script>
+<script src="js/i18n.js?v=20261008b"></script>
+<script type="text/babel" src="js/utils.js?v=20261008b"></script>
+<script type="text/babel" src="js/fonts.js?v=20261008b"></script>
+<script type="text/babel" src="js/document-templates.js?v=20261008b"></script>
+<script type="text/babel" src="js/app-official.js?v=20261008b"></script>
+<script type="text/babel" src="js/app-operational.js?v=20261008b"></script>
+<script type="text/babel" src="js/app-system.js?v=20261008b"></script>
+<script type="text/babel" src="js/app-shell.js?v=20261008b"></script>
 </body>
 </html>

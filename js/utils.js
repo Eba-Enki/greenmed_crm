@@ -38,15 +38,15 @@ const toW=(n,currency='GBP')=>{
 };
 
 const SM={
-  draft:{l:'Draft',c:'b-draft'},sent:{l:'Sent',c:'b-sent'},approved:{l:'Approved',c:'b-approved'},
-  locked:{l:'Locked',c:'b-locked'},passive:{l:'Passive',c:'b-passive'},
-  'po-created':{l:'PO Created',c:'b-po-created'},closed:{l:'Closed',c:'b-closed'},
-  paid:{l:'Paid',c:'b-paid'},partial:{l:'Partially Paid',c:'b-partial'},received:{l:'Received',c:'b-received'},
-  unpaid:{l:'Unpaid',c:'b-pending'},
-  overdue:{l:'Overdue',c:'b-overdue'},cancelled:{l:'Cancelled',c:'b-cancelled'},
-  pending:{l:'Pending',c:'b-pending'},active:{l:'Active',c:'b-active'},
-  completed:{l:'Completed',c:'b-completed'},'on-hold':{l:'On Hold',c:'b-on-hold'},
-  declined:{l:'Declined',c:'b-declined'}
+  draft:{l:tr('Draft'),c:'b-draft'},sent:{l:tr('Sent'),c:'b-sent'},approved:{l:tr('Approved'),c:'b-approved'},
+  locked:{l:tr('Locked'),c:'b-locked'},passive:{l:tr('Passive'),c:'b-passive'},
+  'po-created':{l:tr('PO Created'),c:'b-po-created'},closed:{l:tr('Closed'),c:'b-closed'},
+  paid:{l:tr('Paid'),c:'b-paid'},partial:{l:tr('Partially Paid'),c:'b-partial'},received:{l:tr('Received'),c:'b-received'},
+  unpaid:{l:tr('Unpaid'),c:'b-pending'},
+  overdue:{l:tr('Overdue'),c:'b-overdue'},cancelled:{l:tr('Cancelled'),c:'b-cancelled'},
+  pending:{l:tr('Pending'),c:'b-pending'},active:{l:tr('Active'),c:'b-active'},
+  completed:{l:tr('Completed'),c:'b-completed'},'on-hold':{l:tr('On Hold'),c:'b-on-hold'},
+  declined:{l:tr('Declined'),c:'b-declined'}
 };
 
 // Numbering helpers
@@ -95,8 +95,14 @@ const hashStr=str=>{
 };
 // Record ids in list order; a missing or repeated id falls back to the row position (as the server does)
 const recIds=list=>{const seen=new Set();return list.map((r,i)=>{let id=r&&typeof r==='object'&&r.id!=null&&r.id!==''?String(r.id):'';if(!id||seen.has(id))id='__row'+i;seen.add(id);return id;});};
+// The server explains refused saves in English; known reasons are shown in the user's language
+const reasonText=r=>{
+  let m=/^Number (.+) is already used by another document\.$/.exec(r);if(m)return tr('Number {0} is already used by another document.',m[1]);
+  m=/^Revision (.+) was already created by another user\.$/.exec(r);if(m)return tr('Revision {0} was already created by another user.',m[1]);
+  return r;
+};
 // What a record is called in messages to the user
-const recLabel=r=>(r&&(r.number||r.name||r.company||r.contact||r.desc||r.description||r.title))||'A record';
+const recLabel=r=>(r&&(r.number||r.name||r.company||r.contact||r.desc||r.description||r.title))||tr('A record');
 const readStore=k=>{try{return JSON.parse(localStorage.getItem(k)||'null');}catch{return null;}};
 const writeStore=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){console.warn('Sync store failed:',k,e.name);}};
 const Sync={
@@ -192,8 +198,9 @@ const Sync={
       if(res.conflict){
         b.v=res.conflict.version;
         b.h=this.writeLocal(k,res.conflict.value);
-        const area=k.startsWith('off_')?'Official settings':k.startsWith('ops_')?'Sales & Procurement settings':'The logo or signature';
-        notices.push(`${area} were changed by another user at the same time. Their version was kept — please check and make your change again.`);
+        notices.push(tr(k.startsWith('off_')?'Official settings were changed by another user at the same time. Their version was kept — please check and make your change again.'
+          :k.startsWith('ops_')?'Sales & Procurement settings were changed by another user at the same time. Their version was kept — please check and make your change again.'
+          :'The logo or signature was changed by another user at the same time. Their version was kept — please check and make your change again.'));
       }else{
         b.v=res.version;
         if(res.value!==undefined)b.h=this.writeLocal(k,res.value); // merged counters
@@ -213,18 +220,18 @@ const Sync={
         const i=indexOf(r.id);if(i<0)return;
         list[i]={...list[i],number:r.to,...(k==='ops_sq'?{base:r.to}:{})};
         b.h[r.id]=hashStr(JSON.stringify(list[i]));
-        notices.push(`Number ${r.from} was taken by another user at the same moment, so your document was saved as ${r.to}.`);
+        notices.push(tr('Number {0} was taken by another user at the same moment, so your document was saved as {1}.',r.from,r.to));
       });
       conflicts.forEach(c=>{
         const i=indexOf(c.id),mine=i>=0?list[i]:null;
         if(c.data===null){
           if(i>=0)list.splice(i,1);
           delete b.v[c.id];delete b.h[c.id];
-          notices.push(c.reason==='deleted'?`${recLabel(mine)} was deleted by another user, so your changes to it were not saved.`:`${recLabel(mine)} could not be saved: ${c.reason}`);
+          notices.push(c.reason==='deleted'?tr('{0} was deleted by another user, so your changes to it were not saved.',recLabel(mine)):tr('{0} could not be saved: {1}',recLabel(mine),reasonText(c.reason)));
         }else{
           if(i>=0)list[i]=c.data;else list.push(c.data);
           b.v[c.id]=c.version;b.h[c.id]=hashStr(JSON.stringify(c.data));
-          notices.push(c.reason==='changed'?`${recLabel(c.data)} was changed by another user at the same time. Their version was kept — please check it and make your change again.`:`${recLabel(mine||c.data)} could not be saved: ${c.reason}`);
+          notices.push(c.reason==='changed'?tr('{0} was changed by another user at the same time. Their version was kept — please check it and make your change again.',recLabel(c.data)):tr('{0} could not be saved: {1}',recLabel(mine||c.data),reasonText(c.reason)));
         }
       });
       try{localStorage.setItem(k,JSON.stringify(list));}catch(e){console.warn('Sync write failed:',k,e.name);}
@@ -485,7 +492,7 @@ function GlobalConfirmDialog(){
   useEffect(()=>{
     window.__askGlobalConfirm=(msg,opts={})=>new Promise(resolve=>{
       window.__globalConfirmResolve=resolve;
-      setState({msg,confirmLabel:opts.confirmLabel||'Leave without saving',cancelLabel:opts.cancelLabel||'Cancel'});
+      setState({msg,confirmLabel:opts.confirmLabel||tr('Leave without saving'),cancelLabel:opts.cancelLabel||tr('Cancel')});
     });
   },[]);
   if(!state)return null;
@@ -514,7 +521,7 @@ function GlobalConfirmDialog(){
   ReactDOM.createRoot(el).render(<GlobalConfirmDialog/>);
 })();
 const askGlobalConfirm=(msg,opts)=>window.__askGlobalConfirm(msg,opts);
-const askUnsaved=()=>askGlobalConfirm('You have unsaved changes. Leave without saving?');
+const askUnsaved=()=>askGlobalConfirm(tr('You have unsaved changes. Leave without saving?'));
 // Case-insensitive "does this name already exist" check — "Acme Ltd" and "ACME LTD" read as
 // the same record to a person, so callers use this to warn before quietly creating a near-duplicate.
 const findCaseInsensitiveDup=(list,field,value,excludeId)=>{
@@ -522,7 +529,7 @@ const findCaseInsensitiveDup=(list,field,value,excludeId)=>{
   if(!v)return null;
   return list.find(x=>x.id!==excludeId&&(x[field]||'').trim().toLowerCase()===v)||null;
 };
-const askDuplicateOk=(kind,name)=>askGlobalConfirm(`A ${kind} named "${name}" already exists. Save anyway?`,{confirmLabel:'Save Anyway'});
+const askDuplicateOk=(kind,name)=>askGlobalConfirm(tr("A {0} named \"{1}\" already exists. Save anyway?", kind, name),{confirmLabel:tr('Save Anyway')});
 
 // Name/company casing, applied on save (not while typing) so "acme ltd" and "ACME LTD" both
 // end up stored as "Acme Ltd" — keeps lookups, exports and PDFs consistent regardless of input habits.
@@ -576,6 +583,6 @@ const SortTh=({k,sort,onSort,className,style,children})=>{
 };
 
 function usePagination(filterKey,defaultSize=25){const[pg,setPg]=useState(1);const[ps,setPs]=useState(defaultSize);useEffect(()=>{setPg(1);},[filterKey]);return{pg,ps,setPg,setPs};}
-function Pagination({total,page,pageSize,onPageChange,onPageSizeChange}){if(!total)return null;const pages=Math.ceil(total/pageSize);const s=(page-1)*pageSize+1,e=Math.min(page*pageSize,total);const nums=()=>{if(pages<=7)return Array.from({length:pages},(_,i)=>i+1);const r=[1];if(page>3)r.push('…');for(let i=Math.max(2,page-1);i<=Math.min(pages-1,page+1);i++)r.push(i);if(page<pages-2)r.push('…');r.push(pages);return r;};const pb=(active,disabled)=>({display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:28,height:28,padding:'0 6px',border:`1px solid ${active?'var(--gm-400)':'var(--g200)'}`,borderRadius:5,background:active?'var(--gm-400)':'var(--g50)',color:active?'#fff':disabled?'var(--g300)':'var(--g700)',fontSize:12,fontWeight:active?700:500,cursor:disabled?'default':'pointer',transition:'background .15s,border-color .15s,color .15s',outline:'none'});return(<div style={{display:'flex',alignItems:'center',gap:8,padding:'9px 14px',borderTop:'1px solid var(--g200)',flexWrap:'wrap',background:'var(--g50)',borderRadius:'0 0 8px 8px'}}><span style={{fontSize:12,color:'var(--g500)',flex:1}}>Showing {s}–{e} of {total}</span><div style={{display:'flex',alignItems:'center',gap:5}}><span style={{fontSize:11,color:'var(--g500)'}}>Per page:</span><select value={pageSize} onChange={ev=>onPageSizeChange(+ev.target.value)} style={{border:'1px solid var(--g200)',borderRadius:5,padding:'3px 6px',fontSize:12,color:'var(--g700)',background:'var(--white)',cursor:'pointer'}}>{[10,25,50].map(n=><option key={n} value={n}>{n}</option>)}</select></div>{pages>1&&<div style={{display:'flex',alignItems:'center',gap:3}}><button style={pb(false,page===1)} disabled={page===1} onClick={()=>onPageChange(page-1)}>‹</button>{nums().map((p,i)=>p==='…'?<span key={`e${i}`} style={{fontSize:12,color:'var(--g400)',padding:'0 2px',lineHeight:'28px'}}>…</span>:<button key={p} style={pb(p===page,false)} onClick={()=>onPageChange(p)}>{p}</button>)}<button style={pb(false,page===pages)} disabled={page===pages} onClick={()=>onPageChange(page+1)}>›</button></div>}</div>);}
+function Pagination({total,page,pageSize,onPageChange,onPageSizeChange}){if(!total)return null;const pages=Math.ceil(total/pageSize);const s=(page-1)*pageSize+1,e=Math.min(page*pageSize,total);const nums=()=>{if(pages<=7)return Array.from({length:pages},(_,i)=>i+1);const r=[1];if(page>3)r.push('…');for(let i=Math.max(2,page-1);i<=Math.min(pages-1,page+1);i++)r.push(i);if(page<pages-2)r.push('…');r.push(pages);return r;};const pb=(active,disabled)=>({display:'inline-flex',alignItems:'center',justifyContent:'center',minWidth:28,height:28,padding:'0 6px',border:`1px solid ${active?'var(--gm-400)':'var(--g200)'}`,borderRadius:5,background:active?'var(--gm-400)':'var(--g50)',color:active?'#fff':disabled?'var(--g300)':'var(--g700)',fontSize:12,fontWeight:active?700:500,cursor:disabled?'default':'pointer',transition:'background .15s,border-color .15s,color .15s',outline:'none'});return(<div style={{display:'flex',alignItems:'center',gap:8,padding:'9px 14px',borderTop:'1px solid var(--g200)',flexWrap:'wrap',background:'var(--g50)',borderRadius:'0 0 8px 8px'}}><span style={{fontSize:12,color:'var(--g500)',flex:1}}>{tr("Showing {0}–{1} of {2}", s, e, total)}</span><div style={{display:'flex',alignItems:'center',gap:5}}><span style={{fontSize:11,color:'var(--g500)'}}>{tr("Per page:")}</span><select value={pageSize} onChange={ev=>onPageSizeChange(+ev.target.value)} style={{border:'1px solid var(--g200)',borderRadius:5,padding:'3px 6px',fontSize:12,color:'var(--g700)',background:'var(--white)',cursor:'pointer'}}>{[10,25,50].map(n=><option key={n} value={n}>{n}</option>)}</select></div>{pages>1&&<div style={{display:'flex',alignItems:'center',gap:3}}><button style={pb(false,page===1)} disabled={page===1} onClick={()=>onPageChange(page-1)}>‹</button>{nums().map((p,i)=>p==='…'?<span key={`e${i}`} style={{fontSize:12,color:'var(--g400)',padding:'0 2px',lineHeight:'28px'}}>…</span>:<button key={p} style={pb(p===page,false)} onClick={()=>onPageChange(p)}>{p}</button>)}<button style={pb(false,page===pages)} disabled={page===pages} onClick={()=>onPageChange(page+1)}>›</button></div>}</div>);}
 
 // Embedded Arial Fonts (Base64 - Inline)

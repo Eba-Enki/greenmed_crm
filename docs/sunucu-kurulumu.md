@@ -119,6 +119,14 @@ Ayar türündeyse (`id`'li kayıt listesi değilse) `js/utils.js` → `SYNC_SETT
 
 Yalnızca birine yazılırsa ya veri tarayıcıda kalır ya da sunucu `Unknown key` hatası verir.
 
+### Dil desteği (EN / TR)
+
+- Arayüz metinleri kodda İngilizce yazılır ve `tr('...')` ile sarılır. Türkçeleri `js/i18n.js` → `I18N_TR` sözlüğündedir. Sözlükte olmayan bir metin İngilizce görünür.
+- Değişken içeren metinler yer tutucu kullanır: `tr('Delete {0}?', doc.number)` → sözlükte `'{0} silinsin mi?'`.
+- Dil seçimi tarayıcıya özeldir (`gm_lang`, sunucuya gitmez). Varsayılan İngilizcedir. Dil değişince sayfa yeniden yüklenir; açık bir formda kaydedilmemiş değişiklik varsa önce sorulur.
+- **Belgeler her zaman İngilizcedir:** PDF'ler (`buildStandardPDF`), uygulama içindeki belge önizlemesi (`DocSummaryBody`, `lang="en"`) ve Excel dışa aktarımları çevrilmez. Kayıtlara yazılan değerler (durum anahtarları, roller, varsayılan kategori adları, ödeme koşulları) de çevrilmez; yalnızca ekranda gösterilirken `tr()` ile çevrilir.
+- Yeni bir ekran metni eklerken: metni `tr('...')` ile sarın ve Türkçesini `I18N_TR`'ye ekleyin. JS dosyaları değiştiğinde `index.html` içindeki `?v=...` eklerini güncelleyin.
+
 ## 5. Yedekleme ve değişiklik geçmişi
 
 ### Günlük yedek (cPanel Cron Job)
