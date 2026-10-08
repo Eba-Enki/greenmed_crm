@@ -63,55 +63,260 @@ const genPQNum=()=>''; // manual
 const genProjNum=n=>`PRJ-${padN(n)}`;
 
 // ── Server sync (PHP API in /api) ──
-// localStorage stays the working copy; these keys are loaded from the server after login
-// and every write to them is pushed back. Must match the key lists in api/_bootstrap.php.
+// localStorage is the working copy. For every synced key we remember what the server last confirmed
+// (record versions + content fingerprints, in gm_sync_base), so a save sends only the records that
+// changed, each with the version it was based on. The server refuses to overwrite a record someone
+// else changed in the meantime and sends its copy back instead (a conflict).
+// Keys with unsent changes are listed in gm_sync_pending, which survives reloads and lost connections:
+// they are retried until the server accepts them, and a reload never overwrites them with server data.
+// The key lists must match api/_bootstrap.php.
 const API_BASE='api/';
 const SYNC_JSON_KEYS=['gm_users',
   'off_i','off_q','off_p','off_r','off_pr','off_cust','off_banktx','off_expcat','off_incomecat','off_co','off_cnt',
   'ops_cust','ops_proj','ops_sq','ops_si','ops_pq','ops_po','ops_ri','ops_exp','ops_expcat','ops_docs','ops_co','ops_cnt','ops_pp'];
 const SYNC_RAW_KEYS=['gm_logo','gm_signature'];
+const SYNC_SETTING_KEYS=['off_co','off_cnt','ops_co','ops_cnt','ops_pp',...SYNC_RAW_KEYS];
 const isSyncKey=k=>SYNC_JSON_KEYS.includes(k)||SYNC_RAW_KEYS.includes(k);
+const isRecordKey=k=>SYNC_JSON_KEYS.includes(k)&&!SYNC_SETTING_KEYS.includes(k);
+const SYNC_BASE_KEY='gm_sync_base',SYNC_PENDING_KEY='gm_sync_pending';
 const apiCall=async(path,opts={})=>{
   const r=await fetch(API_BASE+path,{credentials:'same-origin',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});
   const j=await r.json().catch(()=>({}));
   if(!r.ok){const e=new Error(j.error||('HTTP '+r.status));e.status=r.status;throw e;}
   return j;
 };
+// Short content fingerprint (cyrb53) — tells which records changed since the last sync
+const hashStr=str=>{
+  let h1=0xdeadbeef,h2=0x41c6ce57;
+  for(let i=0;i<str.length;i++){const ch=str.charCodeAt(i);h1=Math.imul(h1^ch,2654435761);h2=Math.imul(h2^ch,1597334677);}
+  h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);
+  h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);
+  return(4294967296*(2097151&h2)+(h1>>>0)).toString(36);
+};
+// Record ids in list order; a missing or repeated id falls back to the row position (as the server does)
+const recIds=list=>{const seen=new Set();return list.map((r,i)=>{let id=r&&typeof r==='object'&&r.id!=null&&r.id!==''?String(r.id):'';if(!id||seen.has(id))id='__row'+i;seen.add(id);return id;});};
+// What a record is called in messages to the user
+const recLabel=r=>(r&&(r.number||r.name||r.company||r.contact||r.desc||r.description||r.title))||'A record';
+const readStore=k=>{try{return JSON.parse(localStorage.getItem(k)||'null');}catch{return null;}};
+const writeStore=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){console.warn('Sync store failed:',k,e.name);}};
 const Sync={
-  timers:{},
-  // Debounced so rapid successive saves of one key send a single request with the latest value.
+  timers:{},inflight:{},again:{},changed:{},retryDelay:0,retryTimer:null,lastError:'',
+  base:readStore(SYNC_BASE_KEY)||{},        // records: {v:{id:version},h:{id:hash},o:[id]} · settings: {v:version,h:hash}
+  pending:readStore(SYNC_PENDING_KEY)||{user:null,keys:{}},
+  pendingKeys(){return Object.keys(this.pending.keys||{});},
+  hasPending(){return this.pendingKeys().length>0;},
+  saveBase(){writeStore(SYNC_BASE_KEY,this.base);},
+  savePending(){writeStore(SYNC_PENDING_KEY,this.pending);},
+  status(){window.dispatchEvent(new CustomEvent('sync-status',{detail:{pending:this.pendingKeys().length,error:this.lastError}}));},
+  // Called on every local write to a synced key; debounced so rapid saves send one request.
   push(k){
     if(!isSyncKey(k)||k==='gm_users')return; // gm_users is pulled only; changes go through users.php
+    this.changed[k]=(this.changed[k]||0)+1;
+    const s=readStore('gm_session');
+    this.pending.user=(s&&s.userId)||this.pending.user;
+    if(!this.pending.keys[k]){this.pending.keys[k]=1;this.savePending();}
     clearTimeout(this.timers[k]);
     this.timers[k]=setTimeout(()=>this.send(k),300);
   },
-  send(k,keepalive=false){
-    delete this.timers[k];
-    let raw=null;try{raw=localStorage.getItem(k);}catch{}
-    const value=SYNC_RAW_KEYS.includes(k)?raw:(raw?JSON.parse(raw):null);
-    return apiCall('data.php?key='+encodeURIComponent(k),{method:'PUT',keepalive,body:JSON.stringify({value})})
-      .catch(e=>{
-        console.warn('Sync failed:',k,e.message);
-        window.dispatchEvent(new CustomEvent(e.status===401?'sync-unauthorized':'sync-error',{detail:{key:k,message:e.message}}));
-      });
+  // The changes in k since the server's last confirmed state, or null when there are none.
+  diff(k){
+    const raw=localStorage.getItem(k);
+    if(!isRecordKey(k)){
+      const b=this.base[k]||{v:0,h:''};
+      const h=raw===null?'':hashStr(raw);
+      if(h===b.h)return null;
+      const value=raw===null?null:SYNC_RAW_KEYS.includes(k)?raw:JSON.parse(raw);
+      return{body:{value,base:b.v},h};
+    }
+    let list=raw?JSON.parse(raw):[];if(!Array.isArray(list))list=[];
+    const b=this.base[k]||{v:{},h:{},o:[]};
+    const ids=recIds(list),hashes={},upserts=[];
+    list.forEach((r,i)=>{
+      const id=ids[i],h=hashStr(JSON.stringify(r));hashes[id]=h;
+      if(b.h[id]!==h&&r&&typeof r==='object')upserts.push({id,base:b.v[id]||0,data:r});
+    });
+    const present=new Set(ids);
+    const deletes=Object.keys(b.v).filter(id=>!present.has(id)).map(id=>({id,base:b.v[id]}));
+    // The server appends new records; send the full order only if the list differs from that
+    const expected=[...(b.o||[]).filter(id=>present.has(id)&&b.v[id]),...ids.filter(id=>!b.v[id])];
+    const order=expected.join('\n')===ids.join('\n')?undefined:ids;
+    if(!upserts.length&&!deletes.length&&!order)return null;
+    return{body:{ops:{upserts,deletes,order}},ids,hashes};
   },
-  flush(){Object.keys(this.timers).forEach(k=>{clearTimeout(this.timers[k]);this.send(k,true);});},
-  // Replaces the local copy of every synced key with the server's data.
+  send(k,keepalive=false){
+    clearTimeout(this.timers[k]);delete this.timers[k];
+    if(this.inflight[k]){this.again[k]=true;return this.inflight[k];}
+    const p=this._send(k,keepalive).finally(()=>{
+      delete this.inflight[k];
+      if(this.again[k]){delete this.again[k];this.timers[k]=setTimeout(()=>this.send(k),0);}
+    });
+    this.inflight[k]=p;
+    return p;
+  },
+  async _send(k,keepalive){
+    const mark=this.changed[k]||0;
+    let d;
+    try{d=this.diff(k);}catch(e){console.warn('Sync diff failed:',k,e);return false;}
+    if(d){
+      const body=JSON.stringify(d.body);
+      // Browsers cap keepalive (page closing) requests at 64 KB; bigger saves stay pending for the next visit
+      if(keepalive&&body.length>60000)return false;
+      let res;
+      try{res=await apiCall('data.php?key='+encodeURIComponent(k),{method:'PUT',keepalive,body});}
+      catch(e){this.failed(k,e);return false;}
+      this.apply(k,d,res);
+    }
+    if((this.changed[k]||0)===mark){delete this.pending.keys[k];this.savePending();}
+    else this.again[k]=true; // changed again while this save was on its way
+    if(!this.hasPending()){this.lastError='';this.retryDelay=0;}
+    this.status();
+    return true;
+  },
+  failed(k,e){
+    console.warn('Sync failed:',k,e.message);
+    if(e.status===401){window.dispatchEvent(new CustomEvent('sync-unauthorized'));return;}
+    this.lastError=e.message;
+    this.status();
+    if(e.status===426)return; // outdated app: only a reload helps
+    // Retry everything pending with a growing pause (5 s … 1 min); a reconnect retries at once
+    this.retryDelay=Math.min(60000,this.retryDelay?this.retryDelay*2:5000);
+    clearTimeout(this.retryTimer);
+    this.retryTimer=setTimeout(()=>this.retryAll(),this.retryDelay);
+  },
+  retryAll(){this.pendingKeys().forEach(k=>this.send(k));},
+  // Stores the server's answer: new versions, and its copy of anything that conflicted or was renumbered.
+  apply(k,d,res){
+    const notices=[];
+    if(!isRecordKey(k)){
+      const b=this.base[k]={v:0,h:d.h};
+      if(res.conflict){
+        b.v=res.conflict.version;
+        b.h=this.writeLocal(k,res.conflict.value);
+        const area=k.startsWith('off_')?'Official settings':k.startsWith('ops_')?'Sales & Procurement settings':'The logo or signature';
+        notices.push(`${area} were changed by another user at the same time. Their version was kept — please check and make your change again.`);
+      }else{
+        b.v=res.version;
+        if(res.value!==undefined)b.h=this.writeLocal(k,res.value); // merged counters
+      }
+      this.saveBase();
+      if(notices.length)window.dispatchEvent(new CustomEvent('sync-conflict',{detail:{notices}}));
+      return;
+    }
+    const b=this.base[k]||(this.base[k]={v:{},h:{},o:[]});
+    Object.entries(res.versions||{}).forEach(([id,v])=>{b.v[id]=v;b.h[id]=d.hashes[id];});
+    (res.deleted||[]).forEach(id=>{delete b.v[id];delete b.h[id];});
+    const renumbered=res.renumbered||[],conflicts=res.conflicts||[];
+    if(renumbered.length||conflicts.length){
+      let list=readStore(k);if(!Array.isArray(list))list=[];
+      const indexOf=id=>recIds(list).indexOf(id);
+      renumbered.forEach(r=>{
+        const i=indexOf(r.id);if(i<0)return;
+        list[i]={...list[i],number:r.to,...(k==='ops_sq'?{base:r.to}:{})};
+        b.h[r.id]=hashStr(JSON.stringify(list[i]));
+        notices.push(`Number ${r.from} was taken by another user at the same moment, so your document was saved as ${r.to}.`);
+      });
+      conflicts.forEach(c=>{
+        const i=indexOf(c.id),mine=i>=0?list[i]:null;
+        if(c.data===null){
+          if(i>=0)list.splice(i,1);
+          delete b.v[c.id];delete b.h[c.id];
+          notices.push(c.reason==='deleted'?`${recLabel(mine)} was deleted by another user, so your changes to it were not saved.`:`${recLabel(mine)} could not be saved: ${c.reason}`);
+        }else{
+          if(i>=0)list[i]=c.data;else list.push(c.data);
+          b.v[c.id]=c.version;b.h[c.id]=hashStr(JSON.stringify(c.data));
+          notices.push(c.reason==='changed'?`${recLabel(c.data)} was changed by another user at the same time. Their version was kept — please check it and make your change again.`:`${recLabel(mine||c.data)} could not be saved: ${c.reason}`);
+        }
+      });
+      try{localStorage.setItem(k,JSON.stringify(list));}catch(e){console.warn('Sync write failed:',k,e.name);}
+      b.o=recIds(list).filter(id=>b.v[id]);
+      this.saveBase();
+      if(renumbered.length)this.fixLinkedNumbers(renumbered);
+    }else{
+      b.o=d.ids.filter(id=>b.v[id]);
+      this.saveBase();
+    }
+    if(notices.length)window.dispatchEvent(new CustomEvent('sync-conflict',{detail:{notices}}));
+  },
+  // Documents link to each other as {id, number}; point those links at the new number after a renumber.
+  fixLinkedNumbers(renumbered){
+    const fix=(node,depth)=>{
+      if(Array.isArray(node)){let ch=false;const out=node.map(x=>{const y=fix(x,depth+1);if(y!==x)ch=true;return y;});return ch?out:node;}
+      if(!node||typeof node!=='object')return node;
+      let out=node;
+      for(const key in node){const y=fix(node[key],depth+1);if(y!==node[key]){if(out===node)out={...node};out[key]=y;}}
+      // depth>1: a link nested inside a record, not a top-level record (those were renumbered already)
+      const r=depth>1&&renumbered.find(x=>out.id===x.id&&out.number===x.from);
+      if(r)out={...out,number:r.to};
+      return out;
+    };
+    SYNC_JSON_KEYS.filter(k=>isRecordKey(k)&&k!=='gm_users').forEach(key=>{
+      const list=readStore(key);if(!Array.isArray(list))return;
+      const next=fix(list,0);
+      if(next!==list){writeStore(key,next);this.push(key);}
+    });
+  },
+  // Writes a value from the server into localStorage (without sending it back); returns its fingerprint.
+  writeLocal(k,v){
+    try{
+      if(v===null||v===undefined){localStorage.removeItem(k);return '';}
+      const raw=SYNC_RAW_KEYS.includes(k)?String(v):JSON.stringify(v);
+      localStorage.setItem(k,raw);
+      if(k==='gm_logo')window.dispatchEvent(new CustomEvent('logo-changed',{detail:{logo:raw}}));
+      if(k==='gm_signature')window.dispatchEvent(new CustomEvent('signature-changed',{detail:{signature:raw}}));
+      return hashStr(raw);
+    }catch(e){console.warn('Sync write failed:',k,e.name);return '';}
+  },
+  // Page closing: send what fits in a keepalive request; the rest stays pending for next time.
+  flush(){this.pendingKeys().forEach(k=>{clearTimeout(this.timers[k]);if(!this.inflight[k])this.send(k,true);});},
+  // Sends everything pending and waits; resolves true when nothing is left unsent.
+  async flushNow(){
+    for(let i=0;i<3&&(this.hasPending()||Object.keys(this.inflight).length);i++){
+      await Promise.all(this.pendingKeys().map(k=>this.send(k)));
+      await Promise.all(Object.values(this.inflight));
+      if(this.lastError)break;
+    }
+    return !this.hasPending();
+  },
+  // Unsent changes belong to the user who made them; another user signing in on this browser drops them.
+  adoptPending(userId){
+    if(this.hasPending()&&this.pending.user&&this.pending.user!==userId){
+      console.warn('Discarding unsent changes of another user:',this.pendingKeys());
+      this.pending={user:userId,keys:{}};this.savePending();
+    }
+  },
+  // Replaces the local copy of every synced key with the server's data — except keys with unsent changes.
   async pull(){
-    const{data}=await apiCall('data.php');
+    const{data,versions={}}=await apiCall('data.php');
+    const pend=new Set(this.pendingKeys());
     [...SYNC_JSON_KEYS,...SYNC_RAW_KEYS].forEach(k=>{
+      if(pend.has(k))return;
       const v=data[k];
       try{
         if(v===null||v===undefined)localStorage.removeItem(k);
         else localStorage.setItem(k,SYNC_RAW_KEYS.includes(k)?v:JSON.stringify(v));
       }catch(e){console.warn('Sync pull failed:',k,e.name);}
+      if(isRecordKey(k)){
+        const list=Array.isArray(v)?v:[],vv=versions[k]||{},ids=recIds(list),b={v:{},h:{},o:ids};
+        list.forEach((r,i)=>{b.v[ids[i]]=vv[ids[i]]||1;b.h[ids[i]]=hashStr(JSON.stringify(r));});
+        this.base[k]=b;
+      }else{
+        const raw=v===null||v===undefined?null:SYNC_RAW_KEYS.includes(k)?v:JSON.stringify(v);
+        this.base[k]={v:versions[k]||0,h:raw===null?'':hashStr(raw)};
+      }
     });
-    window.dispatchEvent(new CustomEvent('logo-changed',{detail:{logo:data.gm_logo||''}}));
-    window.dispatchEvent(new CustomEvent('signature-changed',{detail:{signature:data.gm_signature||''}}));
+    this.saveBase();
+    window.dispatchEvent(new CustomEvent('logo-changed',{detail:{logo:getLogo()}}));
+    window.dispatchEvent(new CustomEvent('signature-changed',{detail:{signature:getSignature()}}));
   },
-  clearLocal(){[...SYNC_JSON_KEYS,...SYNC_RAW_KEYS].forEach(k=>{try{localStorage.removeItem(k);}catch{}});}
+  clearLocal(){
+    Object.values(this.timers).forEach(clearTimeout);this.timers={};
+    this.base={};this.pending={user:null,keys:{}};this.lastError='';
+    [...SYNC_JSON_KEYS,...SYNC_RAW_KEYS,SYNC_BASE_KEY,SYNC_PENDING_KEY].forEach(k=>{try{localStorage.removeItem(k);}catch{}});
+    this.status();
+  }
 };
 window.addEventListener('beforeunload',()=>Sync.flush());
+window.addEventListener('online',()=>Sync.retryAll());
 
 const LS={
   get:k=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch{return null}},

@@ -17,6 +17,9 @@ function LoginScreen({onLogin}){
       let user;
       try{({user}=await apiCall('login.php',{method:'POST',body:JSON.stringify({username,password})}));}
       catch(e){setError(e.status===401?'Incorrect username or password':'Server error: '+e.message);setLoading(false);return;}
+      // Changes this user left unsent last time go first, so the fresh server data includes them
+      Sync.adoptPending(user.id);
+      await Sync.flushNow();
       await Sync.pull();
       const portals=user.portals||{};
       const accessible=Object.entries(portals).filter(([,r])=>r).map(([k])=>k);
@@ -213,26 +216,39 @@ function App(){
   const[pendingPortals,setPendingPortals]=useState([]);
   const[profileOpen,setProfileOpen]=useState(false);
 
-  const[syncError,setSyncError]=useState('');
+  const[loadError,setLoadError]=useState('');
+  const[syncState,setSyncState]=useState({pending:Sync.pendingKeys().length,error:''});
+  const[conflicts,setConflicts]=useState([]);
+  // Bumped after the server sent back other users' versions, so the open portal re-reads its data
+  const[dataEpoch,setDataEpoch]=useState(0);
+
+  // Session expired: unsent changes stay on this computer and go out after the same user signs in again
+  const endSession=()=>{clearSession();if(!Sync.hasPending())Sync.clearLocal();setSessionState(null);setPendingUser(null);setStep('login');};
 
   useEffect(()=>{
     const saved=getSession();
     if(!saved){setStep('login');return;}
-    // Refresh local data from the server; a 401 means the server session has expired.
-    Sync.pull()
+    // Send changes left over from last time, then refresh local data; a 401 means the server session has expired.
+    Sync.flushNow()
+      .then(()=>Sync.pull())
       .then(()=>{setSessionState(saved);setStep('app');})
       .catch(e=>{
-        if(e.status===401){clearSession();Sync.clearLocal();setStep('login');}
-        else{setSyncError('Could not load data from the server: '+e.message);setSessionState(saved);setStep('app');}
+        if(e.status===401)endSession();
+        else{setLoadError('Could not load data from the server: '+e.message);setSessionState(saved);setStep('app');}
       });
   },[]);
 
   useEffect(()=>{
-    const onUnauthorized=()=>{clearSession();Sync.clearLocal();setSessionState(null);setStep('login');};
-    const onError=e=>setSyncError('Changes could not be saved to the server ('+e.detail.message+'). Check your connection before continuing.');
-    window.addEventListener('sync-unauthorized',onUnauthorized);
-    window.addEventListener('sync-error',onError);
-    return()=>{window.removeEventListener('sync-unauthorized',onUnauthorized);window.removeEventListener('sync-error',onError);};
+    const onStatus=e=>setSyncState(e.detail);
+    const onConflict=e=>{setConflicts(c=>[...c,...e.detail.notices]);setDataEpoch(n=>n+1);};
+    window.addEventListener('sync-unauthorized',endSession);
+    window.addEventListener('sync-status',onStatus);
+    window.addEventListener('sync-conflict',onConflict);
+    return()=>{
+      window.removeEventListener('sync-unauthorized',endSession);
+      window.removeEventListener('sync-status',onStatus);
+      window.removeEventListener('sync-conflict',onConflict);
+    };
   },[]);
 
   const doSelectPortal=(user,portal)=>{
@@ -260,8 +276,9 @@ function App(){
     setSession(newSess);setSessionState(newSess);
   };
 
-  const handleLogout=()=>{
-    Sync.flush();
+  const handleLogout=async()=>{
+    // Logging out clears this computer's copy, so anything not yet on the server would be lost
+    if(!await Sync.flushNow()&&!await askGlobalConfirm(`${Sync.pendingKeys().length} change(s) could not be saved to the server yet. If you log out now they will be lost. Log out anyway?`,{confirmLabel:'Log out and discard',cancelLabel:'Stay logged in'}))return;
     apiCall('logout.php',{method:'POST',keepalive:true}).catch(()=>{});
     clearSession();Sync.clearLocal();setSessionState(null);setPendingUser(null);setStep('login');
   };
@@ -276,13 +293,29 @@ function App(){
 
   return(
     <>
-      {session.activePortal==='off'&&<AppOfficial {...portalProps}/>}
-      {session.activePortal==='ops'&&<AppOperational {...portalProps}/>}
+      {session.activePortal==='off'&&<AppOfficial key={dataEpoch} {...portalProps}/>}
+      {session.activePortal==='ops'&&<AppOperational key={dataEpoch} {...portalProps}/>}
       {session.activePortal==='system'&&<AppSystem {...portalProps}/>}
       {profileOpen&&<ProfileModal session={session} onClose={()=>setProfileOpen(false)} onUpdate={handleSessionUpdate}/>}
-      {syncError&&<div role="alert" style={{position:'fixed',left:16,right:16,bottom:16,zIndex:9999,display:'flex',alignItems:'center',gap:12,background:'#fff',border:'1.5px solid rgba(192,57,43,.35)',borderRadius:10,padding:'12px 16px',boxShadow:'0 8px 28px rgba(26,42,10,.12)',color:'var(--red)',fontSize:13,fontWeight:500}}>
-        <span style={{flex:1}}>{syncError}</span>
-        <button onClick={()=>setSyncError('')} style={{border:'none',background:'transparent',color:'var(--g600)',cursor:'pointer',fontSize:13,fontWeight:600}}>Dismiss</button>
+      {(loadError||(syncState.pending>0&&syncState.error))&&<div role="alert" style={{position:'fixed',left:'calc(var(--sidebar) + 16px)',right:16,bottom:16,zIndex:9999,display:'flex',alignItems:'center',gap:12,background:'#fff',border:'1.5px solid rgba(192,57,43,.35)',borderRadius:10,padding:'12px 16px',boxShadow:'0 8px 28px rgba(26,42,10,.12)',color:'var(--red)',fontSize:13,fontWeight:500}}>
+        <span style={{flex:1}}>{syncState.pending>0&&syncState.error
+          ?`${syncState.pending} change(s) could not be saved to the server yet (${syncState.error}). They are kept on this computer and retried automatically — don't clear the browser data or log out until this message disappears.`
+          :loadError}</span>
+        {syncState.pending>0&&syncState.error
+          ?<button onClick={()=>Sync.retryAll()} style={{border:'none',background:'transparent',color:'var(--g600)',cursor:'pointer',fontSize:13,fontWeight:600}}>Retry now</button>
+          :<button onClick={()=>setLoadError('')} style={{border:'none',background:'transparent',color:'var(--g600)',cursor:'pointer',fontSize:13,fontWeight:600}}>Dismiss</button>}
+      </div>}
+      {conflicts.length>0&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:99998,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div role="alertdialog" aria-labelledby="sync-conflict-title" style={{background:'#fff',borderRadius:12,padding:'28px 32px',minWidth:320,maxWidth:520,boxShadow:'0 8px 40px rgba(0,0,0,.18)',display:'flex',flexDirection:'column',gap:16}}>
+          <h3 id="sync-conflict-title" style={{margin:0,fontSize:16,fontWeight:700,color:'var(--g900)'}}>Updated by another user</h3>
+          <ul style={{margin:0,paddingLeft:18,fontSize:13.5,lineHeight:1.6,color:'var(--g700)',maxHeight:280,overflowY:'auto'}}>
+            {conflicts.map((m,i)=><li key={i}>{m}</li>)}
+          </ul>
+          <p style={{margin:0,fontSize:12.5,color:'var(--g500)'}}>The latest data has been loaded.</p>
+          <div style={{display:'flex',justifyContent:'flex-end'}}>
+            <button autoFocus onClick={()=>setConflicts([])} style={{padding:'7px 20px',borderRadius:7,border:'none',background:'var(--gm-600)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}}>OK</button>
+          </div>
+        </div>
       </div>}
     </>
   );
