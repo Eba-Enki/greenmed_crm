@@ -8,24 +8,14 @@
 - If no reference image: design from scratch with high craft (see guardrails below).
 - Screenshot your output, compare against reference, fix mismatches, re-screenshot. Do at least 2 comparison rounds. Stop only when no visible differences remain or user says so.
 
-## Local Server
-- **Always serve on localhost** — never screenshot a `file:///` URL.
-- Start the dev server: `node serve.mjs` (serves the project root at `http://localhost:3000`)
-- `serve.mjs` lives in the project root. Start it in the background before taking any screenshots.
-- If the server is already running, do not start a second instance.
-
-## Screenshot Workflow
-- Puppeteer is installed at `C:/Users/nateh/AppData/Local/Temp/puppeteer-test/`. Chrome cache is at `C:/Users/nateh/.cache/puppeteer/`.
-- **Always screenshot from localhost:** `node screenshot.mjs http://localhost:3000`
-- Screenshots are saved automatically to `./temporary screenshots/screenshot-N.png` (auto-incremented, never overwritten).
-- Optional label suffix: `node screenshot.mjs http://localhost:3000 label` → saves as `screenshot-N-label.png`
-- `screenshot.mjs` lives in the project root. Use it as-is.
-- After screenshotting, read the PNG from `temporary screenshots/` with the Read tool — Claude can see and analyze the image directly.
-- When comparing, be specific: "heading is 32px but reference shows ~24px", "card gap is 16px but should be 24px"
-- Check: spacing/padding, font size/weight/line-height, colors (exact hex), alignment, border-radius, shadows, image sizing
+## Local Testing
+- The app needs PHP + MySQL; a static file server cannot log in. Test against a **built copy**, never the working tree:
+  copy the repo to a scratch folder, run `npm ci --prefix tools` once, then `node tools/build.mjs <copy>` (the build refuses to run inside a git working copy).
+- Serve the copy with `php -S 127.0.0.1:8080 -t <copy>` and a local `api/config.php` pointing at a test database (e.g. Docker `mariadb:10.6`).
+- Screenshot / browser-test with `puppeteer-core` and the locally installed Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`). Never screenshot a `file:///` URL.
 
 ## Output Defaults
-- Single `index.html` file, all styles inline, unless user says otherwise
+- Styles live in the `<style>` block of `index.html`; app code is JSX in `js/*.js`, precompiled at deploy by `tools/build.mjs`
 - Custom CSS with CSS variables (no Tailwind) — use `--var` tokens for colors, spacing, and typography
 - Placeholder images: `https://placehold.co/WIDTHxHEIGHT`
 - Mobile-first responsive
@@ -37,12 +27,9 @@
 
 ### Logo Usage Rule (strict)
 
-Two logo variants are available — choose based on the section's background tone:
-
-- **Light background** (white, light grey, pale tints) → use `brand_assets/green_med_logo.svg`
-- **Dark background** (navy, dark gradients, deep colors) → use ``
-
-Never mix these up. Check every section where a logo appears — navbar, footer, hero, cards — and apply the correct variant for that section's background.
+- `brand_assets/green_med_logo.svg` — full logo, for light backgrounds.
+- `brand_assets/Greenmed_Logo_General_Favicon.svg` — the mark alone (favicon, loading splash).
+- There is no dark-background logo variant yet; don't place the logo on dark surfaces until one is added.
 
 ## Anti-Generic Guardrails
 - **Colors:** Never use default Tailwind palette (indigo-500, blue-600, etc.). Pick a custom brand color and derive from it.
