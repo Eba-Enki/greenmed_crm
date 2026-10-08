@@ -745,11 +745,11 @@ body{background:var(--bz-canvas);background-attachment:fixed;color:var(--bz-ink)
 .sb-search kbd{font:500 10.5px/1 'Inter',sans-serif;color:#8d8f8b;letter-spacing:.2px}
 
 .sb-nav{flex:1;overflow-y:auto;overflow-x:hidden;margin:0 -4px;padding:0 4px}
-.sb-sec+.sb-sec{margin-top:18px}
-.sb-group{padding:0 8px 6px;font-size:12.5px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--bz-mute);gap:8px}
+.sb-sec+.sb-sec{margin-top:24px}
+.sb-group{padding:0 8px 8px;font-size:12.5px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--bz-mute);gap:8px}
 .sb-group::after{display:none}
 .sb-group svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.75;opacity:.85}
-.sb-item,button.sb-item{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;height:28px;padding:0 8px;margin:1px 0;border-radius:7px;font-size:14px;font-weight:450;color:var(--bz-ink-2);cursor:pointer;user-select:none;transition:background .14s var(--bz-ease),color .14s var(--bz-ease)}
+.sb-item,button.sb-item{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 8px;margin:0 0 2px;border-radius:7px;font-size:14px;font-weight:450;color:var(--bz-ink-2);cursor:pointer;user-select:none;transition:background .14s var(--bz-ease),color .14s var(--bz-ease)}
 .sb-item:hover{background:var(--bz-hover);color:var(--bz-ink)}
 .sb-item:active{background:var(--bz-press)}
 .sb-item:focus-visible{outline:2px solid var(--gm-400);outline-offset:-2px}
@@ -758,6 +758,9 @@ body{background:var(--bz-canvas);background-attachment:fixed;color:var(--bz-ink)
 .sb-item .lbl{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-cnt,.sb-item.active .sb-cnt{background:transparent;color:var(--bz-faint);font-size:11.5px;font-weight:500;padding:0}
 .sb-none{padding:6px 8px;font-size:13px;color:var(--bz-mute)}
+/* Something to look at here: bold label + dot (reasons in the tooltip), like unread channels in Buzz */
+.sb-item.att .lbl{font-weight:600;color:var(--bz-ink)}
+.sb-dot{margin-left:auto;width:7px;height:7px;border-radius:50%;background:var(--bz-pill);flex-shrink:0;animation:bzFade .3s var(--bz-ease)}
 
 .sb-pinned{padding-top:8px}
 .sb-me-wrap{position:relative}
@@ -879,17 +882,17 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 <body>
 <div id="root"><div class="splash" role="status" aria-label="Loading"><img class="splash-logo" src="brand_assets/Greenmed_Logo_General_Favicon.svg" alt=""><span class="splash-ring"></span></div></div>
 <!-- Loaded on first use, not on page load (see ensureXLSX / ensurePDF in js/utils.js) -->
-<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261009"}</script>
+<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261009b"}</script>
 <script>window.onerror=function(msg,src,line,col,err){document.getElementById('root').innerHTML='<pre style="color:red;background:#fff;padding:20px;font-size:13px">'+msg+'\n'+src+':'+line+'</pre>';return false;};</script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.22.5/babel.min.js"></script>
-<script src="js/i18n.js?v=20261009"></script>
-<script type="text/babel" src="js/utils.js?v=20261009"></script>
-<script type="text/babel" src="js/document-templates.js?v=20261009"></script>
-<script type="text/babel" src="js/app-official.js?v=20261009"></script>
-<script type="text/babel" src="js/app-operational.js?v=20261009"></script>
-<script type="text/babel" src="js/app-system.js?v=20261009"></script>
-<script type="text/babel" src="js/app-shell.js?v=20261009"></script>
+<script src="js/i18n.js?v=20261009b"></script>
+<script type="text/babel" src="js/utils.js?v=20261009b"></script>
+<script type="text/babel" src="js/document-templates.js?v=20261009b"></script>
+<script type="text/babel" src="js/app-official.js?v=20261009b"></script>
+<script type="text/babel" src="js/app-operational.js?v=20261009b"></script>
+<script type="text/babel" src="js/app-system.js?v=20261009b"></script>
+<script type="text/babel" src="js/app-shell.js?v=20261009b"></script>
 </body>
 </html>

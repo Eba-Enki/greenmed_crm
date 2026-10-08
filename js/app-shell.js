@@ -231,17 +231,39 @@ function SidebarUserMenu({session,portalLabel,onOpenProfile,onLogout,onLang}){
   );
 }
 
+// "New since I last opened this page": the record ids seen on each page are kept per user in this browser.
+// The first time a page is tracked everything counts as seen, so nobody starts with a wall of dots.
+const seenKey=(session,k)=>`gm_seen_${session.userId}_${session.activePortal}_${k}`;
+const readSeen=(session,k)=>{try{const v=localStorage.getItem(seenKey(session,k));return v?new Set(JSON.parse(v)):null;}catch{return null;}};
+const writeSeen=(session,k,ids)=>{try{localStorage.setItem(seenKey(session,k),JSON.stringify(ids));}catch{}};
+
 function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,onLogout,onLang}){
   const[q,setQ]=useState('');
+  const tracked=sb.filter(it=>it.k&&Array.isArray(it.ids));
+  // Opening a page marks its records as seen; untracked pages get their starting point. Empty lists are
+  // skipped: a portal's first render has empty lists until its data is read, and recording that as "seen"
+  // would make every existing record look new a moment later.
+  useEffect(()=>{
+    tracked.forEach(it=>{if(it.ids.length&&(isActive(it.k)||readSeen(session,it.k)===null))writeSeen(session,it.k,it.ids);});
+  });
+  const newCount=it=>{
+    if(!Array.isArray(it.ids)||isActive(it.k))return 0;
+    const seen=readSeen(session,it.k);
+    return seen?it.ids.filter(id=>!seen.has(id)).length:0;
+  };
   const portalLabel=(PORTAL_INFO[session.activePortal]||{label:session.activePortal}).label;
   const sections=sbSections(sb);
   const ql=q.trim().toLocaleLowerCase(LANG);
   const matches=ql?sections.flatMap(s=>s.items).filter(it=>String(it.lbl).toLocaleLowerCase(LANG).includes(ql)):[];
-  const item=it=>(
-    <button key={it.k} className={`sb-item${isActive(it.k)?' active':''}`} onClick={()=>{setQ('');onGo(it.k);}} aria-current={isActive(it.k)?'page':undefined}>
-      <Ico n={it.ico} size={16}/><span className="lbl">{it.lbl}</span>{it.cnt>0&&<span className="sb-cnt">{it.cnt}</span>}
-    </button>
-  );
+  const item=it=>{
+    const n=newCount(it);
+    const why=[...(it.att||[]),...(n?[tr('{0} new',n)]:[])].join(', ');
+    return(
+      <button key={it.k} className={`sb-item${isActive(it.k)?' active':''}${why?' att':''}`} onClick={()=>{setQ('');onGo(it.k);}} aria-current={isActive(it.k)?'page':undefined} title={why||undefined}>
+        <Ico n={it.ico} size={16}/><span className="lbl">{it.lbl}</span>{why&&<span className="sb-dot" aria-label={why}/>}
+      </button>
+    );
+  };
   return(
     <aside className="sidebar no-print">
       <PortalDropdown session={session} onPortalSwitch={onPortalSwitch}/>

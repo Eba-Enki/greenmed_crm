@@ -393,17 +393,21 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
 
   const SB=[
     {sec:tr('Documents')},
-    {k:'off_invoices',ico:'invoice',lbl:tr('Invoices'),cnt:inv.length},
-    {k:'off_quotes',ico:'quote',lbl:tr('Quotations'),cnt:quo.length},
-    {k:'off_pos',ico:'po',lbl:tr('Purchase Orders'),cnt:pos.length},
-    {k:'off_received',ico:'received',lbl:tr('Received Invoices'),cnt:rec.length},
+    {k:'off_invoices',ico:'invoice',lbl:tr('Invoices'),cnt:inv.length,ids:inv.map(d=>d.id),
+      att:att([countWhere(inv,isOverdue),'{0} overdue'],[countWhere(inv,d=>d.status==='draft'),'{0} draft'])},
+    {k:'off_quotes',ico:'quote',lbl:tr('Quotations'),cnt:quo.length,ids:quo.map(d=>d.id),
+      att:att([countWhere(quo,d=>d.status==='draft'),'{0} draft'],[countWhere(quo,d=>d.status==='sent'),'{0} awaiting reply'])},
+    {k:'off_pos',ico:'po',lbl:tr('Purchase Orders'),cnt:pos.length,ids:pos.map(d=>d.id),
+      att:att([countWhere(pos,d=>d.status==='draft'),'{0} draft'])},
+    {k:'off_received',ico:'received',lbl:tr('Received Invoices'),cnt:rec.length,ids:rec.map(d=>d.id),
+      att:att([countWhere(rec,isOverdue),'{0} overdue'],[countWhere(rec,d=>d.status!=='paid'&&!isOverdue(d)),'{0} unpaid'])},
     {div:true},
     {sec:tr('Management')},
-    {k:'off_customers',ico:'customers',lbl:tr('Contacts'),cnt:customers.length},
-    {k:'off_projects',ico:'project',lbl:tr('Projects'),cnt:projects.length},
+    {k:'off_customers',ico:'customers',lbl:tr('Contacts'),cnt:customers.length,ids:customers.map(c=>c.id)},
+    {k:'off_projects',ico:'project',lbl:tr('Projects'),cnt:projects.length,ids:projects.map(p=>p.id)},
     {k:'off_expenses',ico:'expense',lbl:tr('Expenses'),cnt:expCats.length},
     {k:'off_incomes',ico:'income',lbl:tr('Incomes'),cnt:incomeCats.length},
-    {k:'off_bank',ico:'bank',lbl:tr('Bank'),cnt:(co.banks||[]).length},
+    {k:'off_bank',ico:'bank',lbl:tr('Bank'),cnt:(co.banks||[]).length,ids:bankTx.map(t=>t.id)},
     {k:'settings',ico:'settings',lbl:tr('Settings')},
   ];
 

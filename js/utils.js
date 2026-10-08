@@ -345,6 +345,14 @@ const usersApi=async(action,payload)=>{
   return users;
 };
 
+// ── Sidebar attention ──
+// A menu item is shown bold with a dot when something there needs a look (drafts, overdue, unpaid…) or when
+// records were added since the user last opened that page. att() turns [count, message] pairs into the
+// reasons shown in the dot's tooltip; pairs with a zero count are dropped.
+const isOverdue=d=>!!d.dueDate&&d.dueDate<td()&&!['paid','cancelled','closed','draft'].includes(d.status);
+const att=(...pairs)=>pairs.filter(([n])=>n>0).map(([n,msg])=>tr(msg,n));
+const countWhere=(list,fn)=>(list||[]).filter(fn).length;
+
 // ── Heavy libraries on demand ──
 // The Excel library, jsPDF and the embedded PDF fonts (~1.9 MB together) are loaded the first time they are
 // needed instead of on every page load. Their URLs live in index.html (#gm-lazy) so the deploy build can

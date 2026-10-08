@@ -16,6 +16,12 @@ const require = createRequire(import.meta.url);
 const Babel = require('@babel/standalone'); // pinned to the version index.html loads (see package.json)
 
 const root = path.resolve(process.argv[2] || '.');
+// The build overwrites the sources, so outside CI it only runs on a copy (a folder that is not a git checkout)
+if (fs.existsSync(path.join(root, '.git')) && process.env.CI !== 'true' && !process.argv.includes('--force')) {
+  console.error(`Refusing to build in ${root}: it is a git working copy and this would overwrite the sources.\n` +
+    'Copy the project elsewhere and build the copy (CI does this automatically).');
+  process.exit(1);
+}
 const indexPath = path.join(root, 'index.html');
 let html = fs.readFileSync(indexPath, 'utf8');
 
