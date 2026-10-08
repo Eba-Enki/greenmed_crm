@@ -721,7 +721,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             </div>}
           </div>
         </div>
-        {importMsg&&<div style={{background:'var(--greenl)',color:'var(--green)',border:'1px solid rgba(59,109,17,.25)',borderRadius:7,padding:'7px 12px',fontSize:12,fontWeight:600,marginBottom:10}}>{importMsg}</div>}
+        {importMsg&&<div style={{background:'var(--greenl)',color:'var(--green)',border:'1px solid rgba(61,105,22,.25)',borderRadius:7,padding:'7px 12px',fontSize:12,fontWeight:600,marginBottom:10}}>{importMsg}</div>}
         <div className="iw">
           <table className="ie" style={{tableLayout:'auto'}}>
             <thead><tr>
@@ -991,7 +991,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,project:d=>d.project,supplier:d=>d.supplierCompany,total:d=>dt(d.items||[]),
       linked:d=>isPQ?d.linkedPO&&d.linkedPO.number:isPO?d.pqNum:d.poNum,status:d=>d.status||'unpaid'});
     const lbl=isPQ?tr('Received Quote'):isPO?tr('Purchase Order'):tr('Received Invoice');
-    const linkChip=(label,num)=><span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{label} {num}</span>;
+    const linkChip=(label,num)=><span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(61,105,22,.09)',color:'#3D6916',border:'1px solid rgba(61,105,22,.18)'}}>{label} {num}</span>;
     return(<div className="content">
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search supplier or ref...")}/></div>

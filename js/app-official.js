@@ -885,7 +885,7 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
           <td style={{color:'var(--g500)',fontSize:12}}>{t.date}</td>
           <td>{(t.account&&t.account.accountName)||'—'}</td>
           <td>{t.description||'—'}</td>
-          <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
+          <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(61,105,22,.09)',color:'#3D6916',border:'1px solid rgba(61,105,22,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
           <td className="tar" style={{fontWeight:600}}>{curSym}{fmt(+t.amount)}</td>
           <td><div className="aw"><button className="ab" onClick={()=>{const{account,...raw}=t;onEdit(raw);}}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(t)}><Ico n="trash"/></button></div></td>
         </tr>
@@ -1281,7 +1281,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
           <td style={{fontWeight:500,color:'var(--g800)'}}>{t.contactName||<span style={{color:'var(--g300)'}}>—</span>}</td>
           <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{fxTitle(t)||'—'}{isFx(t)&&<div className="fx-sub">{fxDetail(t.fx)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayDetail(t)}</div>}</td>
           <td>{isFx(t)?<span className="fx-badge">{tr("FX")}</span>:t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
-          <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(59,109,17,.09)',color:'#3B6D11',border:'1px solid rgba(59,109,17,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
+          <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(61,105,22,.09)',color:'#3D6916',border:'1px solid rgba(61,105,22,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
           <td className="tar" style={{color:'var(--green)'}}>{t.type==='in'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayAmt(t)}</div>}</>}</td>
           <td className="tar" style={{color:'var(--red)'}}>{t.type==='out'&&<>{curSym+fmt(+t.amount)}{isFx(t)&&<div className="fx-sub">{fxCounter(t)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayAmt(t)}</div>}</>}</td>
           <td className="tar" style={{fontWeight:600}}>{curSym}{fmt(t.balance)}</td>
