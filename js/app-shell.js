@@ -314,6 +314,7 @@ function ProfileModal({session,onClose,onUpdate}){
   const[saving,setSaving]=useState(false);
   const[avatar,setAvatar]=useState(me.avatar||'');
   const photoRef=useRef(null);
+  useEscape(onClose);
   const s=(k,v)=>setForm(x=>({...x,[k]:v}));
   const pickPhoto=e=>{
     const f=e.target.files[0];e.target.value='';
@@ -385,6 +386,7 @@ function App(){
   const[loadError,setLoadError]=useState('');
   const[syncState,setSyncState]=useState({pending:Sync.pendingKeys().length,error:''});
   const[conflicts,setConflicts]=useState([]);
+  useEscape(()=>setConflicts([]),conflicts.length>0);
   // Bumped after the server sent back other users' versions, so the open portal re-reads its data
   const[dataEpoch,setDataEpoch]=useState(0);
 

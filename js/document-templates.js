@@ -837,6 +837,7 @@ function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
 }
 
 function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfOpts}){
+  useEscape(onClose);
   const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
   const statusClass=statusMap[doc.status]||'b-draft';
   const statusLabel=doc.status?((SM[doc.status]&&SM[doc.status].l)||(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' '))):tr('Draft');

@@ -22,6 +22,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const[documents,setDocuments]=useState([]);
   const[cnt,setCnt]=useState({sq:0,si:0,po:0,prj:0});
   const[confirmDlg,setConfirmDlg]=useState(null);
+  useEscape(()=>setConfirmDlg(null),!!confirmDlg);
   const askConfirm=(msg,onYes)=>setConfirmDlg({msg,onYes});
   const[showDocForm,setShowDocForm]=useState(false);const[docToEdit,setDocToEdit]=useState(null);
   // Set by whichever form is currently mounted (see each form's "dirtyCheckRef.current=..." line);
@@ -1282,6 +1283,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
     const openPriceModal=(item)=>{setEditingItem(item);setTempPrice(item.purchasePrice||'');};
     const closeModal=()=>{setEditingItem(null);setTempPrice('');};
+    useEscape(closeModal,!!editingItem);
     const savePurchasePrice=()=>{
       if(editingItem){sPP(editingItem.id,tempPrice);setEditingItem(null);setTempPrice('');showToast(tr('Purchase price saved ✓'));}
     };
@@ -1668,6 +1670,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Documents View
   function DocumentsView(){
     const{sort,onSort}=useSort();
+    useEscape(()=>setShowDocForm(false),showDocForm&&!!docToEdit);
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(sort));
     // Fed newest-first so documents uploaded the same day keep their newest-added-first order
     const rows=sortRows([...documents].reverse(),sort,{date:d=>d.uploadDate,name:d=>d.name,category:d=>d.category,type:d=>d.fileType});

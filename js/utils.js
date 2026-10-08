@@ -562,6 +562,24 @@ const Badge=({s})=>{const m=SM[s]||SM.draft;return <span className={`bdg ${m.c}`
 const Btn=({v='bp',onClick,children,style={},...p})=><button className={`btn ${v}`} onClick={onClick} style={style} {...p}>{children}</button>;
 const Fld=({label,children})=><div className="fld"><label>{label}</label>{children}</div>;
 
+// Escape closes the top-most open dialog — the same as its Cancel / Close / × button. Dialogs register while
+// open, so with a confirm on top of a document window, Escape closes the confirm first.
+const escStack=[];
+window.addEventListener('keydown',e=>{
+  if(e.key!=='Escape'||!escStack.length)return;
+  e.preventDefault();
+  escStack[escStack.length-1].current();
+});
+function useEscape(onClose,open=true){
+  const ref=useRef(onClose);
+  ref.current=onClose;
+  useEffect(()=>{
+    if(!open)return;
+    escStack.push(ref);
+    return()=>{const i=escStack.lastIndexOf(ref);if(i>=0)escStack.splice(i,1);};
+  },[open]);
+}
+
 // Global confirm dialog, mounted on its own React root outside the main app tree.
 // Portal/Operational/Official forms are nested inside their parent component's render body,
 // so a confirm dialog whose visibility lived in that parent's state would re-render the parent
@@ -577,6 +595,7 @@ function GlobalConfirmDialog(){
       setState({msg,confirmLabel:opts.confirmLabel||tr('Leave without saving'),cancelLabel:opts.cancelLabel||tr('Cancel')});
     });
   },[]);
+  useEscape(()=>{setState(null);const r=window.__globalConfirmResolve;window.__globalConfirmResolve=null;r&&r(false);},!!state);
   if(!state)return null;
   const close=result=>{
     setState(null);

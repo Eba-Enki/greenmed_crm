@@ -8,6 +8,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
   const[cur,setCur]=useState(null);
   const[toast,showToast]=useToast();
   const[confirmDlg,setConfirmDlg]=useState(null);
+  useEscape(()=>setConfirmDlg(null),!!confirmDlg);
 
   const askConfirm=(msg,onYes)=>setConfirmDlg({msg,onYes});
 
