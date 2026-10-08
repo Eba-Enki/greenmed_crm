@@ -992,7 +992,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
           
           {Object.values(TEMPLATES).map(tpl=>(
             <div key={tpl.id} onClick={()=>s('selectedTemplate',tpl.id)} style={{background:'var(--white)',border:c.selectedTemplate===tpl.id?'2px solid var(--gm-400)':'1px solid var(--g200)',borderRadius:10,padding:20,marginBottom:12,cursor:'pointer',transition:'background 0.15s,border-color 0.15s,box-shadow 0.15s,color 0.15s,transform 0.15s',position:'relative'}}>
-              {c.selectedTemplate===tpl.id&&<div style={{position:'absolute',top:12,right:12,background:'var(--gm-400)',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:700}}>{tr("ACTIVE")}</div>}
+              {c.selectedTemplate===tpl.id&&<div style={{position:'absolute',top:12,right:12,background:'var(--btn)',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:700}}>{tr("ACTIVE")}</div>}
               <div style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginBottom:6}}>{tpl.name}</div>
               <div style={{fontSize:12,color:'var(--g600)'}}>{tpl.description}</div>
             </div>

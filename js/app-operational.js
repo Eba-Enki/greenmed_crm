@@ -1353,7 +1353,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
           <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
             <button onClick={closeModal} style={{padding:'8px 16px',fontSize:13,fontWeight:600,border:'1px solid var(--g300)',borderRadius:7,background:'var(--white)',color:'var(--g700)',cursor:'pointer'}}>{tr("Cancel")}</button>
-            <button onClick={savePurchasePrice} style={{padding:'8px 16px',fontSize:13,fontWeight:600,border:'none',borderRadius:7,background:'linear-gradient(135deg,var(--gm-400),var(--gm-500))',color:'var(--white)',cursor:'pointer'}}>{tr("Save Price")}</button>
+            <button onClick={savePurchasePrice} style={{padding:'8px 16px',fontSize:13,fontWeight:600,border:'none',borderRadius:7,background:'linear-gradient(135deg,var(--btn),var(--btn-hover))',color:'var(--white)',cursor:'pointer'}}>{tr("Save Price")}</button>
           </div>
         </div>
       </div>}
