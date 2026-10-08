@@ -6,6 +6,7 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
+header('X-Robots-Tag: noindex, nofollow'); // internal CRM: API responses never belong in search results
 
 // Storage keys the app syncs. Record collections are arrays of {id,...}; settings are single values.
 const RECORD_KEYS = [
