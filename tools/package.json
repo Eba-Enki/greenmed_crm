@@ -1,0 +1,12 @@
+{
+  "name": "greenmed-crm-build",
+  "private": true,
+  "description": "Deploy-time build: precompiles the JSX so the browser does not load Babel (see build.mjs)",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs .."
+  },
+  "dependencies": {
+    "@babel/standalone": "7.22.5"
+  }
+}

@@ -29,7 +29,9 @@ Tarayıcı (React uygulaması) ◄──► api/*.php ◄──► MySQL: cromte
 - `FTP_USERNAME`: yalnızca `crm.greenmed.uk` klasörüne erişen FTP hesabı
 - `FTP_PASSWORD`: bu hesabın şifresi
 
-**Sunucuya yüklenmeyen dosyalar:** `.github/`, `.claude/`, `.tools/`, `database/`, `docs/`, `CLAUDE.md`, `README.md`, `serve.ps1`, `index_backup_monolith.html`, `api/config.sample.php`
+**Sunucuya yüklenmeyen dosyalar:** `.github/`, `.claude/`, `.tools/`, `tools/`, `database/`, `docs/`, `CLAUDE.md`, `README.md`, `serve.ps1`, `index_backup_monolith.html`, `api/config.sample.php`
+
+**Derleme adımı:** Upload'dan önce `tools/build.mjs` çalışır. Bu adım `js/` altındaki JSX kodunu, tarayıcının kullandığı Babel sürümü ve ayarlarıyla (7.22.5, `react` + `env`) önceden derler, `index.html`'den Babel'i kaldırır ve her script'e içeriğe göre `?v=` sürüm etiketi verir. Böylece ziyaretçi 2.8 MB'lık Babel'i indirmez ve kod her açılışta yeniden derlenmez. Derleme hata verirse iş akışı durur ve hiçbir dosya yüklenmez. Repo'daki `index.html` derlenmemiş haliyle kalır; yerelde geliştirme eskisi gibi tarayıcıda derlenerek çalışır. Derlenmiş hali yerelde denemek için projenin bir kopyasında `npm ci --prefix tools` ve `node tools/build.mjs .` çalıştırın; asıl klasörde çalıştırmayın, çünkü dosyaların yerine yazar.
 
 Deploy işlemi yalnızca değişen dosyaları yükler. Sunucudaki `.ftp-deploy-sync-state.json` dosyası neyin yüklendiğini takip eder; **bu dosyayı silmeyin**. Silinirse bir sonraki deploy bütün dosyaları baştan yükler.
 
