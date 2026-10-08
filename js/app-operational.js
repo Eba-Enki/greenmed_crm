@@ -1975,14 +1975,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function Dashboard(){
     const ov=salesInvoices.filter(d=>d.status==='overdue');
     const revenue=dt(salesInvoices.filter(d=>d.status==='sent'||d.status==='paid').flatMap(d=>d.items));
-    const activePQ=purchaseQuotes.filter(d=>d.status==='draft').length;
     
     const cards=[
       {k:'sales_quotes',ico:'sq',lbl:tr('Sales Quotes'),val:salesQuotes.filter(d=>d.status!=='passive').length,sub:tr("{0} approved", salesQuotes.filter(d=>d.status==='approved').length)},
       {k:'sales_invoices',ico:'si',lbl:tr('Sales Invoices'),val:salesInvoices.length,sub:tr("{0} draft", salesInvoices.filter(d=>d.status==='draft').length)},
-      {k:'purchase_quotes',ico:'rq',lbl:tr('Purchase Quotes'),val:purchaseQuotes.length,sub:tr("{0} active", activePQ)},
-      {k:'purchase_orders',ico:'po',lbl:tr('Purchase Orders'),val:purchaseOrders.length,sub:tr("{0} sent", purchaseOrders.filter(d=>d.status==='sent').length)},
-      {k:'received_invoices',ico:'ri',lbl:tr('Received Invoices'),val:receivedInvoices.length,sub:tr("{0} pending", receivedInvoices.filter(d=>d.status==='pending').length)},
+      {k:'purchase_quotes',ico:'rq',lbl:tr('Purchase Quotes'),val:purchaseQuotes.length,sub:tr('{0} not ordered yet',countWhere(purchaseQuotes,d=>!d.linkedPO))}, // quotes and orders have no status field since the PQ → PO → RI links replaced it
+      {k:'purchase_orders',ico:'po',lbl:tr('Purchase Orders'),val:purchaseOrders.length,sub:tr('{0} awaiting invoice',countWhere(purchaseOrders,d=>!d.linkedRI))},
+      {k:'received_invoices',ico:'ri',lbl:tr('Received Invoices'),val:receivedInvoices.length,sub:tr('{0} unpaid',countWhere(receivedInvoices,d=>d.status!=='paid'))},
       {k:'projects',ico:'project',lbl:tr('Projects'),val:projects.length,sub:tr("{0} active", projects.filter(d=>d.status==='active').length)},
       {k:'product_pool',ico:'pool',lbl:tr('Product Pool'),val:poolItems.length,sub:tr('items')},
       {k:'customers',ico:'customers',lbl:tr('Customers'),val:customers.length,sub:tr('contacts')},
