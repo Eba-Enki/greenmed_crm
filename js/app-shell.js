@@ -273,7 +273,7 @@ function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,on
           matches.length?matches.map(item):<div className="sb-none">{tr('No matches')}</div>
         ):sections.map((s,i)=>(
           <div key={i} className="sb-sec">
-            {s.label&&<div className="sb-group"><Ico n={(s.items[0]||{}).ico||'dash'} size={14}/>{s.label}</div>}
+            {s.label&&<div className="sb-group">{s.label}</div>}
             {s.items.map(item)}
           </div>
         ))}
