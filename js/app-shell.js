@@ -127,12 +127,14 @@ function PortalDropdown({session,onPortalSwitch}){
 
   return(
     <div ref={ref} style={{position:'relative'}}>
-      <div className="sb-acc-pill" onClick={()=>setOpen(o=>!o)} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:8,justifyContent:'space-between'}}>
-        <div style={{display:'flex',flexDirection:'column',minWidth:0}}>
+      <button className="sb-acc-pill" onClick={()=>setOpen(o=>!o)} aria-haspopup="menu" aria-expanded={open}>
+        <img className="sb-acc-logo" src={LOGO} alt=""/>
+        <span className="sb-acc-txt">
+          <span className="sb-acc-co">Green Med Ltd</span>
           <span className="sb-acc-name">{(PORTAL_INFO[session.activePortal]||{label:session.activePortal}).label}</span>
-        </div>
+        </span>
         <svg viewBox="0 0 24 24" style={{width:13,height:13,stroke:'var(--g400)',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round',transform:open?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
-      </div>
+      </button>
       {open&&(
         <div className="portal-dropdown">
           {list.map(p=>{
@@ -152,24 +154,136 @@ function PortalDropdown({session,onPortalSwitch}){
 }
 
 // ==========================
-// SIDEBAR USER FOOTER (profile + log out)
+// PORTAL SIDEBAR (Buzz-style): portal switcher, search, sections, user card
 // ==========================
-function SidebarUserFooter({session,onOpenProfile,onLogout,onLang}){
+// sb is the portal's menu list: {sec|group} headers, {div} separators (ignored) and {k,ico,lbl,cnt} items.
+// Each section shows the icon of its first item, like the small emoji next to Buzz's section names.
+const sbSections=sb=>{
+  const out=[];let cur=null;
+  sb.forEach(it=>{
+    const head=it.sec||it.group;
+    if(head){cur={label:head,items:[]};out.push(cur);return;}
+    if(it.div||!it.k)return;
+    if(!cur){cur={label:'',items:[]};out.push(cur);}
+    cur.items.push(it);
+  });
+  return out;
+};
+
+function SidebarSearch({items,onGo,q,setQ}){
+  const ref=useRef(null);
+  useEffect(()=>{
+    // Ctrl+K / ⌘K jumps to the search box from anywhere
+    const h=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();ref.current&&ref.current.focus();}};
+    window.addEventListener('keydown',h);
+    return()=>window.removeEventListener('keydown',h);
+  },[]);
+  const isMac=/Mac/.test(navigator.platform||'');
+  return(
+    <label className="sb-search">
+      <Ico n="search" size={15}/>
+      <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder={tr('Search everything')} aria-label={tr('Search everything')}
+        onKeyDown={e=>{
+          if(e.key==='Escape'){setQ('');e.currentTarget.blur();}
+          if(e.key==='Enter'&&items[0]){onGo(items[0].k);setQ('');e.currentTarget.blur();}
+        }}/>
+      {!q&&<kbd>{isMac?'⌘K':'Ctrl K'}</kbd>}
+    </label>
+  );
+}
+
+function SidebarUserMenu({session,portalLabel,onOpenProfile,onLogout,onLang}){
+  const[open,setOpen]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!open)return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    const k=e=>{if(e.key==='Escape')setOpen(false);};
+    document.addEventListener('mousedown',h);document.addEventListener('keydown',k);
+    return()=>{document.removeEventListener('mousedown',h);document.removeEventListener('keydown',k);};
+  },[open]);
   const name=`${session.firstName||''} ${session.lastName||''}`.trim()||session.username||'';
   return(
-    <>
-    <div className="sb-lang"><LangSwitch onChange={onLang}/></div>
-    <div className="sb-user">
-      <button className="sb-user-info" onClick={onOpenProfile} title={tr("Profile")}>
-        <span className="sb-avatar">{(name[0]||'?').toUpperCase()}</span>
-        <span className="sb-user-txt">
-          <span className="sb-user-name">{name}</span>
-          <span className="sb-user-role">{tr(session.activeRole||'User')}</span>
+    <div className="sb-me-wrap" ref={ref}>
+      {open&&(
+        <div className="sb-menu" role="menu">
+          <button role="menuitem" className="sb-menu-item" onClick={()=>{setOpen(false);onOpenProfile();}}><Ico n="user" size={15}/>{tr('Profile')}</button>
+          <div className="sb-menu-row"><span><Ico n="globe" size={15}/>{tr('Language')}</span><LangSwitch onChange={onLang}/></div>
+          <div className="sb-menu-sep"/>
+          <button role="menuitem" className="sb-menu-item danger" onClick={()=>{setOpen(false);onLogout();}}><Ico n="logout" size={15}/>{tr('Log Out')}</button>
+        </div>
+      )}
+      <button className={`sb-me${open?' open':''}`} onClick={()=>setOpen(o=>!o)} aria-haspopup="menu" aria-expanded={open}>
+        <span className="sb-avatar">{(name[0]||'?').toUpperCase()}<i className="sb-presence"/></span>
+        <span className="sb-me-txt">
+          <span className="sb-me-name">{name}</span>
+          <span className="sb-me-sub"><img src={LOGO} alt=""/>{portalLabel}</span>
         </span>
       </button>
-      <button className="sb-logout" onClick={onLogout} title={tr("Log Out")} aria-label={tr("Log Out")}><Ico n="logout" size={18}/></button>
     </div>
-    </>
+  );
+}
+
+function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,onLogout,onLang}){
+  const[q,setQ]=useState('');
+  const portalLabel=(PORTAL_INFO[session.activePortal]||{label:session.activePortal}).label;
+  const sections=sbSections(sb);
+  const ql=q.trim().toLocaleLowerCase(LANG);
+  const matches=ql?sections.flatMap(s=>s.items).filter(it=>String(it.lbl).toLocaleLowerCase(LANG).includes(ql)):[];
+  const item=it=>(
+    <button key={it.k} className={`sb-item${isActive(it.k)?' active':''}`} onClick={()=>{setQ('');onGo(it.k);}} aria-current={isActive(it.k)?'page':undefined}>
+      <Ico n={it.ico} size={16}/><span className="lbl">{it.lbl}</span>{it.cnt>0&&<span className="sb-cnt">{it.cnt}</span>}
+    </button>
+  );
+  return(
+    <aside className="sidebar no-print">
+      <PortalDropdown session={session} onPortalSwitch={onPortalSwitch}/>
+      <SidebarSearch items={matches} onGo={onGo} q={q} setQ={setQ}/>
+      <nav className="sb-nav">
+        {ql?(
+          matches.length?matches.map(item):<div className="sb-none">{tr('No matches')}</div>
+        ):sections.map((s,i)=>(
+          <div key={i} className="sb-sec">
+            {s.label&&<div className="sb-group"><Ico n={(s.items[0]||{}).ico||'dash'} size={14}/>{s.label}</div>}
+            {s.items.map(item)}
+          </div>
+        ))}
+      </nav>
+      <div className="sb-pinned">
+        <SidebarUserMenu session={session} portalLabel={portalLabel} onOpenProfile={onOpenProfile} onLogout={onLogout} onLang={onLang}/>
+      </div>
+    </aside>
+  );
+}
+
+// ==========================
+// PAGE HEADER (Buzz-style): breadcrumb, title + actions, pill tabs for the pages of the same section
+// ==========================
+function PageHeader({sb,isActive,onGo,session,title,children}){
+  const portalLabel=(PORTAL_INFO[session.activePortal]||{label:session.activePortal}).label;
+  const sec=sbSections(sb).find(s=>s.items.some(it=>isActive(it.k)));
+  const cur=sec&&sec.items.find(it=>isActive(it.k));
+  const crumbs=[portalLabel,sec&&sec.label,cur&&cur.lbl!==title?cur.lbl:null].filter(Boolean);
+  // Settings shares a menu section with list pages but is not one of them, so it never becomes a tab
+  const tabItems=sec?sec.items.filter(it=>it.k!=='settings'):[];
+  const tabs=tabItems.length>1&&tabItems.some(it=>isActive(it.k))?tabItems:[];
+  return(
+    <header className="topbar no-print">
+      <nav className="crumbs" aria-label="Breadcrumb">
+        <Ico n={(cur||{}).ico||'dash'} size={14}/>
+        {crumbs.map((c,i)=><React.Fragment key={i}>{i>0&&<span className="crumb-sep">›</span>}<span className="crumb">{c}</span></React.Fragment>)}
+        <span className="crumb-sep">›</span><span className="crumb crumb-cur">{title}</span>
+      </nav>
+      <div className="topbar-row">
+        <h1 className="topbar-title">{title}</h1>
+        <div className="topbar-actions">{children}</div>
+      </div>
+      {tabs.length>0&&(
+        <div className="pills" role="tablist">
+          {tabs.map(it=><button key={it.k} role="tab" aria-selected={isActive(it.k)} className={`pill${isActive(it.k)?' on':''}`} onClick={()=>onGo(it.k)}>{it.lbl}{it.cnt>0&&<span className="pill-cnt">{it.cnt}</span>}</button>)}
+        </div>
+      )}
+    </header>
   );
 }
 

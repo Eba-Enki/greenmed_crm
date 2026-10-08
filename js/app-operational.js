@@ -1978,8 +1978,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const revenue=dt(salesInvoices.filter(d=>d.status==='sent'||d.status==='paid').flatMap(d=>d.items));
     const activePQ=purchaseQuotes.filter(d=>d.status==='draft').length;
     
-    // All cards share the brand accent on a white surface.
-    const accent='#608425';
     const cards=[
       {k:'sales_quotes',ico:'sq',lbl:tr('Sales Quotes'),val:salesQuotes.filter(d=>d.status!=='passive').length,sub:tr("{0} approved", salesQuotes.filter(d=>d.status==='approved').length)},
       {k:'sales_invoices',ico:'si',lbl:tr('Sales Invoices'),val:salesInvoices.length,sub:tr("{0} draft", salesInvoices.filter(d=>d.status==='draft').length)},
@@ -1992,90 +1990,15 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     ];
     
     return(<div className="content">
-      <div style={{marginBottom:28}}>
-        <div style={{fontSize:22,fontWeight:800,color:'var(--g900)',marginBottom:4,letterSpacing:'-0.5px'}}>{tr("Dashboard")}</div>
-        <div style={{fontSize:13,color:'var(--g500)',fontWeight:500}}>{tr('Sales & Procurement Account')}</div>
-      </div>
-      
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:18,marginBottom:28}}>
+
+      <div className="dash-grid">
         {cards.map(c=>(
-          <div 
-            key={c.k} 
-            onClick={()=>go(c.k)}
-            style={{
-              background:'#fff',
-              border:`1px solid ${accent}20`,
-              borderRadius:12,
-              padding:'22px 20px',
-              cursor:'pointer',
-              transition:'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-              position:'relative',
-              overflow:'hidden',
-              boxShadow:'0 1px 3px rgba(0,0,0,0.04)',
-            }}
-            onMouseEnter={(e)=>{
-              e.currentTarget.style.transform='translateY(-4px)';
-              e.currentTarget.style.boxShadow=`0 8px 24px ${accent}20`;
-              e.currentTarget.style.borderColor=`${accent}40`;
-            }}
-            onMouseLeave={(e)=>{
-              e.currentTarget.style.transform='translateY(0)';
-              e.currentTarget.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';
-              e.currentTarget.style.borderColor=`${accent}20`;
-            }}
-          >
-            <div style={{position:'absolute',top:-10,right:-10,width:80,height:80,borderRadius:'50%',background:`${accent}08`,filter:'blur(20px)'}}/>
-            
-            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16,position:'relative'}}>
-              <div style={{
-                width:48,
-                height:48,
-                borderRadius:10,
-                background:`${accent}15`,
-                display:'flex',
-                alignItems:'center',
-                justifyContent:'center',
-                border:`1px solid ${accent}20`
-              }}>
-                <div style={{color:accent}}>
-                  <Ico n={c.ico} size={20}/>
-                </div>
-              </div>
-              <div style={{
-                fontSize:32,
-                fontWeight:800,
-                color:accent,
-                lineHeight:1,
-                letterSpacing:'-1px'
-              }}>
-                {c.val}
-              </div>
-            </div>
-            
-            <div style={{position:'relative'}}>
-              <div style={{
-                fontSize:13,
-                fontWeight:600,
-                color:'var(--g800)',
-                marginBottom:4,
-                letterSpacing:'-0.2px'
-              }}>
-                {c.lbl}
-              </div>
-              <div style={{
-                fontSize:11,
-                color:'var(--g500)',
-                fontWeight:500,
-                display:'inline-block',
-                padding:'3px 8px',
-                background:'var(--white)',
-                borderRadius:6,
-                border:'1px solid var(--g200)'
-              }}>
-                {c.sub}
-              </div>
-            </div>
-          </div>
+          <button key={c.k} className="dash-card" onClick={()=>go(c.k)}>
+            <span className="dash-ico"><Ico n={c.ico} size={18}/></span>
+            <span className="dash-val">{c.val}</span>
+            <span className="dash-lbl">{c.lbl}</span>
+            {c.sub&&<span className="dash-sub">{c.sub}</span>}
+          </button>
         ))}
       </div>
     </div>);
@@ -2102,33 +2025,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     {k:'settings',ico:'settings',lbl:tr('Settings')},
   ];
 
+  // Sidebar + page header menu: Dashboard first, then the sections above
+  const NAV=[{k:'home',ico:'home',lbl:tr('Dashboard')},...SB];
+  const isNav=k=>view===k||view===k+'_form'||view===k+'_preview';
+
   const titles={home:tr('Dashboard'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
-      <div className="sidebar no-print">
-        <div className="sb-brand" onClick={()=>goGuarded('home')}>
-          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">{tr('Sales & Procurement')}</div></div>
-        </div>
-        <PortalDropdown session={session} onPortalSwitch={guardedPortalSwitch} onLogout={guardedLogout} onOpenProfile={onOpenProfile}/>
-        <div style={{flex:1,overflow:'auto',padding:'6px 0'}}>
-          {SB.map((it,i)=>{
-            if(it.group)return <div key={i} className="sb-group">{it.group}</div>;
-            if(it.div)return <div key={i} style={{height:1,background:'rgba(255,255,255,.06)',margin:'4px 10px'}}/>;
-            return <div key={it.k} className={`sb-item${(view===it.k||view===it.k+'_form'||view===it.k+'_preview')?' active':''}`} onClick={()=>goGuarded(it.k)}><Ico n={it.ico} size={13}/><span className="lbl">{it.lbl}</span></div>;
-          })}
-        </div>
-        <div className="sb-pinned">
-          <SidebarUserFooter session={session} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
-        </div>
-      </div>
+      <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
         {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
-          <div className="topbar no-print">
-            <h1 className="topbar-title">{titles[view]||''}</h1>
-            <div style={{flex:1}}/>
+          <PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={titles[view]||''}>
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
             {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si');setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>{tr("New Invoice")}</Btn>}
             {view==='purchase_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>{tr("New Received Quote")}</Btn>}
@@ -2139,7 +2049,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {view==='expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>{tr("Categories")}</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>{tr("New Expense")}</Btn></div>}
             {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('cust_form');}}><Ico n="plus"/>{tr("New Customer")}</Btn>}
             {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>{tr("Upload Document")}</Btn>}
-          </div>
+          </PageHeader>
         }
         {view==='home'&&<Dashboard/>}
         {view==='sales_quotes'&&<SalesQuotesList/>}

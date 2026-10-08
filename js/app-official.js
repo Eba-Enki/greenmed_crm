@@ -407,6 +407,10 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     {k:'settings',ico:'settings',lbl:tr('Settings')},
   ];
 
+  // Sidebar + page header menu: Dashboard first, then the sections above
+  const NAV=[{k:'home',ico:'home',lbl:tr('Dashboard')},...SB];
+  const isNav=k=>view===k;
+
   const selectedBank=(co.banks||[]).find(b=>b.id===selectedBankId)||null;
   const bankTxForAccount=selectedBank?bankTx.filter(t=>t.accountId===selectedBank.id):[];
 
@@ -415,26 +419,11 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   dirtyCheckRef.current=null;
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
-      <div className="sidebar no-print">
-        <div className="sb-brand" onClick={()=>goGuarded('home')}>
-          <img src={getLogo()||LOGO} alt=""/><div style={{marginTop:2}}><div className="sb-brand-sub">{tr("Official Records")}</div></div>
-        </div>
-        <PortalDropdown session={session} onPortalSwitch={guardedPortalSwitch} onLogout={guardedLogout} onOpenProfile={onOpenProfile}/>
-        {SB.map((it,i)=>{
-          if(it.sec)return <div key={i} className="sb-group">{it.sec}</div>;
-          if(it.div)return <div key={i} style={{height:1,background:'rgba(255,255,255,.06)',margin:'5px 12px'}}/>;
-          return <div key={it.k} className={`sb-item${view===it.k?' active':''}`} onClick={()=>goGuarded(it.k)}><Ico n={it.ico} size={14}/><span className="lbl">{it.lbl}</span>{it.cnt>0&&<span className="sb-cnt">{it.cnt}</span>}</div>;
-        })}
-        <div className="sb-pinned">
-          <SidebarUserFooter session={session} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
-        </div>
-      </div>
+      <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
         {!['off_preview','off_form','off_custform','off_projform','off_bank_detail','off_banktx_form','off_fx_form','off_cat_detail','off_contact'].includes(view)&&(()=>{
           const offTitles={home:tr('Dashboard'),off_invoices:tr('Invoices'),off_quotes:tr('Quotations'),off_pos:tr('Purchase Orders'),off_received:tr('Received Invoices'),off_customers:tr('Contacts'),off_projects:tr('Projects'),off_expenses:tr('Expenses'),off_incomes:tr('Incomes'),off_bank:tr('Bank Accounts'),settings:tr('Settings')};
-          return(<div className="topbar no-print">
-            <h1 className="topbar-title">{offTitles[view]||''}</h1>
-            <div style={{flex:1}}/>
+          return(<PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={offTitles[view]||''}>
             {view==='off_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('invoice'));go('off_form');}}><Ico n="plus"/>{tr("New Invoice")}</Btn>}
             {view==='off_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('quote'));go('off_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
             {view==='off_pos'&&<Btn v="bp bsm" onClick={()=>{setCur(mkDoc('po'));go('off_form');}}><Ico n="plus"/>{tr("New Purchase Order")}</Btn>}
@@ -444,9 +433,9 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
             {view==='off_expenses'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'out'})}><Ico n="plus"/>{tr("New Expense")}</Btn>}
             {view==='off_incomes'&&<Btn v="bp bsm" onClick={()=>setEditingCategory({id:null,name:'',parentId:null,direction:'in'})}><Ico n="plus"/>{tr("New Income")}</Btn>}
             {view==='off_bank'&&<Btn v="bp bsm" onClick={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})}><Ico n="plus"/>{tr("New Account")}</Btn>}
-          </div>);
+          </PageHeader>);
         })()}
-        {view==='home'&&<div className="content"><div style={{marginBottom:20}}><div style={{fontSize:18,fontWeight:800,color:'var(--g900)',marginBottom:2}}>{tr("Dashboard")}</div><div style={{fontSize:12,color:'var(--g500)'}}>{tr("Official Account")}</div></div>
+        {view==='home'&&<div className="content">
           <div className="nav-cards">
             {[{k:'off_invoices',ico:'invoice',lbl:tr('Invoices'),val:inv.length},{k:'off_quotes',ico:'quote',lbl:tr('Quotations'),val:quo.length},{k:'off_pos',ico:'po',lbl:tr('POs'),val:pos.length},{k:'off_received',ico:'received',lbl:tr('Received'),val:rec.length},{k:'off_customers',ico:'customers',lbl:tr('Customers'),val:customers.length},{k:'off_projects',ico:'project',lbl:tr('Projects'),val:projects.length},{k:'off_expenses',ico:'expense',lbl:tr('Expenses'),val:expCats.length},{k:'off_incomes',ico:'income',lbl:tr('Incomes'),val:incomeCats.length},{k:'off_bank',ico:'bank',lbl:tr('Bank'),val:(co.banks||[]).length}].map(c=><div key={c.k} className="nav-card" onClick={()=>go(c.k)}><div className="nc-ico"><Ico n={c.ico} size={16}/></div><div className="nc-val">{c.val}</div><div className="nc-lbl">{c.lbl}</div></div>)}
           </div>
