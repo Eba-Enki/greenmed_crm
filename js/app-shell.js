@@ -231,26 +231,14 @@ function SidebarUserMenu({session,portalLabel,onOpenProfile,onLogout,onLang}){
   );
 }
 
-// "New since I last opened this page": the record ids seen on each page are kept per user in this browser.
-// The first time a page is tracked everything counts as seen, so nobody starts with a wall of dots.
-const seenKey=(session,k)=>`gm_seen_${session.userId}_${session.activePortal}_${k}`;
-const readSeen=(session,k)=>{try{const v=localStorage.getItem(seenKey(session,k));return v?new Set(JSON.parse(v)):null;}catch{return null;}};
-const writeSeen=(session,k,ids)=>{try{localStorage.setItem(seenKey(session,k),JSON.stringify(ids));}catch{}};
-
 function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,onLogout,onLang}){
   const[q,setQ]=useState('');
-  const tracked=sb.filter(it=>it.k&&Array.isArray(it.ids));
-  // Opening a page marks its records as seen; untracked pages get their starting point. Empty lists are
-  // skipped: a portal's first render has empty lists until its data is read, and recording that as "seen"
-  // would make every existing record look new a moment later.
-  useEffect(()=>{
-    tracked.forEach(it=>{if(it.ids.length&&(isActive(it.k)||readSeen(session,it.k)===null))writeSeen(session,it.k,it.ids);});
-  });
-  const newCount=it=>{
-    if(!Array.isArray(it.ids)||isActive(it.k))return 0;
-    const seen=readSeen(session,it.k);
-    return seen?it.ids.filter(id=>!seen.has(id)).length:0;
-  };
+  const[,bump]=useState(0);
+  useEffect(()=>{const h=()=>bump(n=>n+1);window.addEventListener('seen-changed',h);return()=>window.removeEventListener('seen-changed',h);},[]);
+  // Opening a list tells the server it has been seen (once per visit, not on every render)
+  const activeCol=(sb.find(it=>it.col&&isActive(it.k))||{}).col||null;
+  useEffect(()=>{if(activeCol)Seen.mark(activeCol);},[activeCol]);
+  const newCount=it=>it.col&&!isActive(it.k)?Seen.count(it.col):0;
   const portalLabel=(PORTAL_INFO[session.activePortal]||{label:session.activePortal}).label;
   const sections=sbSections(sb);
   const ql=q.trim().toLocaleLowerCase(LANG);
@@ -429,6 +417,9 @@ function App(){
     };
   },[]);
 
+  // Sidebar "new records" dots come from the server once the app is showing
+  useEffect(()=>{if(step==='app'&&session)Seen.load();},[step,session&&session.userId]);
+
   const doSelectPortal=(user,portal)=>{
     const role=portal==='system'?'Admin':(user.portals||{})[portal]||'User';
     const sess={userId:user.id,username:user.username,firstName:user.firstName||'',lastName:user.lastName||'',activePortal:portal,activeRole:role,portals:user.portals||{},loginTime:new Date().toISOString()};
@@ -458,7 +449,7 @@ function App(){
     // Logging out clears this computer's copy, so anything not yet on the server would be lost
     if(!await Sync.flushNow()&&!await askGlobalConfirm(tr("{0} change(s) could not be saved to the server yet. If you log out now they will be lost. Log out anyway?", Sync.pendingKeys().length),{confirmLabel:tr('Log out and discard'),cancelLabel:tr('Stay logged in')}))return;
     apiCall('logout.php',{method:'POST',keepalive:true}).catch(()=>{});
-    clearSession();Sync.clearLocal();setSessionState(null);setPendingUser(null);setStep('login');
+    clearSession();Sync.clearLocal();Seen.clear();setSessionState(null);setPendingUser(null);setStep('login');
   };
   const handleSessionUpdate=newSess=>{setSessionState(newSess);};
 

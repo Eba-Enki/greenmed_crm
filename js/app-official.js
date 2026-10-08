@@ -393,17 +393,17 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
 
   const SB=[
     {sec:tr('Documents')},
-    {k:'off_invoices',ico:'invoice',lbl:tr('Invoices'),cnt:inv.length,ids:inv.map(d=>d.id)},
-    {k:'off_quotes',ico:'quote',lbl:tr('Quotations'),cnt:quo.length,ids:quo.map(d=>d.id)},
-    {k:'off_pos',ico:'po',lbl:tr('Purchase Orders'),cnt:pos.length,ids:pos.map(d=>d.id)},
-    {k:'off_received',ico:'received',lbl:tr('Received Invoices'),cnt:rec.length,ids:rec.map(d=>d.id)},
+    {k:'off_invoices',ico:'invoice',lbl:tr('Invoices'),cnt:inv.length,col:'off_i'},
+    {k:'off_quotes',ico:'quote',lbl:tr('Quotations'),cnt:quo.length,col:'off_q'},
+    {k:'off_pos',ico:'po',lbl:tr('Purchase Orders'),cnt:pos.length,col:'off_p'},
+    {k:'off_received',ico:'received',lbl:tr('Received Invoices'),cnt:rec.length,col:'off_r'},
     {div:true},
     {sec:tr('Management')},
-    {k:'off_customers',ico:'customers',lbl:tr('Contacts'),cnt:customers.length,ids:customers.map(c=>c.id)},
-    {k:'off_projects',ico:'project',lbl:tr('Projects'),cnt:projects.length,ids:projects.map(p=>p.id)},
+    {k:'off_customers',ico:'customers',lbl:tr('Contacts'),cnt:customers.length,col:'off_cust'},
+    {k:'off_projects',ico:'project',lbl:tr('Projects'),cnt:projects.length,col:'off_pr'},
     {k:'off_expenses',ico:'expense',lbl:tr('Expenses'),cnt:expCats.length},
     {k:'off_incomes',ico:'income',lbl:tr('Incomes'),cnt:incomeCats.length},
-    {k:'off_bank',ico:'bank',lbl:tr('Bank'),cnt:(co.banks||[]).length,ids:bankTx.map(t=>t.id)},
+    {k:'off_bank',ico:'bank',lbl:tr('Bank'),cnt:(co.banks||[]).length,col:'off_banktx'},
     {k:'settings',ico:'settings',lbl:tr('Settings')},
   ];
 

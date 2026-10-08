@@ -345,6 +345,26 @@ const usersApi=async(action,payload)=>{
   return users;
 };
 
+// ── New records since the user last looked (sidebar dots) ──
+// Kept on the server per user (api/seen.php), so every browser and device shows the same dots. Only records
+// created by other users count. Seen.load() runs after the data is loaded; Seen.mark() when a list is opened.
+const Seen={
+  newIds:{},
+  emit(){window.dispatchEvent(new CustomEvent('seen-changed'));},
+  async load(){
+    // The earlier, per-browser version of this feature left keys behind
+    try{Object.keys(localStorage).filter(k=>k.startsWith('gm_seen_')).forEach(k=>localStorage.removeItem(k));}catch{}
+    try{this.newIds=(await apiCall('seen.php')).new||{};}catch(e){console.warn('Seen load failed:',e.message);this.newIds={};}
+    this.emit();
+  },
+  count(col){return(this.newIds[col]||[]).length;},
+  mark(col){
+    if(this.newIds[col]){delete this.newIds[col];this.emit();}
+    apiCall('seen.php',{method:'POST',body:JSON.stringify({collection:col})}).catch(e=>console.warn('Seen mark failed:',e.message));
+  },
+  clear(){this.newIds={};this.emit();}
+};
+
 // ── Action reminders ──
 // The sidebar only marks pages with records added since the user last looked (PortalSidebar). Records that
 // need something done are marked where the action is: the row's action button gets a small dot (ActBtn).

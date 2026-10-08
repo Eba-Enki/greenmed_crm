@@ -46,6 +46,14 @@ CREATE TABLE IF NOT EXISTS `record_history` (
   KEY `idx_changed_at` (`changed_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- When each user last opened each list: records other users created after that are "new" for them.
+CREATE TABLE IF NOT EXISTS `user_seen` (
+  `user_id`     VARCHAR(64)  NOT NULL,
+  `collection`  VARCHAR(32)  NOT NULL,
+  `seen_at`     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`, `collection`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Schema version (the API upgrades older databases automatically on first request).
-INSERT INTO `settings` (`setting_key`, `value`, `is_raw`, `updated_by`) VALUES ('__schema', '2', 1, 'system')
+INSERT INTO `settings` (`setting_key`, `value`, `is_raw`, `updated_by`) VALUES ('__schema', '3', 1, 'system')
   ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);

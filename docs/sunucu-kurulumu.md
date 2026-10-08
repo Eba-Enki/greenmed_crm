@@ -44,9 +44,10 @@ Deploy işlemi yalnızca değişen dosyaları yükler. Sunucudaki `.ftp-deploy-s
 |---|---|
 | `records` | Her kayıt bir satırdır. Sütunlar: `collection` (kaydın grubu, örn. `ops_sq`), `id`, `data` (kaydın tamamı JSON olarak), `sort_order`, `version` (her kayıtta 1 artar), `updated_at`, `updated_by` |
 | `settings` | Tekil değerler: şirket bilgileri, numara sayaçları, alış fiyatları, logo, imza. `is_raw = 1` olan değerler düz metin (base64 görsel), diğerleri JSON'dur. `version` her kayıtta 1 artar. `__schema` satırı veritabanı şema sürümünü tutar. |
+| `user_seen` | Her kullanıcının her listeye en son ne zaman baktığı. O zamandan sonra **başka kullanıcıların** oluşturduğu kayıtlar sidebar'da "yeni" noktası olarak görünür; kullanıcı listeyi açınca güncellenir. |
 | `record_history` | Değişiklik geçmişi: her ekleme, güncelleme ve silme bir satırdır (`action`: `create` / `update` / `delete` / `import`). `data` yeni hali, silmede ise son halidir. Kullanıcı hesapları (şifre hash'leri) buraya yazılmaz. |
 
-**Otomatik şema güncellemesi:** API, eski şemalı bir veritabanına ilk bağlandığında eksik `version` sütunlarını ve `record_history` tablosunu kendisi ekler (`__schema` değeri 2'den küçükse). Deploy sonrası phpMyAdmin'de elle bir şey yapmak gerekmez. Mevcut kayıtlar `version = 1` ile başlar.
+**Otomatik şema güncellemesi:** API, eski şemalı bir veritabanına ilk bağlandığında eksik `version` sütunlarını, `record_history` ve `user_seen` tablolarını kendisi ekler (`__schema` değeri 3'ten küçükse). Deploy sonrası phpMyAdmin'de elle bir şey yapmak gerekmez. Mevcut kayıtlar `version = 1` ile başlar.
 
 ## 3. PHP API (`api/` klasörü)
 
@@ -57,6 +58,7 @@ Deploy işlemi yalnızca değişen dosyaları yükler. Sunucudaki `.ftp-deploy-s
 | `users.php` | `POST {action}`: kullanıcı ekleme/düzenleme/silme (yalnızca Admin) ve herkesin kendi profilini/şifresini değiştirmesi. Şifreler burada hash'lenir |
 | `logout.php` | `POST`: oturumu kapatır |
 | `data.php` | `GET`: bütün verileri ve sürüm numaralarını getirir (`gm_users` şifre hash'leri olmadan). `PUT ?key=...`: bir anahtardaki değişiklikleri kaydeder (`gm_users` hariç; ayrıntı için bkz. bölüm 4). `POST`: toplu içe aktarma (yalnızca Admin, `gm_users` hariç, sürüm kontrolü yapmaz) |
+| `seen.php` | `GET`: kullanıcının son bakışından sonra başkalarının oluşturduğu kayıtlar (sidebar noktaları). `POST {collection}`: kullanıcı o listeyi açtı |
 | `history.php` | `GET`: değişiklik geçmişi (yalnızca Admin). `?collection=ops_sq&id=...` bir kaydın bütün eski hallerini verileriyle döner; parametresiz son 200 değişikliği listeler |
 | `.htaccess` | `config.php` ve `_bootstrap.php` dosyalarına dışarıdan erişimi engeller (403) |
 | `config.php` | **Yalnızca sunucuda bulunur.** Git'e girmez, deploy tarafından yüklenmez veya silinmez. |

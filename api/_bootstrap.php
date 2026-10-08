@@ -21,7 +21,7 @@ const COUNTER_KEYS = ['off_cnt', 'ops_cnt'];
 // taken (two users creating a document at the same moment) gets the next free number instead.
 const NUMBERED_KEYS = ['off_i', 'off_q', 'off_p', 'ops_sq', 'ops_si', 'ops_po', 'ops_proj'];
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const PASSWORD_SALT = 'gm_salt_2025'; // legacy SHA-256 hashes only; new hashes use password_hash()
 
@@ -72,6 +72,7 @@ function db(): PDO
 
 // Upgrades an older database in place, so a deploy never has to wait for a manual phpMyAdmin import.
 // v2: per-record versions (conflict detection) and the change history table.
+// v3: user_seen — when each user last opened each list (sidebar "new records" dots).
 function ensure_schema(PDO $pdo): void
 {
     try {
@@ -90,6 +91,7 @@ function ensure_schema(PDO $pdo): void
             $pdo->exec('ALTER TABLE `settings` ADD COLUMN `version` INT NOT NULL DEFAULT 1 AFTER `is_raw`');
         }
         $pdo->exec(HISTORY_TABLE_SQL);
+        $pdo->exec(USER_SEEN_TABLE_SQL);
         $pdo->prepare(
             "INSERT INTO settings (setting_key, value, is_raw, updated_by) VALUES ('__schema', ?, 1, 'system')
              ON DUPLICATE KEY UPDATE value = VALUES(value)"
@@ -99,6 +101,13 @@ function ensure_schema(PDO $pdo): void
         error_log('GM API schema upgrade: ' . $e->getMessage());
     }
 }
+
+const USER_SEEN_TABLE_SQL = 'CREATE TABLE IF NOT EXISTS `user_seen` (
+  `user_id`     VARCHAR(64)  NOT NULL,
+  `collection`  VARCHAR(32)  NOT NULL,
+  `seen_at`     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`user_id`, `collection`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci';
 
 const HISTORY_TABLE_SQL = 'CREATE TABLE IF NOT EXISTS `record_history` (
   `hid`         BIGINT       NOT NULL AUTO_INCREMENT,
