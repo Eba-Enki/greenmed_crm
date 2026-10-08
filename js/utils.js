@@ -1,6 +1,8 @@
 const {useState,useEffect,useRef,useCallback}=React;
 // Brand mark (leaf icon only, no wordmark) from the brand logo folder.
 const LOGO='brand_assets/logo/logo_fl.svg';
+// Mark above the wordmark; the file has wide empty margins, .login-logo crops them.
+const LOGO_VERTICAL='brand_assets/logo/logo_vertical.svg';
 const CURR={GBP:'£',USD:'$',EUR:'€',TRY:'₺'};
 const td=()=>new Date().toISOString().slice(0,10);
 const addD=(n,f=td())=>{const d=new Date(f);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};

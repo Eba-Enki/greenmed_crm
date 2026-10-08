@@ -52,8 +52,10 @@ function LoginScreen({onLogin}){
       <LangSwitch className="lang-sw-corner"/>
       <div style={{maxWidth:'420px',width:'100%'}}>
         <div style={{textAlign:'center',marginBottom:32}}>
-          <img src={logo||LOGO} style={{width:130,height:'auto',display:'block',margin:'0 auto 16px'}} alt="Green Med Ltd"/>
-          <h2 style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:8}}>{tr("Green Med Ltd")}</h2>
+          {logo?<>
+            <img src={logo} style={{width:130,height:'auto',display:'block',margin:'0 auto 16px'}} alt="Green Med Ltd"/>
+            <h2 style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:8}}>{tr("Green Med Ltd")}</h2>
+          </>:<div className="login-logo"><img src={LOGO_VERTICAL} alt="Green Med Ltd"/></div>}
           <p style={{fontSize:14,color:'var(--g500)'}}>{tr("Sign in to your account")}</p>
         </div>
         <div style={{background:'#fff',border:'1px solid var(--gm-border)',borderRadius:12,padding:28,boxShadow:'0 8px 28px rgba(26,42,10,.08)'}}>
