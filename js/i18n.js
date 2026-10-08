@@ -234,7 +234,8 @@ const I18N_TR={
 
   // Language switch
   'Language':'Dil',
-  'Search everything':'Her şeyi ara','No matches':'Eşleşme yok',
+  'Loading':'Yükleniyor','Search everything':'Her şeyi ara','No matches':'Eşleşme yok',
+  'A required component could not be loaded. Check your internet connection and try again.':'Gerekli bir bileşen yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.',
 
   // Added after the screen walkthrough
   'Sales & Procurement Account':'Satış ve Satın Alma Hesabı','Save & New':'Kaydet ve Yeni','items':'kalem','contacts':'kayıt',

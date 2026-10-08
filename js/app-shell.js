@@ -1,5 +1,12 @@
 
 // ==========================
+// STARTUP SPLASH — same markup as the static one in index.html, so the hand-over to React is seamless
+// ==========================
+function Splash(){
+  return <div className="splash splash-app" role="status" aria-label={tr('Loading')}><img className="splash-logo" src="brand_assets/Greenmed_Logo_General_Favicon.svg" alt=""/><span className="splash-ring"/></div>;
+}
+
+// ==========================
 // LANGUAGE SWITCH (EN | TR)
 // ==========================
 // onChange defaults to switching right away; the portals pass a version that first asks about unsaved form changes.
@@ -415,7 +422,7 @@ function App(){
   };
   const handleSessionUpdate=newSess=>{setSessionState(newSess);};
 
-  if(step==='loading')return null;
+  if(step==='loading')return <Splash/>;
   if(step==='login')return <LoginScreen onLogin={handleLogin}/>;
   if(step==='portal-pick')return <PortalSelectScreen user={pendingUser} portals={pendingPortals} onSelect={handlePortalPick}/>;
   if(!session)return <LoginScreen onLogin={handleLogin}/>;

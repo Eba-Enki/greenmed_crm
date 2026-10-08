@@ -47,6 +47,7 @@ const docBank=(doc,co)=>{
 
 // opts.fullBank: print the full bank block (account name, number, IBAN, SWIFT/BIC, currency, bank name and address)
 const buildStandardPDF=async(doc,co,type,opts={})=>{
+  await ensurePDF();
   const {jsPDF}=window.jspdf;
   const pdf=new jsPDF({
     orientation:'portrait',
@@ -438,7 +439,7 @@ const savePDF=async(doc,co,type='invoice',opts)=>{
     console.error('PDF generation failed:',e);
   }
 };
-const exportExcel=(rows,name)=>{const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');XLSX.writeFile(wb,`${name}-${td()}.xlsx`);};
+const exportExcel=(rows,name)=>ensureXLSX().then(()=>{const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');XLSX.writeFile(wb,`${name}-${td()}.xlsx`);},libLoadFailed);
 
 // Preview component — mirrors buildStandardPDF layout exactly
 function DocPage({doc,co,docType}){

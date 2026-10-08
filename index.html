@@ -6,8 +6,6 @@
 <title>Green Med Ltd — Finance</title>
 <link rel="icon" type="image/svg+xml" href="brand_assets/Greenmed_Logo_General_Favicon.svg">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -695,6 +693,15 @@ table.pv2-tbl tbody tr:last-child td{border-bottom:none}
   @page{margin:0;size:A4}
 }
 
+/* Startup splash: shown by the static HTML until React renders, and by the app while data loads */
+.splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--bz-canvas,#eef1e6);background-attachment:fixed;animation:splashIn .3s ease-out}
+.splash-logo{width:64px;height:64px;filter:drop-shadow(0 6px 18px rgba(59,109,17,.18))}
+.splash-ring{width:26px;height:26px;border-radius:50%;border:2.5px solid rgba(59,109,17,.16);border-top-color:var(--gm-400);animation:splashSpin .8s linear infinite}
+@keyframes splashSpin{to{transform:rotate(360deg)}}
+@keyframes splashIn{from{opacity:0}to{opacity:1}}
+.splash-app{animation:none}/* React's copy replaces the static one without fading in again */
+@media (prefers-reduced-motion:reduce){.splash-ring{animation-duration:2s}}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    BUZZ THEME — soft gradient canvas, transparent sidebar, floating white panel,
    breadcrumb + pill-tab page header, thin-bordered cards. Overrides the rules above.
@@ -870,18 +877,19 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root"><div class="splash" role="status" aria-label="Loading"><img class="splash-logo" src="brand_assets/Greenmed_Logo_General_Favicon.svg" alt=""><span class="splash-ring"></span></div></div>
+<!-- Loaded on first use, not on page load (see ensureXLSX / ensurePDF in js/utils.js) -->
+<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261009"}</script>
 <script>window.onerror=function(msg,src,line,col,err){document.getElementById('root').innerHTML='<pre style="color:red;background:#fff;padding:20px;font-size:13px">'+msg+'\n'+src+':'+line+'</pre>';return false;};</script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.22.5/babel.min.js"></script>
-<script src="js/i18n.js?v=20261008buzz"></script>
-<script type="text/babel" src="js/utils.js?v=20261008buzz"></script>
-<script type="text/babel" src="js/fonts.js?v=20261008buzz"></script>
-<script type="text/babel" src="js/document-templates.js?v=20261008buzz"></script>
-<script type="text/babel" src="js/app-official.js?v=20261008buzz"></script>
-<script type="text/babel" src="js/app-operational.js?v=20261008buzz"></script>
-<script type="text/babel" src="js/app-system.js?v=20261008buzz"></script>
-<script type="text/babel" src="js/app-shell.js?v=20261008buzz"></script>
+<script src="js/i18n.js?v=20261009"></script>
+<script type="text/babel" src="js/utils.js?v=20261009"></script>
+<script type="text/babel" src="js/document-templates.js?v=20261009"></script>
+<script type="text/babel" src="js/app-official.js?v=20261009"></script>
+<script type="text/babel" src="js/app-operational.js?v=20261009"></script>
+<script type="text/babel" src="js/app-system.js?v=20261009"></script>
+<script type="text/babel" src="js/app-shell.js?v=20261009"></script>
 </body>
 </html>

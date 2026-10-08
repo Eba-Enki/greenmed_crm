@@ -45,9 +45,10 @@ const babelTag = /\s*<script src="https:\/\/unpkg\.com\/@babel\/standalone@[^"]+
 if (!babelTag.test(html)) throw new Error('Babel <script> tag not found in index.html');
 html = html.replace(babelTag, '');
 
-// 3. Plain local scripts (e.g. js/i18n.js) get a content hash too
-html = html.replace(/<script src="(js\/[^"?]+)\?v=[^"]*"><\/script>/g, (tag, src) =>
-  `<script src="${src}?v=${hash(fs.readFileSync(path.join(root, src)))}"></script>`);
+// 3. Every other local script reference — plain tags like js/i18n.js and the on-demand URLs in #gm-lazy
+//    (js/fonts.js) — gets a content hash too
+html = html.replace(/(js\/[\w.-]+\.js)\?v=[^"&]*/g, (ref, src) =>
+  `${src}?v=${hash(fs.readFileSync(path.join(root, src)))}`);
 
 if (/text\/babel/.test(html)) throw new Error('index.html still has text/babel scripts');
 if (compiled === 0) throw new Error('no text/babel scripts found — nothing compiled');

@@ -581,8 +581,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         alert(tr('Failed to read file'));
       };
 
-      if(isCSV)reader.readAsText(file);
-      else reader.readAsBinaryString(file);
+      ensureXLSX().then(()=>{if(isCSV)reader.readAsText(file);else reader.readAsBinaryString(file);},libLoadFailed);
 
       e.target.value='';
     };
@@ -1475,7 +1474,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         }
       };
       reader.onerror=()=>alert(tr('Failed to read file'));
-      if(isCSV)reader.readAsText(file);else reader.readAsBinaryString(file);
+      ensureXLSX().then(()=>{if(isCSV)reader.readAsText(file);else reader.readAsBinaryString(file);},libLoadFailed);
       ev.target.value='';
     };
 

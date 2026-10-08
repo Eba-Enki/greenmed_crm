@@ -345,6 +345,26 @@ const usersApi=async(action,payload)=>{
   return users;
 };
 
+// ── Heavy libraries on demand ──
+// The Excel library, jsPDF and the embedded PDF fonts (~1.9 MB together) are loaded the first time they are
+// needed instead of on every page load. Their URLs live in index.html (#gm-lazy) so the deploy build can
+// stamp the local font file with a content hash.
+const LAZY_SRC=(()=>{try{return JSON.parse(document.getElementById('gm-lazy').textContent);}catch{return{};}})();
+const lazyScripts={};
+const loadScript=src=>lazyScripts[src]||(lazyScripts[src]=new Promise((resolve,reject)=>{
+  const s=document.createElement('script');
+  s.src=src;s.async=false;
+  s.onload=()=>resolve();
+  s.onerror=()=>{delete lazyScripts[src];s.remove();reject(new Error('Could not load '+src));};
+  document.head.appendChild(s);
+}));
+const ensureXLSX=()=>window.XLSX?Promise.resolve():loadScript(LAZY_SRC.xlsx);
+const ensurePDF=()=>Promise.all([
+  window.jspdf?null:loadScript(LAZY_SRC.jspdf),
+  typeof ARIAL_REGULAR_BASE64!=='undefined'?null:loadScript(LAZY_SRC.fonts),
+]);
+const libLoadFailed=()=>alert(tr('A required component could not be loaded. Check your internet connection and try again.'));
+
 // Logo stored separately (raw, no JSON) to avoid quota issues with large base64
 const LOGO_KEY='gm_logo';
 const getLogo=()=>{try{return localStorage.getItem(LOGO_KEY)||'';}catch{return '';}};
