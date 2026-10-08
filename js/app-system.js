@@ -134,7 +134,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
         const name=fullName(u)||u.username;
         return(
           <div key={u.id} className={`sys-card${u.active?'':' inactive'}`}>
-            <span className="sys-avatar">{(name[0]||'?').toUpperCase()}</span>
+            <Avatar className="sys-avatar" user={u} name={name}/>
             <div className="sys-info">
               <div className="sys-name">{name}<span className="sys-uname">@{u.username}</span></div>
               <div className="sys-tags">

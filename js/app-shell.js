@@ -221,7 +221,7 @@ function SidebarUserMenu({session,portalLabel,onOpenProfile,onLogout,onLang}){
         </div>
       )}
       <button className={`sb-me${open?' open':''}`} onClick={()=>setOpen(o=>!o)} aria-haspopup="menu" aria-expanded={open}>
-        <span className="sb-avatar">{(name[0]||'?').toUpperCase()}<i className="sb-presence"/></span>
+        <Avatar className="sb-avatar" user={(LS.get('gm_users')||[]).find(u=>u.id===session.userId)} name={name}><i className="sb-presence"/></Avatar>
         <span className="sb-me-txt">
           <span className="sb-me-name">{name}</span>
           <span className="sb-me-sub"><img src={LOGO} alt=""/>{portalLabel}</span>
@@ -324,7 +324,14 @@ function ProfileModal({session,onClose,onUpdate}){
   const[form,setForm]=useState({firstName:session.firstName||'',lastName:session.lastName||'',email:me.email||session.email||'',username:session.username||'',password:'',confirmPassword:''});
   const[error,setError]=useState('');
   const[saving,setSaving]=useState(false);
+  const[avatar,setAvatar]=useState(me.avatar||'');
+  const photoRef=useRef(null);
   const s=(k,v)=>setForm(x=>({...x,[k]:v}));
+  const pickPhoto=e=>{
+    const f=e.target.files[0];e.target.value='';
+    if(!f)return;
+    squareImage(f).then(setAvatar,()=>setError(tr('Please select an image file')));
+  };
 
   const handleSave=async()=>{
     if(form.password&&form.password!==form.confirmPassword){setError(tr('Passwords do not match'));return;}
@@ -332,7 +339,7 @@ function ProfileModal({session,onClose,onUpdate}){
     setSaving(true);setError('');
     try{
       const{firstName,lastName,email,username,password}=form;
-      await usersApi('profile',{profile:{firstName,lastName,email,username,password}});
+      await usersApi('profile',{profile:{firstName,lastName,email,username,password,avatar}});
       const newSess={...session,firstName:firstName.trim(),lastName:lastName.trim(),username:username.trim().toLowerCase()};
       setSession(newSess);
       onUpdate(newSess);
@@ -347,6 +354,17 @@ function ProfileModal({session,onClose,onUpdate}){
         <div style={{display:'flex',alignItems:'center',marginBottom:24}}>
           <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)',flex:1}}>{tr("Profile")}</h2>
           <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'var(--g400)',lineHeight:1,padding:'0 4px'}}>×</button>
+        </div>
+        <div className="pf-photo">
+          <Avatar className="pf-avatar" user={{avatar}} name={form.firstName||form.username}/>
+          <div className="pf-photo-actions">
+            <div style={{display:'flex',gap:8}}>
+              <Btn v="bgh bsm" onClick={()=>photoRef.current.click()}><Ico n="upload"/>{avatar?tr('Change photo'):tr('Upload photo')}</Btn>
+              {avatar&&<Btn v="bgh bsm" onClick={()=>setAvatar('')}>{tr('Remove')}</Btn>}
+            </div>
+            <span className="pf-photo-hint">{tr('PNG, JPG or WebP')}</span>
+          </div>
+          <input ref={photoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={pickPhoto} hidden/>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
           <Fld label={tr("First Name")}><input value={form.firstName} onChange={e=>s('firstName',e.target.value)} className="fi" placeholder={tr("Your first name")}/></Fld>

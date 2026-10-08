@@ -507,6 +507,29 @@ const Ico=({n,size=13,style={}})=>{const s={width:size,height:size,stroke:'curre
 // Renders a <colgroup> for a table.dt from relative column weights (proportional to max expected content length),
 // so column widths stay fixed and predictable instead of the browser rebalancing them per row's content.
 const Cg=({w})=>{const sum=w.reduce((a,b)=>a+b,0);return <colgroup>{w.map((x,i)=><col key={i} style={{width:(x/sum*100)+'%'}}/>)}</colgroup>;};
+// User photo (users.avatar, a small square data URL) or, without one, the first letter of the name
+const Avatar=({user,name,className,children})=>{
+  const src=user&&user.avatar;
+  return <span className={className}>{src?<img src={src} alt=""/>:((name||'?')[0]||'?').toUpperCase()}{children}</span>;
+};
+// Crops an image file to a centred square and shrinks it to size×size JPEG, so a phone photo of several MB
+// becomes a ~15 KB data URL. Resolves with the data URL; rejects when the file is not a readable image.
+const squareImage=(file,size=160)=>new Promise((resolve,reject)=>{
+  if(!file||!/^image\/(png|jpeg|webp|gif)$/.test(file.type)){reject(new Error('type'));return;}
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{
+    const side=Math.min(img.naturalWidth,img.naturalHeight);
+    const c=document.createElement('canvas');c.width=c.height=size;
+    const ctx=c.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size); // transparent PNGs get a white background
+    ctx.drawImage(img,(img.naturalWidth-side)/2,(img.naturalHeight-side)/2,side,side,0,0,size,size);
+    URL.revokeObjectURL(url);
+    resolve(c.toDataURL('image/jpeg',0.85));
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('read'));};
+  img.src=url;
+});
 const Badge=({s})=>{const m=SM[s]||SM.draft;return <span className={`bdg ${m.c}`}>{m.l}</span>;};
 const Btn=({v='bp',onClick,children,style={},...p})=><button className={`btn ${v}`} onClick={onClick} style={style} {...p}>{children}</button>;
 const Fld=({label,children})=><div className="fld"><label>{label}</label>{children}</div>;

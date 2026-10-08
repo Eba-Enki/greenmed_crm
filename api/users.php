@@ -2,7 +2,8 @@
 // User accounts. Passwords are hashed here and never sent back to the browser.
 // POST {action: 'save', user: {...}}       → create or update a user (admins only)
 // POST {action: 'delete', id}              → delete a user (admins only, not yourself)
-// POST {action: 'profile', profile: {...}} → update the signed-in user's own name, email, username, password
+// POST {action: 'profile', profile: {...}} → update the signed-in user's own name, email, username, password,
+//                                          avatar (data:image/… URL, '' removes it; omitted = unchanged)
 // Every action returns {ok, users}: the full list without password hashes.
 
 require __DIR__ . '/_bootstrap.php';
@@ -14,6 +15,7 @@ $body = read_json_body();
 $action = is_object($body) ? (string)($body->action ?? '') : '';
 
 const PORTAL_ROLES = ['User', 'Manager', 'Admin'];
+const AVATAR_MAX = 200000; // bytes of data URL; the app's 160×160 JPEG is ~10–20 KB
 
 function field($obj, string $key): string
 {
@@ -117,6 +119,18 @@ try {
         $u->lastName = field($in, 'lastName');
         $u->email = strtolower(field($in, 'email'));
         if ($password !== '') $u->password = hash_password($password);
+        if (property_exists($in, 'avatar')) {
+            $avatar = (string)$in->avatar;
+            if ($avatar === '') {
+                unset($u->avatar);
+            } else {
+                // The app sends a small square JPEG; anything else (or anything large) is refused
+                if (strlen($avatar) > AVATAR_MAX || !preg_match('#^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$#', $avatar)) {
+                    respond(400, ['error' => 'Invalid profile photo']);
+                }
+                $u->avatar = $avatar;
+            }
+        }
         $_SESSION['username'] = $username;
     } else {
         respond(400, ['error' => 'Unknown action']);

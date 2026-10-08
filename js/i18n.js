@@ -234,7 +234,7 @@ const I18N_TR={
 
   // Language switch
   'Language':'Dil',
-  'Loading':'Yükleniyor','{0} overdue':'{0} gecikmiş','{0} awaiting reply':'{0} cevap bekliyor','{0} unpaid':'{0} ödenmemiş',
+  'Loading':'Yükleniyor','Upload photo':'Fotoğraf yükle','Change photo':'Fotoğrafı değiştir','PNG, JPG or WebP':'PNG, JPG veya WebP','{0} overdue':'{0} gecikmiş','{0} awaiting reply':'{0} cevap bekliyor','{0} unpaid':'{0} ödenmemiş',
   '{0} not ordered yet':'{0} siparişe dönüşmedi','{0} new':'{0} yeni','{0} awaiting invoice':'{0} fatura bekliyor','Search everything':'Her şeyi ara','No matches':'Eşleşme yok',
   'A required component could not be loaded. Check your internet connection and try again.':'Gerekli bir bileşen yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.',
 
