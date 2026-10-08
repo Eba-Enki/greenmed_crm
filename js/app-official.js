@@ -902,223 +902,155 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
   const[uPg,setUPg]=useState(1);const[uPs,setUPs]=useState(25);
   const handleSave=()=>onSave({...c,name:toTitleCase(c.name),address:toSentenceCase(c.address),email:(c.email||'').trim().toLowerCase()});
 
-  const handleLogoUpload=(e)=>{
-    const f=e.target.files[0];
+  const logoInput=useRef(null);const sigInput=useRef(null);
+  const readImage=(e,typeRe,typeMsg,apply)=>{
+    const f=e.target.files[0];e.target.value='';
     if(!f)return;
-    if(!f.type.startsWith('image/')){alert(tr('Please select an image file'));return;}
-    const r=new FileReader();
-    r.onload=()=>{
-      const data=r.result;
-      setLogo(data);          // write to localStorage immediately
-      s('logo',data);         // write to state
-    };
-    r.readAsDataURL(f);
+    if(!typeRe.test(f.type)){alert(tr(typeMsg));return;}
+    const r=new FileReader();r.onload=()=>apply(r.result);r.readAsDataURL(f);
   };
 
+  // Same layout as the Sales & Procurement settings: sticky back/save bar, tabs, cards
   const menuItems=[
-    {id:'company',icon:'settings',label:tr('Company Information')},
+    {id:'company',icon:'settings',label:tr('Company')},
     {id:'pdf',icon:'dl',label:tr('PDF Templates')},
-    {id:'numbering',icon:'hash',label:tr('Document Numbering')},
+    {id:'numbering',icon:'hash',label:tr('Numbering')},
     {id:'bank',icon:'card',label:tr('Bank Details')}
   ];
-  
-  return(<div className="content" style={{padding:0}}>
-    {/* Back button & Save — part of the page flow, under the page header (the title is already in the header) */}
-    <div style={{background:'var(--g50)',borderBottom:'1px solid var(--g200)',padding:'12px 24px',display:'flex',alignItems:'center',gap:10}}>
-      <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back" size={14}/>{tr("Back to Dashboard")}</button>
-      <div style={{flex:1}}/>
-      <Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn>
+  const numRows=[['quo','Sales Quotation','QUO'],['inv','Sales Invoice','INV'],['po','Purchase Order','PO']];
+
+  const assetCard=(label,hint,src,accept,inputRef,onPick,onRemove)=>(
+    <div className="st-asset">
+      <div className="st-asset-lbl">{label}</div>
+      <div className="st-asset-preview">{src?<img src={src} alt={label}/>:<span>{tr("No {0} uploaded", label.toLowerCase())}</span>}</div>
+      <div className="st-asset-actions">
+        <Btn v="bgh bsm" onClick={()=>inputRef.current.click()}><Ico n="upload" size={13}/>{src?tr('Replace'):tr('Upload')}</Btn>
+        {src&&<button className="st-remove" onClick={onRemove}>{tr("Remove")}</button>}
+        <input ref={inputRef} type="file" accept={accept} onChange={onPick} hidden/>
+      </div>
+      <div className="st-asset-hint">{hint}</div>
     </div>
+  );
 
-    <div style={{display:'flex',minHeight:'calc(100vh - 200px)'}}>
-
-    {/* Left Menu */}
-    <div style={{width:280,background:'var(--white)',borderRight:'1px solid var(--g200)',paddingTop:16,flexShrink:0}}>
-      <div style={{padding:'8px 16px',fontSize:10,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:4}}>{tr("Settings")}</div>
-      {menuItems.map(m=>(
-        <div key={m.id} onClick={()=>{setActiveMenu(m.id);LS.set(ns+'settingsMenu',m.id);}} style={{padding:'10px 16px',margin:'2px 8px',borderRadius:8,cursor:'pointer',display:'flex',alignItems:'center',gap:10,background:activeMenu===m.id?'var(--g100)':'transparent',color:activeMenu===m.id?'var(--g900)':'var(--g600)',fontWeight:activeMenu===m.id?600:500,fontSize:13,transition:'background 0.15s,border-color 0.15s,box-shadow 0.15s,color 0.15s,transform 0.15s'}}>
-          <Ico n={m.icon} size={16}/>
-          <span>{m.label}</span>
-        </div>
-      ))}
-    </div>
-    
-    {/* Right Content */}
-    <div style={{flex:1,minWidth:0}}>
-      <div style={{padding:32,maxWidth:700}}>
-        
-        {/* Company Information */}
-        {activeMenu==='company'&&(<>
-          <div style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:20}}>{tr("Company Information")}</div>
-          <div className="fc">
-            <div style={{marginBottom:12}}><Fld label={tr("Company Name")}><input value={c.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
-            <div style={{marginBottom:12}}><Fld label={tr("Address")}><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld></div>
-            <div className="fg g2"><Fld label={tr("Email")}><input value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
-            <div style={{marginTop:16}}>
-              <Fld label={tr("Company Logo")}>
-                <input type="file" accept="image/*" onChange={handleLogoUpload} className="fi" style={{padding:'8px'}}/>
-                {c.logo&&<div style={{marginTop:8,padding:12,background:'var(--g50)',borderRadius:8,display:'flex',alignItems:'center',gap:12}}>
-                  <img src={c.logo} alt="Logo" style={{maxWidth:120,maxHeight:60,objectFit:'contain'}}/>
-                  <button onClick={()=>{setLogo('');s('logo','');}} style={{padding:'4px 10px',background:'var(--red)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>{tr("Remove")}</button>
-                </div>}
-              </Fld>
-            </div>
-            <div style={{marginTop:16}}>
-              <Fld label={tr("Signature")}>
-                <input type="file" accept="image/png,image/jpeg,image/jpg" onChange={(e)=>{
-                  const f=e.target.files[0];
-                  if(!f)return;
-                  if(!f.type.match(/^image\/(png|jpeg|jpg)$/)){alert(tr('Please select a PNG or JPG file'));return;}
-                  const r=new FileReader();
-                  r.onload=()=>{
-                    const data=r.result;
-                    setSignature(data);
-                    s('signature',data);
-                  };
-                  r.readAsDataURL(f);
-                }} className="fi" style={{padding:'8px'}}/>
-                {c.signature&&<div style={{marginTop:8,padding:12,background:'var(--g50)',borderRadius:8,display:'flex',alignItems:'center',gap:12}}>
-                  <img src={c.signature} alt="Signature" style={{maxWidth:120,maxHeight:60,objectFit:'contain'}}/>
-                  <button onClick={()=>{setSignature('');s('signature','');}} style={{padding:'4px 10px',background:'var(--red)',color:'white',border:'none',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:600}}>{tr("Remove")}</button>
-                </div>}
-              </Fld>
-            </div>
-          </div>
-        </>)}
-        
-        {/* PDF Templates */}
-        {activeMenu==='pdf'&&(<>
-          <div style={{fontSize:18,fontWeight:700,color:'var(--g900)',marginBottom:20}}>{tr("PDF Templates")}</div>
-          <div style={{marginBottom:16,fontSize:13,color:'var(--g600)'}}>{tr("Select a template for your invoices and quotations")}</div>
-          
-          {Object.values(TEMPLATES).map(tpl=>(
-            <div key={tpl.id} onClick={()=>s('selectedTemplate',tpl.id)} style={{background:'var(--white)',border:c.selectedTemplate===tpl.id?'2px solid var(--gm-400)':'1px solid var(--g200)',borderRadius:10,padding:20,marginBottom:12,cursor:'pointer',transition:'background 0.15s,border-color 0.15s,box-shadow 0.15s,color 0.15s,transform 0.15s',position:'relative'}}>
-              {c.selectedTemplate===tpl.id&&<div style={{position:'absolute',top:12,right:12,background:'var(--btn)',color:'white',padding:'4px 10px',borderRadius:6,fontSize:11,fontWeight:700}}>{tr("ACTIVE")}</div>}
-              <div style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginBottom:6}}>{tpl.name}</div>
-              <div style={{fontSize:12,color:'var(--g600)'}}>{tpl.description}</div>
-            </div>
-          ))}
-        </>)}
-        
-        {/* Document Numbering */}
-        {activeMenu==='numbering'&&(<>
-          <div style={{display:'flex',alignItems:'center',marginBottom:20}}>
-            <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>{tr("Document Numbering")}</div>
-            <div style={{flex:1}}/>
-            {numLocked?
-              <Btn v="bgh bsm" onClick={()=>setNumLocked(false)}><Ico n="edit" size={13}/>{tr("Edit")}</Btn>:
-              <Btn v="bp bsm" onClick={()=>setNumLocked(true)}><Ico n="check" size={13}/>{tr("Done")}</Btn>
-            }
-          </div>
-          <label className="num-switch">
-            <input type="checkbox" checked={c.autoNumber!==false} onChange={e=>{s('autoNumber',e.target.checked);onAutoNumberChange(e.target.checked);}}/>
-            <span className="num-switch-track" aria-hidden="true"/>
-            <span className="num-switch-text">
-              <span className="num-switch-t">{tr("Automatic numbering {0}", c.autoNumber!==false?tr('on'):tr('off'))}</span>
-              <span className="num-switch-h">{c.autoNumber!==false
-                ?tr('New quotations, invoices and purchase orders get the next number from the prefixes below.')
-                :tr('Numbers are typed by hand on each quotation, invoice and purchase order — use this to enter old documents. The counters stay where they are; turn this back on to continue automatically.')}</span>
-            </span>
-          </label>
-          <div style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,overflow:'hidden',opacity:c.autoNumber!==false?1:.55}}>
-            {/* Sales Quotation */}
-            <div style={{padding:'16px 20px',borderBottom:'1px solid var(--g200)',display:'flex',alignItems:'center',gap:16}}>
-              <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>1</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>{tr("Sales Quotation")}</div>
-                <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Prefix")}</div>
-                    <input value={c.quoPfx||'QUO'} onChange={e=>s('quoPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Start Number")}</div>
-                    <input type="number" value={c.quoStart||'1'} onChange={e=>s('quoStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Sales Invoice */}
-            <div style={{padding:'16px 20px',borderBottom:'1px solid var(--g200)',display:'flex',alignItems:'center',gap:16}}>
-              <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>2</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>{tr("Sales Invoice")}</div>
-                <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Prefix")}</div>
-                    <input value={c.invPfx||'INV'} onChange={e=>s('invPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Start Number")}</div>
-                    <input type="number" value={c.invStart||'1'} onChange={e=>s('invStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Purchase Order */}
-            <div style={{padding:'16px 20px',display:'flex',alignItems:'center',gap:16}}>
-              <div style={{width:30,height:30,borderRadius:8,background:'var(--g100)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:700,color:'var(--g600)',flexShrink:0}}>3</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:600,color:'var(--g900)',marginBottom:8}}>{tr("Purchase Order")}</div>
-                <div style={{display:'flex',gap:12,alignItems:'center'}}>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Prefix")}</div>
-                    <input value={c.poPfx||'PO'} onChange={e=>s('poPfx',e.target.value.toUpperCase())} className="fi" style={{fontSize:13,padding:'6px 10px'}} readOnly={numLocked}/>
-                  </div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:10,color:'var(--g500)',marginBottom:4}}>{tr("Start Number")}</div>
-                    <input type="number" value={c.poStart||'1'} onChange={e=>s('poStart',e.target.value)} className="fi" style={{fontSize:13,padding:'6px 10px'}} min="1" readOnly={numLocked}/>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>)}
-        
-        {/* Bank Details */}
-        {activeMenu==='bank'&&(<>
-          <div style={{display:'flex',alignItems:'center',marginBottom:20}}>
-            <div style={{fontSize:18,fontWeight:700,color:'var(--g900)'}}>{tr("Bank Details")}</div>
-            <div style={{flex:1}}/>
-            <Btn v="bp bsm" onClick={onAddBank}><Ico n="plus" size={13}/>{tr("Add Bank")}</Btn>
-          </div>
-
-          {/* Bank List */}
-          {(!banks||banks.length===0)&&(
-            <div style={{padding:40,background:'var(--g50)',borderRadius:12,textAlign:'center',color:'var(--g500)',fontSize:13}}>
-              <div style={{fontSize:40,marginBottom:12}}>🏦</div>
-              <div style={{fontWeight:600,marginBottom:6}}>{tr("No Bank Accounts")}</div>
-              <div>{tr("Add your first bank account to start.")}</div>
-            </div>
-          )}
-
-          {(banks||[]).map(bank=>(
-            <div key={bank.id} style={{background:'var(--white)',border:'1px solid var(--g200)',borderRadius:10,padding:20,marginBottom:12}}>
-              <div style={{display:'flex',alignItems:'center',marginBottom:12}}>
-                <div style={{fontSize:14,fontWeight:700,color:'var(--g900)'}}>{ bank.accountName||tr('Unnamed Account')}</div>
-                {bank.isDefault&&<span style={{marginLeft:8,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,background:'var(--greenl)',color:'var(--green)'}}>{tr("DEFAULT")}</span>}
-                <div style={{flex:1}}/>
-                <div style={{display:'flex',gap:6}}>
-                  {!bank.isDefault&&<button onClick={()=>onSetDefaultBank(bank.id)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,background:'var(--g100)',border:'none',borderRadius:6,cursor:'pointer',color:'var(--g700)'}}>{tr("Set Default")}</button>}
-                  <button onClick={()=>onEditBank(bank)} className="ab"><Ico n="edit"/></button>
-                  <button onClick={()=>onDeleteBank(bank.id)} className="ab danger"><Ico n="trash"/></button>
-                </div>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,fontSize:12,color:'var(--g600)'}}>
-                <div><span style={{fontWeight:600}}>{tr("Account Number:")}</span> {bank.accountNumber||'—'}</div>
-                <div><span style={{fontWeight:600}}>{tr("IBAN:")}</span> {bank.iban||'—'}</div>
-                <div><span style={{fontWeight:600}}>{tr("BIC:")}</span> {bank.bic||'—'}</div>
-                <div><span style={{fontWeight:600}}>{tr("Currency:")}</span> {bank.currency||tr('GBP')}</div>
-                <div><span style={{fontWeight:600}}>{tr("Opening Balance:")}</span> {CURR[bank.currency]||'£'}{fmt(+(bank.openingBalance||0))}</div>
-              </div>
-            </div>
-          ))}
-        </>)}
-
+  return(<div className="content"><div className="fw st-wrap">
+    <div className="st-sticky">
+      <div className="st-head">
+        <button className="st-back" onClick={onClose}><Ico n="back" size={14}/>{tr("Back to Dashboard")}</button>
+        <div style={{flex:1}}/>
+        <Btn v="bp bsm" onClick={handleSave}><Ico n="check" size={13}/>{tr("Save")}</Btn>
+      </div>
+      <div className="st-tabs" role="tablist">
+        {menuItems.map(m=>(
+          <button key={m.id} role="tab" aria-selected={activeMenu===m.id} className={'st-tab'+(activeMenu===m.id?' active':'')} onClick={()=>{setActiveMenu(m.id);LS.set(ns+'settingsMenu',m.id);}}>
+            <Ico n={m.icon} size={15}/>{m.label}
+          </button>
+        ))}
       </div>
     </div>
-    </div>
-  </div>);
+
+    {/* Company Information */}
+    {activeMenu==='company'&&(<>
+      <div className="fc"><div className="fct">{tr("Company Information")}</div>
+        <div className="fg g2">
+          <div className="fg">
+            <Fld label={tr("Company Name")}><input value={c.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld>
+            <Fld label={tr("Address")}><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld>
+          </div>
+          <div className="fg" style={{alignContent:'start'}}>
+            <Fld label={tr("Email")}><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi" placeholder="info@company.com"/></Fld>
+            <Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi" placeholder="+44 20 0000 0000"/></Fld>
+          </div>
+        </div>
+      </div>
+      <div className="fc"><div className="fct">{tr("Branding")}</div>
+        <div className="fg g2">
+          {assetCard(tr('Logo'),tr('PNG, JPG or SVG. Shown in the sidebar and on documents. Saved immediately.'),c.logo,'image/*',logoInput,
+            e=>readImage(e,/^image\//,'Please select an image file',d=>{setLogo(d);s('logo',d);}),
+            ()=>{setLogo('');s('logo','');})}
+          {assetCard(tr('Signature'),tr('PNG or JPG, ideally with a transparent background. Saved immediately.'),c.signature,'image/png,image/jpeg',sigInput,
+            e=>readImage(e,/^image\/(png|jpeg|jpg)$/,'Please select a PNG or JPG file',d=>{setSignature(d);s('signature',d);}),
+            ()=>{setSignature('');s('signature','');})}
+        </div>
+      </div>
+    </>)}
+
+    {/* PDF Templates */}
+    {activeMenu==='pdf'&&(<div className="fc"><div className="fct">{tr("PDF Templates")}</div>
+      <p className="st-note">{tr("Select a template for your invoices and quotations.")}</p>
+      <div className="st-tpl-grid">
+        {Object.values(TEMPLATES).map(tpl=>(
+          <button key={tpl.id} className={'st-tpl'+(c.selectedTemplate===tpl.id?' active':'')} onClick={()=>s('selectedTemplate',tpl.id)} aria-pressed={c.selectedTemplate===tpl.id}>
+            <span className="st-tpl-top"><span className="st-tpl-name">{tpl.name}</span>{c.selectedTemplate===tpl.id&&<span className="st-tpl-badge"><Ico n="check" size={11}/>{tr("Active")}</span>}</span>
+            <span className="st-tpl-desc">{tpl.description}</span>
+          </button>
+        ))}
+      </div>
+    </div>)}
+
+    {/* Document Numbering */}
+    {activeMenu==='numbering'&&(<div className="fc">
+      <div className="st-fct-row"><div className="fct">{tr("Document Numbering")}</div>
+        {numLocked?<Btn v="bgh bsm" onClick={()=>setNumLocked(false)}><Ico n="edit" size={13}/>{tr("Edit")}</Btn>:<Btn v="bp bsm" onClick={()=>setNumLocked(true)}><Ico n="check" size={13}/>{tr("Done")}</Btn>}
+      </div>
+      <label className="num-switch">
+        <input type="checkbox" checked={c.autoNumber!==false} onChange={e=>{s('autoNumber',e.target.checked);onAutoNumberChange(e.target.checked);}}/>
+        <span className="num-switch-track" aria-hidden="true"/>
+        <span className="num-switch-text">
+          <span className="num-switch-t">{tr("Automatic numbering {0}", c.autoNumber!==false?tr('on'):tr('off'))}</span>
+          <span className="num-switch-h">{c.autoNumber!==false
+            ?tr('New quotations, invoices and purchase orders get the next number from the prefixes below.')
+            :tr('Numbers are typed by hand on each quotation, invoice and purchase order — use this to enter old documents. The counters stay where they are; turn this back on to continue automatically.')}</span>
+        </span>
+      </label>
+      <table className="st-num" style={{opacity:c.autoNumber!==false?1:.55}}>
+        <thead><tr><th>{tr("Document")}</th><th>{tr("Prefix")}</th><th>{tr("Start Number")}</th></tr></thead>
+        <tbody>
+          {numRows.map(([k,label,def])=>(
+            <tr key={k}>
+              <td className="st-num-doc">{tr(label)}</td>
+              <td><input value={c[k+'Pfx']||def} onChange={e=>s(k+'Pfx',e.target.value.toUpperCase())} className="fi" readOnly={numLocked}/></td>
+              <td><input type="number" value={c[k+'Start']||'1'} onChange={e=>s(k+'Start',e.target.value)} className="fi" min="1" readOnly={numLocked}/></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>)}
+
+    {/* Bank Details */}
+    {activeMenu==='bank'&&(<div className="fc">
+      <div className="st-fct-row"><div className="fct">{tr("Bank Details")}</div>
+        <Btn v="bp bsm" onClick={onAddBank}><Ico n="plus" size={13}/>{tr("Add Bank")}</Btn>
+      </div>
+      {(!banks||banks.length===0)&&(
+        <div className="st-empty">
+          <span className="st-empty-ico"><Ico n="bank" size={22}/></span>
+          <div className="st-empty-t">{tr("No bank accounts")}</div>
+          <div>{tr("Add your first bank account to start.")}</div>
+        </div>
+      )}
+      <div className="st-banks">
+        {(banks||[]).map(bank=>(
+          <div key={bank.id} className={'st-bank'+(bank.isDefault?' default':'')}>
+            <div className="st-bank-head">
+              <span className="st-bank-name">{bank.accountName||tr('Unnamed Account')}</span>
+              <span className="st-cur">{bank.currency||tr('GBP')}</span>
+              {bank.isDefault&&<span className="st-default">{tr("Default")}</span>}
+              <div style={{flex:1}}/>
+              {!bank.isDefault&&<button className="st-link" onClick={()=>onSetDefaultBank(bank.id)}>{tr("Set default")}</button>}
+              <button onClick={()=>onEditBank(bank)} className="ab" title={tr("Edit")} aria-label={tr("Edit")}><Ico n="edit"/></button>
+              <button onClick={()=>onDeleteBank(bank.id)} className="ab danger" title={tr("Delete")} aria-label={tr("Delete")}><Ico n="trash"/></button>
+            </div>
+            <dl className="st-bank-grid">
+              <div><dt>{tr("Account Number")}</dt><dd>{bank.accountNumber||'—'}</dd></div>
+              <div><dt>{tr("IBAN")}</dt><dd>{bank.iban||'—'}</dd></div>
+              <div><dt>{tr("BIC")}</dt><dd>{bank.bic||'—'}</dd></div>
+              <div><dt>{tr("Opening Balance")}</dt><dd>{CURR[bank.currency]||'£'}{fmt(+(bank.openingBalance||0))}</dd></div>
+            </dl>
+          </div>
+        ))}
+      </div>
+    </div>)}
+  </div></div>);
 }
 
 // ==========================
