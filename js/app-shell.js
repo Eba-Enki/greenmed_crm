@@ -286,8 +286,15 @@ function PageHeader({sb,isActive,onGo,session,title,children}){
   // Settings shares a menu section with list pages but is not one of them, so it never becomes a tab
   const tabItems=sec?sec.items.filter(it=>it.k!=='settings'):[];
   const tabs=tabItems.length>1&&tabItems.some(it=>isActive(it.k))?tabItems:[];
+  // Publish the header's height so sticky bars inside the page can sit right under it
+  const ref=useRef(null);
+  useEffect(()=>{
+    const el=ref.current;if(!el||!window.ResizeObserver)return;
+    const ro=new ResizeObserver(()=>document.documentElement.style.setProperty('--topbar-h',el.offsetHeight+'px'));
+    ro.observe(el);return()=>ro.disconnect();
+  },[]);
   return(
-    <header className="topbar no-print">
+    <header className="topbar no-print" ref={ref}>
       <nav className="crumbs" aria-label="Breadcrumb">
         <Ico n={(cur||{}).ico||'dash'} size={14}/>
         {crumbs.map((c,i)=><React.Fragment key={i}>{i>0&&<span className="crumb-sep">›</span>}<span className="crumb">{c}</span></React.Fragment>)}

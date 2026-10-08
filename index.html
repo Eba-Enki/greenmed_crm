@@ -311,7 +311,7 @@ table.ie td input[readonly]{background:transparent;color:var(--g500)}
 .fact{display:flex;justify-content:flex-end;gap:10px;padding-top:6px}
 
 /* SETTINGS (Sales & Procurement) */
-.st-sticky{position:sticky;top:54px;z-index:20;background:#f0f2f5;padding-top:12px;margin-bottom:16px}
+.st-sticky{position:sticky;top:var(--topbar-h,54px);z-index:20;background:#f0f2f5;padding-top:12px;margin-bottom:16px}
 .st-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .st-back{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--g500);font-size:13px;padding:6px 8px;border-radius:6px;transition:background .15s,color .15s}
 .st-back:hover{background:var(--g100);color:var(--g800)}
@@ -901,17 +901,17 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 <body>
 <div id="root"><div class="splash" role="status" aria-label="Loading"><img class="splash-logo" src="brand_assets/logo/logo_fl.svg" alt=""><span class="splash-ring"></span></div></div>
 <!-- Loaded on first use, not on page load (see ensureXLSX / ensurePDF in js/utils.js) -->
-<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261009l"}</script>
+<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261009n"}</script>
 <script>window.onerror=function(msg,src,line,col,err){document.getElementById('root').innerHTML='<pre style="color:red;background:#fff;padding:20px;font-size:13px">'+msg+'\n'+src+':'+line+'</pre>';return false;};</script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.22.5/babel.min.js"></script>
-<script src="js/i18n.js?v=20261009l"></script>
-<script type="text/babel" src="js/utils.js?v=20261009l"></script>
-<script type="text/babel" src="js/document-templates.js?v=20261009l"></script>
-<script type="text/babel" src="js/app-official.js?v=20261009l"></script>
-<script type="text/babel" src="js/app-operational.js?v=20261009l"></script>
-<script type="text/babel" src="js/app-system.js?v=20261009l"></script>
-<script type="text/babel" src="js/app-shell.js?v=20261009l"></script>
+<script src="js/i18n.js?v=20261009n"></script>
+<script type="text/babel" src="js/utils.js?v=20261009n"></script>
+<script type="text/babel" src="js/document-templates.js?v=20261009n"></script>
+<script type="text/babel" src="js/app-official.js?v=20261009n"></script>
+<script type="text/babel" src="js/app-operational.js?v=20261009n"></script>
+<script type="text/babel" src="js/app-system.js?v=20261009n"></script>
+<script type="text/babel" src="js/app-shell.js?v=20261009n"></script>
 </body>
 </html>

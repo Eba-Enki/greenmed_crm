@@ -922,17 +922,18 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
     {id:'bank',icon:'card',label:tr('Bank Details')}
   ];
   
-  return(<div className="content" style={{padding:0,display:'flex',height:'calc(100vh - 54px)'}}>
-    {/* Back Button & Title Bar */}
-    <div style={{position:'fixed',top:54,left:'var(--sidebar)',right:0,background:'var(--g50)',borderBottom:'1px solid var(--g200)',padding:'12px 24px',display:'flex',alignItems:'center',gap:10,zIndex:50}}>
+  return(<div className="content" style={{padding:0}}>
+    {/* Back button & Save — part of the page flow, under the page header (the title is already in the header) */}
+    <div style={{background:'var(--g50)',borderBottom:'1px solid var(--g200)',padding:'12px 24px',display:'flex',alignItems:'center',gap:10}}>
       <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back" size={14}/>{tr("Back to Dashboard")}</button>
-      <h2 style={{fontSize:15,fontWeight:700,color:'var(--g900)',marginLeft:10}}>{tr("Settings")}</h2>
       <div style={{flex:1}}/>
       <Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn>
     </div>
 
+    <div style={{display:'flex',minHeight:'calc(100vh - 200px)'}}>
+
     {/* Left Menu */}
-    <div style={{width:280,background:'var(--white)',borderRight:'1px solid var(--g200)',paddingTop:70,flexShrink:0}}>
+    <div style={{width:280,background:'var(--white)',borderRight:'1px solid var(--g200)',paddingTop:16,flexShrink:0}}>
       <div style={{padding:'8px 16px',fontSize:10,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:4}}>{tr("Settings")}</div>
       {menuItems.map(m=>(
         <div key={m.id} onClick={()=>{setActiveMenu(m.id);LS.set(ns+'settingsMenu',m.id);}} style={{padding:'10px 16px',margin:'2px 8px',borderRadius:8,cursor:'pointer',display:'flex',alignItems:'center',gap:10,background:activeMenu===m.id?'var(--g100)':'transparent',color:activeMenu===m.id?'var(--g900)':'var(--g600)',fontWeight:activeMenu===m.id?600:500,fontSize:13,transition:'background 0.15s,border-color 0.15s,box-shadow 0.15s,color 0.15s,transform 0.15s'}}>
@@ -943,7 +944,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
     </div>
     
     {/* Right Content */}
-    <div style={{flex:1,overflowY:'auto',paddingTop:70}}>
+    <div style={{flex:1,minWidth:0}}>
       <div style={{padding:32,maxWidth:700}}>
         
         {/* Company Information */}
@@ -1115,6 +1116,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
         </>)}
 
       </div>
+    </div>
     </div>
   </div>);
 }
