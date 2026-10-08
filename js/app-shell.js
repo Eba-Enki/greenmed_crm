@@ -256,11 +256,14 @@ function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,on
   const ql=q.trim().toLocaleLowerCase(LANG);
   const matches=ql?sections.flatMap(s=>s.items).filter(it=>String(it.lbl).toLocaleLowerCase(LANG).includes(ql)):[];
   const item=it=>{
-    const n=newCount(it);
-    const why=[...(it.att||[]),...(n?[tr('{0} new',n)]:[])].join(', ');
+    const n=newCount(it),a=it.att||{n:0,reasons:[]};
+    const why=[...a.reasons,...(n?[tr('{0} new',n)]:[])].join(', ');
     return(
-      <button key={it.k} className={`sb-item${isActive(it.k)?' active':''}${why?' att':''}`} onClick={()=>{setQ('');onGo(it.k);}} aria-current={isActive(it.k)?'page':undefined} title={why||undefined}>
-        <Ico n={it.ico} size={16}/><span className="lbl">{it.lbl}</span>{why&&<span className="sb-dot" aria-label={why}/>}
+      <button key={it.k} className={`sb-item${isActive(it.k)?' active':''}${n?' att':''}`} onClick={()=>{setQ('');onGo(it.k);}} aria-current={isActive(it.k)?'page':undefined} title={why||undefined}>
+        <Ico n={it.ico} size={16}/><span className="lbl">{it.lbl}</span>
+        {a.n>0&&<span className={`sb-badge${a.urgent?' urgent':''}`}>{a.n}</span>}
+        {n>0&&<span className="sb-dot"/>}
+        {why&&<span className="sr-only">{why}</span>}
       </button>
     );
   };

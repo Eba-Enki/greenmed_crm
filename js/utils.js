@@ -346,11 +346,20 @@ const usersApi=async(action,payload)=>{
 };
 
 // ── Sidebar attention ──
-// A menu item is shown bold with a dot when something there needs a look (drafts, overdue, unpaid…) or when
-// records were added since the user last opened that page. att() turns [count, message] pairs into the
-// reasons shown in the dot's tooltip; pairs with a zero count are dropped.
+// Two separate signals on a menu item:
+//  • a dot + bold label for records added since the user last opened that page (clears on opening it, like
+//    unread channels in Buzz) — handled in PortalSidebar;
+//  • a small count badge for records that need action (drafts, overdue, unpaid, stale replies). It stays until
+//    the records themselves change; it is red when something is overdue.
+// att() takes [count, message, urgent?] pairs and returns {n, urgent, reasons} (zero counts are dropped).
 const isOverdue=d=>!!d.dueDate&&d.dueDate<td()&&!['paid','cancelled','closed','draft'].includes(d.status);
-const att=(...pairs)=>pairs.filter(([n])=>n>0).map(([n,msg])=>tr(msg,n));
+// Waiting for an answer is normal; only a wait of more than two weeks is worth a reminder
+const STALE_DAYS=14;
+const isStale=d=>!!d.date&&d.date<addD(-STALE_DAYS);
+const att=(...pairs)=>{
+  const on=pairs.filter(([n])=>n>0);
+  return{n:on.reduce((s,[n])=>s+n,0),urgent:on.some(([,,u])=>u),reasons:on.map(([n,msg])=>tr(msg,n))};
+};
 const countWhere=(list,fn)=>(list||[]).filter(fn).length;
 
 // ── Heavy libraries on demand ──
