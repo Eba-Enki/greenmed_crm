@@ -408,7 +408,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                     <span style={{flex:1,textAlign:'right'}}>{CURR[latest.currency]||'£'}{fmt(dt(latest.items))}</span>
                   </div>
                 </td>
-                <td className="tac">{latest.status==='draft'&&<button className="ab" onClick={e=>{e.stopPropagation();handleMarkAsSent(latest);}}>{tr("Mark as Sent")}</button>}</td>
+                <td className="tac">
+                  {latest.status==='draft'&&<ActBtn label={tr("Mark as Sent")} onClick={()=>handleMarkAsSent(latest)} due={tr('Draft — not sent yet')}/>}
+                  {latest.status==='sent'&&<ActBtn label={tr("Approve")} onClick={()=>handleApproveQuote(latest)} due={isStale(latest)?tr('Waiting for a reply for over 14 days'):''}/>}
+                  {latest.status==='approved'&&remaining.length>0&&<ActBtn label={tr("Create Invoice")} onClick={()=>{setCur(mkSalesInvoice(latest));go('sales_invoice_form');}} due={tr('Approved — not invoiced yet')}/>}
+                </td>
                 <td className="tac"><Badge s={latest.status}/></td>
               </tr>
               {expanded&&history.map(q=>(
@@ -956,7 +960,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 {(d&&d.client&&d.client.company)?d.client.company:'—'}
               </td>
               <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items))}</td>
-              <td className="tac">{d.status==='draft'&&<button className="ab" onClick={e=>{e.stopPropagation();handleMarkInvoiceAsSent(d);}}>{tr("Mark as Sent")}</button>}</td>
+              <td className="tac">{d.status==='draft'&&<ActBtn label={tr("Mark as Sent")} onClick={()=>handleMarkInvoiceAsSent(d)} due={tr('Draft — not sent yet')}/>}</td>
               <td className="tac"><Badge s={d.status}/></td>
             </tr>
           ))}</tbody>
@@ -1000,7 +1004,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isRI?'received':'po'} size={38}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={isRI?[0.8,1,1,2,0.9,0.9,0.9]:[0.8,1,1,2,0.9,0.9]}/>
+          <Cg w={isRI?[0.8,1,1,2,0.9,0.9,1.1,0.9]:[0.8,1,1,2,0.9,0.9,1.3]}/>
           <thead><tr>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{tr("No")}</SortTh>
@@ -1008,6 +1012,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="supplier" sort={sort} onSort={onSort}>{tr("Supplier")}</SortTh>
             <SortTh k="total" sort={sort} onSort={onSort} className="tar">{tr("Total")}</SortTh>
             <SortTh k="linked" sort={sort} onSort={onSort} className="tac">{isPQ?tr('Linked To'):tr('Linked From')}</SortTh>
+            <th className="tac">{tr("Actions")}</th>
             {isRI&&<SortTh k="status" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>}
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
@@ -1021,6 +1026,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 {isPQ&&(d.linkedPO?linkChip('→',d.linkedPO.number):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
                 {isPO&&(d.pqNum?linkChip('←',d.pqNum):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
                 {isRI&&(d.poNum?linkChip('←',d.poNum):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
+              </td>
+              <td className="tac">
+                {isPQ&&!d.linkedPO&&<ActBtn label={tr('Convert to PO')} onClick={()=>handleConvertPQtoPO(d)} due={isStale(d)?tr('Not ordered for over 14 days'):''}/>}
+                {isPO&&!d.linkedRI&&<ActBtn label={tr('Add Invoice')} onClick={()=>handleConvertPOtoRI(d)} due={isStale(d)?tr('No invoice for over 14 days'):''}/>}
+                {isRI&&d.status!=='paid'&&<ActBtn label={tr('Mark as Paid')} onClick={()=>{sRI(receivedInvoices.map(x=>x.id===d.id?{...x,status:'paid'}:x));showToast(tr('Marked as paid'));}} due={isOverdue(d)?tr('Overdue — not paid'):tr('Not paid yet')}/>}
               </td>
               {isRI&&<td className="tac"><Badge s={d.status||'unpaid'}/></td>}
             </tr>
@@ -2004,17 +2014,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   const SB=[
     {group:tr('Sales')},
-    {k:'sales_quotes',ico:'sq',lbl:tr('Sales Quotations'),cnt:salesQuotes.filter(d=>d.status!=='passive').length,ids:salesQuotes.map(d=>d.id),
-      att:att([countWhere(salesQuotes,d=>d.status==='draft'),'{0} draft'],[countWhere(salesQuotes,d=>d.status==='sent'&&isStale(d)),'{0} awaiting reply for over 14 days'])},
-    {k:'sales_invoices',ico:'si',lbl:tr('Sales Invoices'),cnt:salesInvoices.length,ids:salesInvoices.map(d=>d.id),
-      att:att([countWhere(salesInvoices,isOverdue),'{0} overdue',true],[countWhere(salesInvoices,d=>d.status==='draft'),'{0} draft'])},
+    {k:'sales_quotes',ico:'sq',lbl:tr('Sales Quotations'),cnt:salesQuotes.filter(d=>d.status!=='passive').length,ids:salesQuotes.map(d=>d.id)},
+    {k:'sales_invoices',ico:'si',lbl:tr('Sales Invoices'),cnt:salesInvoices.length,ids:salesInvoices.map(d=>d.id)},
     {div:true},
     {group:tr('Procurement')},
-    {k:'purchase_quotes',ico:'rq',lbl:tr('Received Quotes'),cnt:purchaseQuotes.length,ids:purchaseQuotes.map(d=>d.id),
-      att:att([countWhere(purchaseQuotes,d=>!d.linkedPO&&isStale(d)),'{0} not ordered for over 14 days'])},
+    {k:'purchase_quotes',ico:'rq',lbl:tr('Received Quotes'),cnt:purchaseQuotes.length,ids:purchaseQuotes.map(d=>d.id)},
     {k:'purchase_orders',ico:'po',lbl:tr('Purchase Orders'),cnt:purchaseOrders.length,ids:purchaseOrders.map(d=>d.id)},
-    {k:'received_invoices',ico:'ri',lbl:tr('Received Invoices'),cnt:receivedInvoices.length,ids:receivedInvoices.map(d=>d.id),
-      att:att([countWhere(receivedInvoices,isOverdue),'{0} overdue',true],[countWhere(receivedInvoices,d=>d.status!=='paid'&&!isOverdue(d)),'{0} unpaid'])},
+    {k:'received_invoices',ico:'ri',lbl:tr('Received Invoices'),cnt:receivedInvoices.length,ids:receivedInvoices.map(d=>d.id)},
     {div:true},
     {group:tr('Project Management')},
     {k:'projects',ico:'project',lbl:tr('Projects'),cnt:projects.length,ids:projects.map(p=>p.id)},
