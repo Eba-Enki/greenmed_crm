@@ -1436,6 +1436,34 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const cands=pick?chains.filter(c=>!c.lead.sqBase||c.lead.sqBase===pick.base).flatMap(c=>(c.lead.items||[]).map(it=>({c,it}))):[];
     const lineNo=(base,key)=>{const q=latestSQ(base);const i=q?(q.items||[]).findIndex(x=>sqItemKey(x)===key):-1;return i<0?null:'#'+(i+1);};
     const ql=f.q.trim().toLowerCase();
+    // Excel of the open tab with the current search/filter: one row per supplier line (Matching) or per customer
+    // line (Supply Chain & Margins); amounts are written as numbers so they can be summed in Excel
+    const exportMatching=()=>{
+      const docNo=c=>chainDocs(c).map(([k,n])=>n?k+' '+n:k).join(' · ');
+      const slug=(project.number||project.name||'project').toLowerCase().replace(/[^a-z0-9]+/g,'-');
+      const num=v=>v==null?'':Math.round(v*100)/100;
+      if(tab==='chain'){
+        const head=['Quotation','#','Customer Item','Qty','Unit','Sale Currency','Sale','Bought From','Green Med Cost','Source Supplier','Source Invoice No','Source Currency','Source Cost','Source Cost (sale currency)','Green Med Margin','Group Co. Margin','Group Margin','Ship Date','Incoterm','Carrier','AWB / BL No','Customs Declaration (GÇB) No'];
+        const rows=groups.flatMap(({q,rows})=>rows.filter(visible).map(r=>{
+          const e=lineEconomics(q,r);const L=r.lines;const join=fn=>L.map(fn).filter(Boolean).join('; ');
+          const grp=L.filter(({c})=>isGroupDoc(c.lead));
+          const srcTot=grp.length&&grp.every(({c,it})=>+it.srcPrice)?grp.reduce((s,{it})=>s+(+(it.qty||0))*(+it.srcPrice),0):null;
+          const srcConv=grp.length?grp.reduce((s,{c,it})=>{const u=srcInDocCur(c.lead,it);return s==null||u==null?null:s+(+(it.qty||0))*u;},0):null;
+          const sh=fn=>join(({c})=>c.po&&c.po.shipment&&c.po.shipment[fn]);
+          return[q.number,r.i+1,sqLineText(r.it),+(r.it.qty||0),r.it.unit||'',q.currency||'GBP',num(e.sale),join(({c})=>c.lead.supplierCompany),num(e.buy),
+            join(({it})=>it.srcSupplier),join(({it})=>it.srcDocNo),grp.length?srcCur(grp[0].c.lead):'',num(srcTot),num(srcConv),num(e.gm),num(e.co),num(e.group),
+            sh('date'),sh('incoterm'),sh('carrier'),sh('awb'),sh('gcb')];
+        }));
+        exportExcel([head,...rows],`supply-chain-${slug}`);return;
+      }
+      const head=['Quotation','#','Supplier','Customer Item','Source Supplier','Supplier Item','Qty','Unit','Sale Price','Sale Currency','Purchase Price','Purchase Currency','Documents'];
+      const rows=groups.flatMap(({q,rows})=>rows.filter(visible).flatMap(r=>{
+        const base=[q.number,r.i+1];const sale=[+(r.it.qty||0),r.it.unit||'',+(r.it.price||0),q.currency||'GBP'];
+        if(!r.lines.length)return[[...base,'Not matched',sqLineText(r.it),'','',...sale,'','','']];
+        return r.lines.map(({c,it:s})=>[...base,c.lead.supplierCompany||'',sqLineText(r.it),s.srcSupplier||'',s.desc||s.item||'',...sale,+(s.price||0),c.lead.currency||'GBP',docNo(c)]);
+      }));
+      exportExcel([head,...rows],`item-matching-${slug}`);
+    };
     const money=(cur,v)=>v==null?<span style={{color:'var(--g300)'}}>—</span>:<span style={{color:v<0?'var(--red)':undefined}}>{v<0?'-':''}{CURR[cur]||''}{fmt(Math.abs(v))}</span>;
     const marginCell=(cur,v,sale)=>v==null?money(cur,null):<div>{money(cur,v)}{sale>0&&<div className="mt-pct">{(v/sale*100).toFixed(1)}%</div>}</div>;
     // Supply chain tab: what each customer line sells for, what it cost Green Med and the group, and how it shipped
@@ -1482,7 +1510,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </>);
     };
     const visible=r=>(f.show!=='open'||!r.lines.length)&&(f.show!=='done'||r.lines.length)
-      &&(!ql||[sqLineText(r.it),...r.lines.flatMap(({c,it})=>[c.lead.supplierCompany,it.desc,it.item])].some(x=>(x||'').toLowerCase().includes(ql)));
+      &&(!ql||[sqLineText(r.it),...r.lines.flatMap(({c,it})=>[c.lead.supplierCompany,it.desc,it.item,it.srcSupplier])].some(x=>(x||'').toLowerCase().includes(ql)));
     return(<div className="content">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={()=>go('proj_detail')} className="mt-back"><Ico n="back"/>{project.number||tr("Project")}</button>
@@ -1493,7 +1521,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="st-tabs" role="tablist" style={{marginBottom:14}}>
         {[['match',tr('Matching')],['chain',tr('Supply Chain & Margins')]].map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} className={'st-tab'+(tab===k?' active':'')} onClick={()=>setFilter({tab:k})}>{l}</button>)}
       </div>
-      <ListTools q={f.q} onQ={v=>setFilter({q:v})} placeholder={tr("Search customer or supplier item...")} active={[f.show].filter(Boolean).length} onClear={()=>setFilter({show:''})}>
+      <ListTools q={f.q} onQ={v=>setFilter({q:v})} placeholder={tr("Search customer or supplier item...")} active={[f.show].filter(Boolean).length} onClear={()=>setFilter({show:''})} onExport={exportMatching}>
         <FilterField label={tr("Show")}><select value={f.show} onChange={e=>setFilter({show:e.target.value})}>
           <option value="">{tr("All items")}</option><option value="open">{tr("Not matched")}</option><option value="done">{tr("Matched")}</option>
         </select></FilterField>
@@ -1507,23 +1535,28 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <div className="tcard-hdr-t">{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
             <span className={gDone===rows.length?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",gDone,rows.length)}</span>
           </div>
-          <div className="tcard"><table className="dt mt-tbl">
-            <Cg w={[0.4,2,0.65,1.15,1.3,1.9,2.65,1.45,0.8]}/>
-            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Sale Price")}</th><th>{tr("Supplier")}</th><th>{tr("Supplier Item")}</th><th>{tr("Documents")}</th><th className="tar">{tr("Purchase Price")}</th><th/></tr></thead>
-            <tbody>{shown.length===0?<tr><td colSpan={9}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
+          <div className="tcard"><table className="dt mt-tbl mt-wrap">
+            <Cg w={[0.45,1.6,2.1,1.5,2.1,0.8,1,1.05,1.75,0.75]}/>
+            <thead><tr><th>#</th><th>{tr("Supplier")}</th><th>{tr("Customer Item")}</th><th>{tr("Source Supplier")}</th><th>{tr("Supplier Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Sale Price")}</th><th className="tar">{tr("Purchase Price")}</th><th>{tr("Documents")}</th><th/></tr></thead>
+            <tbody>{shown.length===0?<tr><td colSpan={10}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
             shown.flatMap(({it,i,key,lines})=>{
-              // One row per matched supplier line; the customer columns span them
+              // One row per matched supplier line; the customer's columns (#, item, qty, sale price) span them
               const n=Math.max(1,lines.length);
               const matchBtn=<button className="ab" title={tr("Match")} aria-label={tr("Match")} onClick={()=>{setSel('');setPick({base,key,label:`#${i+1} ${sqLineText(it)}`});}}><Ico n="link"/></button>;
-              const cust=[<td key="n" rowSpan={n} style={{color:'var(--g500)'}}>{i+1}</td>,<td key="d" rowSpan={n} style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(it)}</td>,
-                <td key="q" rowSpan={n} className="tar">{it.qty} {it.unit||''}</td>,<td key="p" rowSpan={n} className="tar">{sym}{fmt(+(it.price||0))}</td>];
-              if(!lines.length)return[<tr key={key}>{cust}<td colSpan={4}><span className="mt-none">{tr("Not matched")}</span></td><td><div className="aw">{matchBtn}</div></td></tr>];
+              const dash=<span style={{color:'var(--g300)'}}>—</span>;
+              const num=<td key="n" rowSpan={n} style={{color:'var(--g500)'}}>{i+1}</td>;
+              const item=<td key="d" rowSpan={n} style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(it)}</td>;
+              const qp=[<td key="q" rowSpan={n} className="tar">{it.qty} {it.unit||''}</td>,<td key="p" rowSpan={n} className="tar">{sym}{fmt(+(it.price||0))}</td>];
+              if(!lines.length)return[<tr key={key}>{num}<td><span className="mt-none">{tr("Not matched")}</span></td>{item}<td>{dash}</td><td>{dash}</td>{qp}<td className="tar">{dash}</td><td>{dash}</td><td><div className="aw">{matchBtn}</div></td></tr>];
               return lines.map(({c,it:s},j)=><tr key={key+c.lead.id+s.id} className={j>0?'mt-sub':''}>
-                {j===0&&cust}
+                {j===0&&num}
                 <td style={{color:'var(--g900)',fontWeight:500}}>{c.lead.supplierCompany||'—'}</td>
+                {j===0&&item}
+                <td>{s.srcSupplier?<span style={{color:'var(--g800)'}}>{s.srcSupplier}</span>:dash}</td>
                 <td>{s.desc||s.item||'—'}</td>
-                <td><DocChips c={c}/></td>
+                {j===0&&qp}
                 <td className="tar">{CURR[c.lead.currency]||'£'}{fmt(+(s.price||0))}</td>
+                <td><DocChips c={c}/></td>
                 <td><div className="aw">{j===0&&matchBtn}<button className="ab danger" title={tr("Remove match")} aria-label={tr("Remove match")} onClick={()=>setLineMatch(c,s.id,base,'')}><Ico n="x"/></button></div></td>
               </tr>);
             })}</tbody>
