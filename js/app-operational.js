@@ -136,7 +136,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       notes:(fromQuote&&fromQuote.notes)||''};
   };
 
-  const handleSaveSQ=q=>{
+  const handleSaveSQ=q0=>{
+    const q=addrCaseDoc(q0);
     const fresh=!q.id;
     const numbered=fresh?assignQuoteNumber(q):q;
     const saved={...numbered,id:numbered.id||uid()};
@@ -201,7 +202,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return isAutoNum('si',si.number)?{...si,number:docNum('si')}:si;
   };
 
-  const handleSaveSI=si=>{
+  const handleSaveSI=si0=>{
+    const si=addrCaseDoc(si0);
     const fresh=!si.id;
     const numbered=fresh?assignInvoiceNumber(si):si;
     const saved={...numbered,id:numbered.id||uid()};
@@ -266,7 +268,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   };
   const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
 
-  const handleSavePQ=pq=>{
+  const handleSavePQ=pq0=>{
+    const pq=addrCaseDoc(pq0);
     const saved={...pq,id:pq.id||uid()};
     commitProc(syncMatchChain('pq',saved,{pq:upsert(purchaseQuotes,saved),po:purchaseOrders,ri:receivedInvoices}));
     showToast(tr('Saved ✓'));go('purchase_quotes');
@@ -279,7 +282,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     sPQ(purchaseQuotes.map(x=>x.id===pq.id?{...x,linkedPO:{id:newPO.id,number:newPO.number}}:x));
     showToast(tr('Converted to PO'));go('purchase_orders');
   };
-  const handleSavePO=po=>{
+  const handleSavePO=po0=>{
+    const po=addrCaseDoc(po0);
     const fresh=!po.id;
     const numbered=fresh?assignPONumber(po):po;
     const saved={...numbered,id:numbered.id||uid()};
@@ -291,7 +295,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     setCur({...ri,_pendingPOId:po.id});
     go('received_invoice_form');
   };
-  const handleSaveRIFromPO=(ri)=>{
+  const handleSaveRIFromPO=ri0=>{
+    const ri=addrCaseDoc(ri0);
     const saved={...ri,id:ri.id||uid()};
     const pendingPOId=ri._pendingPOId;
     const {_pendingPOId:_,...cleanRI}=saved;
@@ -299,7 +304,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     commitProc(syncMatchChain('ri',cleanRI,{pq:purchaseQuotes,po,ri:upsert(receivedInvoices,cleanRI)}));
     showToast(tr('Saved ✓'));go('received_invoices');
   };
-  const handleSaveRI=ri=>{
+  const handleSaveRI=ri0=>{
+    const ri=addrCaseDoc(ri0);
     const saved={...ri,id:ri.id||uid()};
     commitProc(syncMatchChain('ri',saved,{pq:purchaseQuotes,po:purchaseOrders,ri:upsert(receivedInvoices,saved)}));
     showToast(tr('Saved ✓'));go('received_invoices');
@@ -1830,7 +1836,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
     const handleSave=async()=>{
-      const norm={...c,company:toTitleCase(c.company),contact:toTitleCase(c.contact),email:(c.email||'').trim().toLowerCase(),address:toSentenceCase(c.address),notes:toSentenceCase(c.notes)};
+      const norm={...c,company:toTitleCase(c.company),contact:toTitleCase(c.contact),email:(c.email||'').trim().toLowerCase(),address:addrCase(c.address),notes:toSentenceCase(c.notes)};
       const nameField=norm.company?'company':'contact';
       const nameVal=norm.company||norm.contact;
       const dup=findCaseInsensitiveDup(customers,nameField,nameVal,norm.id);
@@ -1970,7 +1976,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     dirtyCheckRef.current=()=>unsavedFields(c)!==unsavedFields({...DEF_CO,...co});
 
     const saveAll=()=>{
-      const cNorm={...c,name:toTitleCase(c.name),address:toSentenceCase(c.address),email:(c.email||'').trim().toLowerCase()};
+      const cNorm={...c,name:toTitleCase(c.name),address:addrCase(c.address),email:(c.email||'').trim().toLowerCase()};
       const{logo,signature,...coWithoutLogoAndSig}=cNorm;
       setLogo(logo||'');setSignature(signature||'');
       settingsDraftRef.current=null;
@@ -1991,7 +1997,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       setCo(x=>({...x,banks}));
     };
     const saveBank=b=>{
-      const bank={...b,accountName:toTitleCase(b.accountName),bankName:(b.bankName||'').trim(),bankAddress:(b.bankAddress||'').trim(),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase(),currency:b.currency||'GBP'};
+      const bank={...b,accountName:toTitleCase(b.accountName),bankName:(b.bankName||'').trim(),bankAddress:addrCase(b.bankAddress),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase(),currency:b.currency||'GBP'};
       const list=draft().banks||[];
       let banks=list.some(x=>x.id===bank.id)?list.map(x=>x.id===bank.id?bank:x):[...list,bank];
       if(bank.isDefault)banks=banks.map(x=>({...x,isDefault:x.id===bank.id}));

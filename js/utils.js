@@ -640,7 +640,31 @@ const toTitleCase=s=>{
   if(!t)return t;
   return t.toLowerCase().replace(/(^|[\s\-\/])\S/g,c=>c.toUpperCase());
 };
-// Free-text fields (notes, addresses, descriptions) only get their first letter capitalized —
+// Addresses: every word capitalised ("ERZENE MAH. ANKARA CAD. NO:172/67" → "Erzene Mah. Ankara Cad. No:172/67").
+// Words containing digits (postcodes like WC2H 0AR, flat numbers) and country codes stay as typed; Turkish
+// addresses keep their dotted/dotless i (İZMİR → İzmir, BULVARI → Bulvarı). Line breaks are kept.
+const ADDR_KEEP=new Set(['UK','USA','US','UAE','EU','PO','GB','TR']);
+const addrCase=s=>{
+  const t=(s||'').trim();
+  if(!t)return t;
+  // An address with any Turkish letter is Turkish throughout, so a plain I there is a dotless ı
+  const turkish=/[ÇĞİÖŞÜçğıöşü]/.test(t);
+  return t.replace(/[^\s\-\/:.,()]+/g,w=>{
+    if(/\d/.test(w)||ADDR_KEEP.has(w))return w;
+    const lower=[...w].map(ch=>ch==='İ'?'i':ch==='I'?(turkish?'ı':'i'):ch.toLowerCase()).join('');
+    const first=w[0];
+    const head=first===first.toLowerCase()?(first==='i'&&turkish?'İ':first.toUpperCase()):first;
+    return head+lower.slice(1);
+  });
+};
+// Address fields on a Sales & Procurement document
+const addrCaseDoc=d=>({
+  ...d,
+  ...(d.client?{client:{...d.client,address:addrCase(d.client.address)}}:{}),
+  ...(d.shipTo?{shipTo:{...d.shipTo,address:addrCase(d.shipTo.address)}}:{}),
+  ...('supplierAddress' in d?{supplierAddress:addrCase(d.supplierAddress)}:{}),
+});
+// Free-text fields (notes, descriptions) only get their first letter capitalized —
 // title-casing these would wrongly capitalize every word in a sentence.
 const toSentenceCase=s=>{
   const t=(s||'').trim();

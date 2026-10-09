@@ -77,7 +77,7 @@ const drawModernHeader=async(pdf,ctx)=>{
 
   // Company lines: bold label + value; empty ones are left out
   const info=[
-    ['Address',(co.address||'').split('\n').map(s=>s.trim()).filter(Boolean).join(', ')],
+    ['Address',addrCase((co.address||'').split('\n').map(s=>s.trim()).filter(Boolean).join(', '))],
     ['Phone',co.phone||''],
     ['UTR',co.utr||''],
   ].filter(([,v])=>String(v).trim());
@@ -124,7 +124,7 @@ const drawModernHeader=async(pdf,ctx)=>{
     pdf.splitTextToSize(fixText(p.company||'—'),colW-2).forEach((t,k)=>{if(k)y+=4;pdf.text(t,x+1,y);});
     pdf.setFont('Arial','normal');
     pdf.setFontSize(8.5);
-    [p.address,p.contact,p.email].filter(v=>v&&String(v).trim()).forEach(v=>{
+    [addrCase(p.address),p.contact,p.email].filter(v=>v&&String(v).trim()).forEach(v=>{
       pdf.splitTextToSize(fixText(v),colW-2).forEach(t=>{y+=3.8;pdf.text(t,x+1,y);});
     });
     return y;
