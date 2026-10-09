@@ -450,7 +450,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </ListTools>
       <BulkBar bulk={bulk}>
         <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
-        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>{tr("Export")}</BulkBtn>
+        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>{tr("Export selected")}</BulkBtn>
         <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
         <BulkBtn icon="trash" danger disabled={!pickedDrafts.length} onClick={bulkDelete}>{tr("Delete drafts")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
       </BulkBar>
@@ -1054,7 +1054,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </ListTools>
       <BulkBar bulk={bulk}>
         <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
-        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...picked.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}>{tr("Export")}</BulkBtn>
+        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...picked.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}>{tr("Export selected")}</BulkBtn>
         <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
       </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="invoice" size={38}/><div className="empty-t">{tr("No sales invoices yet")}</div><div className="empty-s">{tr("Approve a quotation and convert it to invoice")}</div></div></div>:(

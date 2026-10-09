@@ -585,14 +585,11 @@ function useStableComponents(defs){
 }
 
 // ── List tools ──
-// Search, Filter and Export of a list. They sit at the right end of the page header's tab row (#ph-tools, see
-// PageHeader) so they stay in view while the list scrolls; pages without a tab row show them above the list.
-// The filter fields (children) open in a panel above the list when Filter is pressed; the button shows how many
-// filters are active while the panel is closed.
+// Toolbar right above a list: search, Filter and Export on the right; the left side (.lt-left) is where the bulk
+// actions appear while rows are ticked (BulkBar). The filter fields (children) open in a panel under the toolbar
+// when Filter is pressed; the button shows how many filters are active while the panel is closed.
 function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children}){
-  const[target,setTarget]=useState(null);
   const[open,setOpen]=useState(false);
-  React.useLayoutEffect(()=>{setTarget(document.getElementById('ph-tools'));},[]);
   const hasFilters=React.Children.toArray(children).some(Boolean);
   const tools=(<div className="ltools">
     {onQ&&<div className="fbar-s lt-search"><Ico n="search"/><input value={q} onChange={e=>onQ(e.target.value)} placeholder={placeholder}/></div>}
@@ -603,7 +600,7 @@ function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children})
     {onExport&&<button className="lt-btn" onClick={onExport}>{tr('Export')}</button>}
   </div>);
   return(<>
-    {target?ReactDOM.createPortal(tools,target):<div className="lt-inline">{tools}</div>}
+    <div className="lt-row"><div className="lt-left"/>{tools}</div>
     {open&&hasFilters&&<div className="fpanel">
       {children}
       <div style={{flex:1}}/>
@@ -639,16 +636,19 @@ const SelTd=({bulk,id})=>(
     <input type="checkbox" checked={bulk.has(id)} onChange={()=>bulk.toggle(id)} aria-label={tr('Select')}/>
   </td>
 );
-// Bar that appears at the bottom of the list while rows are selected; Escape clears the selection
+// Bulk actions: shown on the left of the list toolbar (ListTools' .lt-left) only while rows are ticked;
+// Escape or the × clears the selection
 function BulkBar({bulk,children}){
+  const[slot,setSlot]=useState(null);
+  React.useLayoutEffect(()=>{setSlot(document.querySelector('.content .lt-left'));},[]);
   useEscape(bulk.clear,bulk.chosen.length>0);
   if(!bulk.chosen.length)return null;
-  return(<div className="bulk-bar" role="toolbar" aria-label={tr('Bulk actions')}>
+  const bar=(<div className="bulk-bar" role="toolbar" aria-label={tr('Bulk actions')}>
+    <button className="bulk-clear" onClick={bulk.clear} title={tr('Clear selection')} aria-label={tr('Clear selection')}><Ico n="x" size={13}/></button>
     <span className="bulk-n">{tr('{0} selected',bulk.chosen.length)}</span>
     {children}
-    <div style={{flex:1}}/>
-    <button className="bulk-clear" onClick={bulk.clear}><Ico n="x" size={13}/>{tr('Clear selection')}</button>
   </div>);
+  return slot?ReactDOM.createPortal(bar,slot):bar;
 }
 const BulkBtn=({icon,danger,disabled,onClick,children})=>(
   <button className={'bulk-btn'+(danger?' danger':'')} disabled={disabled} onClick={onClick}>{icon&&<Ico n={icon} size={13}/>}{children}</button>

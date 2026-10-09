@@ -305,12 +305,8 @@ function PageHeader({sb,isActive,onGo,session,title,children}){
         <div className="topbar-actions">{children}</div>
       </div>
       {tabs.length>0&&(
-        <div className="pills-row">
-          <div className="pills" role="tablist">
-            {tabs.map(it=><button key={it.k} role="tab" aria-selected={isActive(it.k)} className={`pill${isActive(it.k)?' on':''}`} onClick={()=>onGo(it.k)}>{it.lbl}{it.cnt>0&&<span className="pill-cnt">{it.cnt}</span>}</button>)}
-          </div>
-          {/* lists put their search / filter / export here (ListTools) */}
-          <div id="ph-tools" className="ph-tools"/>
+        <div className="pills" role="tablist">
+          {tabs.map(it=><button key={it.k} role="tab" aria-selected={isActive(it.k)} className={`pill${isActive(it.k)?' on':''}`} onClick={()=>onGo(it.k)}>{it.lbl}{it.cnt>0&&<span className="pill-cnt">{it.cnt}</span>}</button>)}
         </div>
       )}
     </header>
