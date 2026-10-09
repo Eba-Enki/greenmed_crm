@@ -597,7 +597,7 @@ function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children})
     </button>}
     {onQ&&<div className="fbar-s lt-search"><Ico n="search"/><input value={q} onChange={e=>onQ(e.target.value)} placeholder={placeholder}/></div>}
     {extra}
-    {onExport&&<button className="lt-btn" onClick={onExport}><Ico n="export" size={13}/>{tr('Export to Excel')}</button>}
+    {onExport&&<button className="lt-btn" onClick={onExport}>{tr('Export to Excel')}</button>}
   </div>);
   return(<>
     <div className="lt-row"><div className="lt-left"/>{tools}</div>
