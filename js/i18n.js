@@ -277,6 +277,11 @@ const I18N_TR={
   'Direct':'Doğrudan','not shipped yet':'henüz sevk edilmedi',
   'No sales quotations in this project':'Bu projede satış teklifi yok','Customer items appear here once a sales quotation is saved with this project.':'Bu proje seçili bir satış teklifi kaydedildiğinde müşteri kalemleri burada görünür.',
   'No supplier documents in this project':'Bu projede tedarikçi belgesi yok',
+  'Select all':'Tümünü seç','Select':'Seç','Bulk actions':'Toplu işlemler','{0} selected':'{0} seçildi','Clear selection':'Seçimi temizle',
+  'Download PDFs':'PDF\'leri indir','Preparing…':'Hazırlanıyor…','Preparing PDFs… {0}/{1}':'PDF\'ler hazırlanıyor… {0}/{1}','{0} PDFs downloaded':'{0} PDF indirildi',
+  '{0} marked as sent':'{0} kayıt gönderildi olarak işaretlendi','{0} skipped (not a draft)':'{0} kayıt atlandı (taslak değil)',
+  'Delete drafts':'Taslakları sil','Delete {0} draft quotations?':'{0} taslak teklif silinsin mi?',
+  '{0} selected quotations are not drafts and will be kept.':'Seçilenlerden {0} teklif taslak olmadığı için silinmeyecek.','{0} deleted':'{0} kayıt silindi',
   'Enter the received quote with this project selected, then match its lines here or in the quote itself.':'Alınan teklifi bu proje seçili olarak girin, ardından kalemlerini burada veya teklifin kendisinde eşleştirin.',
 };
 

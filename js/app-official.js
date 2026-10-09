@@ -69,7 +69,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     setView('home');setCur(null);
   },[]);
 
-  const go=(v,from)=>{setPrev(from||view);setView(v)};
+  const[navSeq,setNavSeq]=useState(0);
+  const go=(v,from)=>{setPrev(from||view);setView(v);setNavSeq(n=>n+1);};
   const si=d=>{setInv(d);LS.set(ns+'i',d)};const sq=d=>{setQuo(d);LS.set(ns+'q',d)};
   const sp=d=>{setPos(d);LS.set(ns+'p',d)};const sr=d=>{setRec(d);LS.set(ns+'r',d)};
   const spr=d=>{setProjects(d);LS.set(ns+'pr',d)};
@@ -417,10 +418,12 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const titles={off_invoices:tr('Invoices'),off_quotes:tr('Quotations'),off_pos:tr('Purchase Orders'),off_received:tr('Received Invoices'),off_customers:tr('Contacts'),off_projects:tr('Projects'),off_expenses:tr('Expenses'),off_incomes:tr('Incomes'),off_bank:tr('Bank Accounts'),settings:tr('Settings'),home:tr('Dashboard')};
 
   dirtyCheckRef.current=null;
+  const S=useStableComponents({SimpleDocForm,OffListView});
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
+        <React.Fragment key={navSeq}>
         {!['off_preview','off_form','off_custform','off_projform','off_bank_detail','off_banktx_form','off_fx_form','off_cat_detail','off_contact'].includes(view)&&(()=>{
           const offTitles={home:tr('Dashboard'),off_invoices:tr('Invoices'),off_quotes:tr('Quotations'),off_pos:tr('Purchase Orders'),off_received:tr('Received Invoices'),off_customers:tr('Contacts'),off_projects:tr('Projects'),off_expenses:tr('Expenses'),off_incomes:tr('Incomes'),off_bank:tr('Bank Accounts'),settings:tr('Settings')};
           return(<PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={offTitles[view]||''}>
@@ -440,17 +443,17 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
             {[{k:'off_invoices',ico:'invoice',lbl:tr('Invoices'),val:inv.length},{k:'off_quotes',ico:'quote',lbl:tr('Quotations'),val:quo.length},{k:'off_pos',ico:'po',lbl:tr('POs'),val:pos.length},{k:'off_received',ico:'received',lbl:tr('Received'),val:rec.length},{k:'off_customers',ico:'customers',lbl:tr('Customers'),val:customers.length},{k:'off_projects',ico:'project',lbl:tr('Projects'),val:projects.length},{k:'off_expenses',ico:'expense',lbl:tr('Expenses'),val:expCats.length},{k:'off_incomes',ico:'income',lbl:tr('Incomes'),val:incomeCats.length},{k:'off_bank',ico:'bank',lbl:tr('Bank'),val:(co.banks||[]).length}].map(c=><div key={c.k} className="nav-card" onClick={()=>go(c.k)}><div className="nc-ico"><Ico n={c.ico} size={16}/></div><div className="nc-val">{c.val}</div><div className="nc-lbl">{c.lbl}</div></div>)}
           </div>
         </div>}
-        {view==='off_invoices'&&<OffListView type="invoice" items={inv}/>}
-        {view==='off_quotes'&&<OffListView type="quote" items={quo}/>}
-        {view==='off_pos'&&<OffListView type="po" items={pos}/>}
-        {view==='off_received'&&<OffListView type="received" items={rec}/>}
+        {view==='off_invoices'&&<S.OffListView type="invoice" items={inv}/>}
+        {view==='off_quotes'&&<S.OffListView type="quote" items={quo}/>}
+        {view==='off_pos'&&<S.OffListView type="po" items={pos}/>}
+        {view==='off_received'&&<S.OffListView type="received" items={rec}/>}
         {view==='off_contact'&&customers.find(c=>c.id===selectedContactId)&&<OffContactStatement contact={customers.find(c=>c.id===selectedContactId)} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go('off_customers')} onEdit={c=>{setCur(c);go('off_custform');}}/>}
         {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(tr("Delete \"{0}\"?", c.company||c.contact)))return;sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));}}/>}
         {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(tr("Delete \"{0}\"?", p.name)))return;spr(projects.filter(d=>d.id!==p.id));showToast(tr('Deleted'));}}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
         {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{const{account,...raw}=t;editTx(raw);}} onDelete={handleDeleteBankTx}/>}
-        {view==='off_form'&&cur&&<SimpleDocForm doc={cur} onSave={d=>{handleSave({...d,type:cur.type});}} onCancel={()=>go(prev)} onPreview={d=>{setCur(d);go('off_preview','off_form');}}/>}
+        {view==='off_form'&&cur&&<S.SimpleDocForm doc={cur} onSave={d=>{handleSave({...d,type:cur.type});}} onCancel={()=>go(prev)} onPreview={d=>{setCur(d);go('off_preview','off_form');}}/>}
         {view==='off_preview'&&cur&&<Preview doc={cur} co={co} docType={cur.type} onBack={()=>go(prev)} onEdit={()=>go('off_form','off_preview')}/>}
         {view==='off_custform'&&cur&&<OffCustForm cust={cur} customers={customers} onSave={handleSaveCust} onCancel={()=>go('off_customers')} dirtyRef={dirtyCheckRef}/>}
         {view==='off_projform'&&cur&&<OffProjForm proj={cur} projects={projects} onSave={handleSavePrj} onCancel={()=>go('off_projects')} dirtyRef={dirtyCheckRef}/>}
@@ -461,6 +464,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} bankTx={bankTx} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
         {view==='settings'&&<OffSettings ns={ns} co={co} go={go} onAutoNumberChange={v=>{const newCo={...co,autoNumber:v};setCo(newCo);LS.set(ns+'co',newCo);showToast(v?tr('Automatic numbering on'):tr('Automatic numbering off — type numbers by hand'));}} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast(tr('Saved ✓'));go('home');}} onClose={()=>go('home')}/>}
+        </React.Fragment>
       </div>
       {toast&&<div className="toast">{toast}</div>}
       {editingBank&&<BankAccountModal bank={editingBank} onSave={b=>{saveBank(b);setEditingBank(null);}} onCancel={()=>setEditingBank(null)}/>}

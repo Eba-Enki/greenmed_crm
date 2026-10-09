@@ -79,7 +79,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     setView('home');setCur(null);
   },[]);
 
-  const go=(v,from)=>{setPrev(from||view);setView(v)};
+  const[navSeq,setNavSeq]=useState(0);
+  const go=(v,from)=>{setPrev(from||view);setView(v);setNavSeq(n=>n+1);};
   const save=(key,setter,data)=>{setter(data);LS.set(ns+key,data)};
   const sSQ=d=>save('sq',setSalesQuotes,d);
   const sSI=d=>save('si',setSalesInvoices,d);
@@ -136,7 +137,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       notes:(fromQuote&&fromQuote.notes)||''};
   };
 
-  const handleSaveSQ=q=>{
+  const handleSaveSQ=q0=>{
+    const q=addrCaseDoc(q0);
     const fresh=!q.id;
     const numbered=fresh?assignQuoteNumber(q):q;
     const saved={...numbered,id:numbered.id||uid()};
@@ -201,7 +203,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return isAutoNum('si',si.number)?{...si,number:docNum('si')}:si;
   };
 
-  const handleSaveSI=si=>{
+  const handleSaveSI=si0=>{
+    const si=addrCaseDoc(si0);
     const fresh=!si.id;
     const numbered=fresh?assignInvoiceNumber(si):si;
     const saved={...numbered,id:numbered.id||uid()};
@@ -282,7 +285,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   };
   const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',supplierId:(po&&po.supplierId)||'',srcCurrency:(po&&po.srcCurrency)||'',fxRate:(po&&po.fxRate)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
 
-  const handleSavePQ=pq=>{
+  const handleSavePQ=pq0=>{
+    const pq=addrCaseDoc(pq0);
     const saved={...pq,id:pq.id||uid()};
     commitProc(syncMatchChain('pq',saved,{pq:upsert(purchaseQuotes,saved),po:purchaseOrders,ri:receivedInvoices}));
     showToast(tr('Saved ✓'));go('purchase_quotes');
@@ -295,7 +299,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     sPQ(purchaseQuotes.map(x=>x.id===pq.id?{...x,linkedPO:{id:newPO.id,number:newPO.number}}:x));
     showToast(tr('Converted to PO'));go('purchase_orders');
   };
-  const handleSavePO=po=>{
+  const handleSavePO=po0=>{
+    const po=addrCaseDoc(po0);
     const fresh=!po.id;
     const numbered=fresh?assignPONumber(po):po;
     const saved={...numbered,id:numbered.id||uid()};
@@ -307,7 +312,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     setCur({...ri,_pendingPOId:po.id});
     go('received_invoice_form');
   };
-  const handleSaveRIFromPO=(ri)=>{
+  const handleSaveRIFromPO=ri0=>{
+    const ri=addrCaseDoc(ri0);
     const saved={...ri,id:ri.id||uid()};
     const pendingPOId=ri._pendingPOId;
     const {_pendingPOId:_,...cleanRI}=saved;
@@ -315,7 +321,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     commitProc(syncMatchChain('ri',cleanRI,{pq:purchaseQuotes,po,ri:upsert(receivedInvoices,cleanRI)}));
     showToast(tr('Saved ✓'));go('received_invoices');
   };
-  const handleSaveRI=ri=>{
+  const handleSaveRI=ri0=>{
+    const ri=addrCaseDoc(ri0);
     const saved={...ri,id:ri.id||uid()};
     commitProc(syncMatchChain('ri',saved,{pq:purchaseQuotes,po:purchaseOrders,ri:upsert(receivedInvoices,saved)}));
     showToast(tr('Saved ✓'));go('received_invoices');
@@ -403,6 +410,35 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // Each revision group sorts by its latest revision
     const sortedGroups=sortRows(filteredGroups,sort,Object.fromEntries(Object.entries(qCols).map(([k,f])=>[k,g=>f(g.latest)])));
     const isExpanded=(base)=>hasFilter||expandedGroups.has(base);
+    // Bulk actions work on each selected group's latest revision — the row the list shows
+    const bulk=useBulkSelect(sortedGroups.map(g=>g.latest.id));
+    const picked=sortedGroups.filter(g=>bulk.has(g.latest.id)).map(g=>g.latest);
+    const pickedDrafts=picked.filter(q=>q.status==='draft');
+    const[zipBusy,setZipBusy]=useState(false);
+    const bulkMarkSent=()=>{
+      const ids=new Set(pickedDrafts.map(q=>q.id));
+      sSQ(salesQuotes.map(x=>ids.has(x.id)?{...x,status:'sent'}:x));
+      const skipped=picked.length-ids.size;
+      showToast(tr('{0} marked as sent',ids.size)+(skipped?' · '+tr('{0} skipped (not a draft)',skipped):''));
+      bulk.clear();
+    };
+    const bulkDelete=()=>{
+      const ids=new Set(pickedDrafts.map(q=>q.id));
+      const kept=picked.length-ids.size;
+      askGlobalConfirm(tr('Delete {0} draft quotations?',ids.size)+(kept?' '+tr('{0} selected quotations are not drafts and will be kept.',kept):''),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+        if(!ok)return;
+        sSQ(salesQuotes.filter(x=>!ids.has(x.id)));
+        sSI(salesInvoices.map(si=>ids.has(si.quoteId)?{...si,quoteId:null,quoteNum:''}:si));
+        showToast(tr('{0} deleted',ids.size));
+        bulk.clear();
+      });
+    };
+    const bulkPDF=async()=>{
+      setZipBusy(true);
+      const done=await downloadPDFZip(picked,co,'sales_quote',FULL_BANK,'sales-quotations',(i,n)=>showToast(tr('Preparing PDFs… {0}/{1}',i,n)));
+      setZipBusy(false);
+      if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
+    };
     return(<div className="content">
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search customer, quote no...")}/></div>
@@ -417,8 +453,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {sortedGroups.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">{tr("No quotations yet")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.8,1,1,2,0.9,1.3,0.9]}/>
+          <Cg w={[0.32,0.8,1,1,2,0.9,1.3,0.9]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{tr("Quote No")}</SortTh>
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
@@ -434,7 +471,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             const remaining=getQuoteRemainingItems(latest);
             const remAmt=dt(remaining.map(i=>({...i,qty:i.remainingQty})));
             return(<React.Fragment key={base}>
-              <tr style={{fontStyle:latest.status==='passive'?'italic':'normal',cursor:'pointer'}} onClick={()=>setQuickView(latest)}>
+              <tr className={bulk.has(latest.id)?'is-sel':''} style={{fontStyle:latest.status==='passive'?'italic':'normal',cursor:'pointer'}} onClick={()=>setQuickView(latest)}>
+                <SelTd bulk={bulk} id={latest.id}/>
                 <td style={{color:'var(--g500)',fontSize:12}}>{latest.date}</td>
                 <td>
                   <div style={{display:'flex',alignItems:'center',gap:5}}>
@@ -474,6 +512,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               </tr>
               {expanded&&history.map(q=>(
                 <tr key={q.id} style={{background:'var(--g50)',fontStyle:'italic',cursor:'pointer'}} onClick={()=>setQuickView(q)}>
+                  <td></td>
                   <td style={{fontSize:12}}>{q.date}</td>
                   <td>
                     <div style={{display:'flex',alignItems:'center',gap:5,paddingLeft:22}}>
@@ -492,6 +531,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           })}</tbody>
         </table><Pagination total={sortedGroups.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
+      <BulkBar bulk={bulk}>
+        <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>{tr("Export")}</BulkBtn>
+        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
+        <BulkBtn icon="trash" danger disabled={!pickedDrafts.length} onClick={bulkDelete}>{tr("Delete drafts")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+      </BulkBar>
       {quickView&&(()=>{
         const remaining=getQuoteRemainingItems(quickView);
         const extraActions=[];
@@ -985,6 +1030,23 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       return true;
     });
     const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,quote:d=>d.quoteNum,customer:d=>d.client&&d.client.company,total:d=>dt(d.items||[]),status:d=>d.status});
+    const bulk=useBulkSelect(sorted.map(d=>d.id));
+    const picked=sorted.filter(d=>bulk.has(d.id));
+    const pickedDrafts=picked.filter(d=>d.status==='draft');
+    const[zipBusy,setZipBusy]=useState(false);
+    const bulkMarkSent=()=>{
+      const ids=new Set(pickedDrafts.map(d=>d.id));
+      sSI(salesInvoices.map(x=>ids.has(x.id)?{...x,status:'sent'}:x));
+      const skipped=picked.length-ids.size;
+      showToast(tr('{0} marked as sent',ids.size)+(skipped?' · '+tr('{0} skipped (not a draft)',skipped):''));
+      bulk.clear();
+    };
+    const bulkPDF=async()=>{
+      setZipBusy(true);
+      const done=await downloadPDFZip(picked,co,'invoice',FULL_BANK,'sales-invoices',(i,n)=>showToast(tr('Preparing PDFs… {0}/{1}',i,n)));
+      setZipBusy(false);
+      if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
+    };
     return(<div className="content">
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search customer or invoice no...")}/></div>
@@ -998,8 +1060,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="invoice" size={38}/><div className="empty-t">{tr("No sales invoices yet")}</div><div className="empty-s">{tr("Approve a quotation and convert it to invoice")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.8,1,1,2,0.9,1.3,0.9]}/>
+          <Cg w={[0.32,0.8,1,1,2,0.9,1.3,0.9]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{tr("Invoice No")}</SortTh>
             <SortTh k="quote" sort={sort} onSort={onSort}>{tr("From Quote")}</SortTh>
@@ -1009,7 +1072,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="status" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
-            <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+            <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+              <SelTd bulk={bulk} id={d.id}/>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
               <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number}</span></td>
               <td>{d.quoteNum?<span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{d.quoteNum}</span>:'—'}</td>
@@ -1023,6 +1087,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           ))}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
+      <BulkBar bulk={bulk}>
+        <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...picked.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}>{tr("Export")}</BulkBtn>
+        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
+      </BulkBar>
       {quickView&&<DocQuickModal doc={quickView} co={co} docType="invoice" pdfOpts={FULL_BANK} onClose={()=>setQuickView(null)}
         onEdit={()=>{const openEdit=()=>{setQuickView(null);setCur(quickView);go('sales_invoice_edit');};if(quickView.status==='sent'){askConfirm(tr('This invoice has been marked as sent. Edit anyway?'),openEdit);}else{openEdit();}}}
         onDelete={()=>askConfirm(tr('Delete this invoice?'),()=>{sSI(salesInvoices.filter(x=>x.id!==quickView.id));showToast(tr('Deleted'));setQuickView(null);})}
@@ -1951,7 +2020,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
     const handleSave=async()=>{
-      const norm={...c,company:toTitleCase(c.company),contact:toTitleCase(c.contact),email:(c.email||'').trim().toLowerCase(),address:toSentenceCase(c.address),notes:toSentenceCase(c.notes)};
+      const norm={...c,company:toTitleCase(c.company),contact:toTitleCase(c.contact),email:(c.email||'').trim().toLowerCase(),address:addrCase(c.address),notes:toSentenceCase(c.notes)};
       const nameField=norm.company?'company':'contact';
       const nameVal=norm.company||norm.contact;
       const dup=findCaseInsensitiveDup(customers,nameField,nameVal,norm.id);
@@ -2021,7 +2090,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {showDocForm&&docToEdit&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setShowDocForm(false)}>
         <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:500,maxWidth:'90vw'}}>
           <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{docToEdit.id?tr('Edit Document'):tr('Upload Document')}</div>
-          <DocumentForm doc={docToEdit} onSave={(d)=>{
+          <S.DocumentForm doc={docToEdit} onSave={(d)=>{
             const doc={...d,id:d.id||uid(),uploadDate:d.uploadDate||td()};
             sDocs(doc.id&&documents.find(x=>x.id===doc.id)?documents.map(x=>x.id===doc.id?doc:x):[...documents,doc]);
             setShowDocForm(false);
@@ -2092,7 +2161,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     dirtyCheckRef.current=()=>unsavedFields(c)!==unsavedFields({...DEF_CO,...co});
 
     const saveAll=()=>{
-      const cNorm={...c,name:toTitleCase(c.name),address:toSentenceCase(c.address),email:(c.email||'').trim().toLowerCase()};
+      const cNorm={...c,name:toTitleCase(c.name),address:addrCase(c.address),email:(c.email||'').trim().toLowerCase()};
       const{logo,signature,...coWithoutLogoAndSig}=cNorm;
       setLogo(logo||'');setSignature(signature||'');
       settingsDraftRef.current=null;
@@ -2113,7 +2182,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       setCo(x=>({...x,banks}));
     };
     const saveBank=b=>{
-      const bank={...b,accountName:toTitleCase(b.accountName),bankName:(b.bankName||'').trim(),bankAddress:(b.bankAddress||'').trim(),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase(),currency:b.currency||'GBP'};
+      const bank={...b,accountName:toTitleCase(b.accountName),bankName:(b.bankName||'').trim(),bankAddress:addrCase(b.bankAddress),iban:(b.iban||'').trim().toUpperCase(),bic:(b.bic||'').trim().toUpperCase(),currency:b.currency||'GBP'};
       const list=draft().banks||[];
       let banks=list.some(x=>x.id===bank.id)?list.map(x=>x.id===bank.id?bank:x):[...list,bank];
       if(bank.isDefault)banks=banks.map(x=>({...x,isDefault:x.id===bank.id}));
@@ -2348,10 +2417,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
+  const S=useStableComponents({SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
+        <React.Fragment key={navSeq}>
         {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
           <PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={titles[view]||''}>
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
@@ -2366,39 +2437,40 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>{tr("Upload Document")}</Btn>}
           </PageHeader>
         }
-        {view==='home'&&<Dashboard/>}
-        {view==='sales_quotes'&&<SalesQuotesList/>}
-        {view==='sales_invoices'&&<SalesInvoicesList/>}
-        {view==='purchase_quotes'&&<ProcurementList type="pq" items={purchaseQuotes} title={tr("Received Quotes")}/>}
-        {view==='purchase_orders'&&<ProcurementList type="po" items={purchaseOrders} title={tr("Purchase Orders")}/>}
-        {view==='received_invoices'&&<ProcurementList type="ri" items={receivedInvoices} title={tr("Received Invoices")}/>}
-        {view==='projects'&&<ProjectsList/>}
-        {view==='proj_detail'&&cur&&<ProjectDetail project={cur}/>}
-        {view==='proj_matching'&&cur&&<ItemMatching project={cur}/>}
-        {view==='product_pool'&&<ProductPoolView/>}
-        {view==='expenses'&&<ExpensesView/>}
-        {view==='customers'&&<CustomersView/>}
-        {view==='documents'&&<DocumentsView/>}
-        {view==='settings'&&<OpsSettings/>}
+        {view==='home'&&<S.Dashboard/>}
+        {view==='sales_quotes'&&<S.SalesQuotesList/>}
+        {view==='sales_invoices'&&<S.SalesInvoicesList/>}
+        {view==='purchase_quotes'&&<S.ProcurementList type="pq" items={purchaseQuotes} title={tr("Received Quotes")}/>}
+        {view==='purchase_orders'&&<S.ProcurementList type="po" items={purchaseOrders} title={tr("Purchase Orders")}/>}
+        {view==='received_invoices'&&<S.ProcurementList type="ri" items={receivedInvoices} title={tr("Received Invoices")}/>}
+        {view==='projects'&&<S.ProjectsList/>}
+        {view==='proj_detail'&&cur&&<S.ProjectDetail project={cur}/>}
+        {view==='proj_matching'&&cur&&<S.ItemMatching project={cur}/>}
+        {view==='product_pool'&&<S.ProductPoolView/>}
+        {view==='expenses'&&<S.ExpensesView/>}
+        {view==='customers'&&<S.CustomersView/>}
+        {view==='documents'&&<S.DocumentsView/>}
+        {view==='settings'&&<S.OpsSettings/>}
         {/* FORMS */}
-        {view==='sales_quote_form'&&cur&&<SalesQuoteForm quote={cur} onSave={handleSaveSQ} onCancel={()=>go('sales_quotes')}/>}
-        {view==='sales_invoice_form'&&cur&&<SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go(cur.quoteId?'sales_quotes':'sales_invoices')}/>}
-        {view==='sales_invoice_edit'&&cur&&<SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go('sales_invoices')}/>}
-        {view==='pq_form'&&cur&&<ProcurementForm doc={cur} docType="pq" onSave={handleSavePQ} onCancel={()=>go('purchase_quotes')}/>}
-        {view==='po_form'&&cur&&<ProcurementForm doc={cur} docType="po" onSave={handleSavePO} onCancel={()=>go('purchase_orders')}/>}
-        {view==='ri_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRI} onCancel={()=>go('received_invoices')}/>}
-        {view==='received_invoice_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRIFromPO} onCancel={()=>go('purchase_orders')}/>}
-        {view==='proj_form'&&cur&&<ProjectForm proj={cur} onSave={handleSaveProj} onCancel={()=>go('projects')}/>}
+        {view==='sales_quote_form'&&cur&&<S.SalesQuoteForm quote={cur} onSave={handleSaveSQ} onCancel={()=>go('sales_quotes')}/>}
+        {view==='sales_invoice_form'&&cur&&<S.SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go(cur.quoteId?'sales_quotes':'sales_invoices')}/>}
+        {view==='sales_invoice_edit'&&cur&&<S.SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go('sales_invoices')}/>}
+        {view==='pq_form'&&cur&&<S.ProcurementForm doc={cur} docType="pq" onSave={handleSavePQ} onCancel={()=>go('purchase_quotes')}/>}
+        {view==='po_form'&&cur&&<S.ProcurementForm doc={cur} docType="po" onSave={handleSavePO} onCancel={()=>go('purchase_orders')}/>}
+        {view==='ri_form'&&cur&&<S.ProcurementForm doc={cur} docType="ri" onSave={handleSaveRI} onCancel={()=>go('received_invoices')}/>}
+        {view==='received_invoice_form'&&cur&&<S.ProcurementForm doc={cur} docType="ri" onSave={handleSaveRIFromPO} onCancel={()=>go('purchase_orders')}/>}
+        {view==='proj_form'&&cur&&<S.ProjectForm proj={cur} onSave={handleSaveProj} onCancel={()=>go('projects')}/>}
         {view==='exp_form'&&cur&&<ExpenseForm exp={cur} expCats={expCats} projects={projects} mkExpense={mkExpense} onSave={handleSaveExp} onSaveAndNew={handleSaveExpAndNew} onCancel={()=>go('expenses')} dirtyRef={dirtyCheckRef}/>}
-        {view==='exp_cats'&&<ExpCatsView/>}
-        {view==='exp_import'&&<ExpenseImportView/>}
-        {view==='cust_form'&&cur&&<CustomerForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('customers')}/>}
+        {view==='exp_cats'&&<S.ExpCatsView/>}
+        {view==='exp_import'&&<S.ExpenseImportView/>}
+        {view==='cust_form'&&cur&&<S.CustomerForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('customers')}/>}
         {/* PREVIEWS */}
         {view==='sales_quote_preview'&&cur&&<Preview doc={cur} co={co} docType="sales_quote" pdfOpts={FULL_BANK} onBack={()=>go(prev)} onEdit={()=>{go('sales_quote_form','sales_quote_preview');}}/>}
         {view==='sales_invoice_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" pdfOpts={FULL_BANK} onBack={()=>go(prev)}/>}
         {view==='pq_preview'&&cur&&<Preview doc={cur} co={co} docType="quote" pdfOpts={SALES_PDF} onBack={()=>go('purchase_quotes')}/>}
         {view==='po_preview'&&cur&&<Preview doc={cur} co={co} docType="po" pdfOpts={SALES_PDF} onBack={()=>go('purchase_orders')}/>}
         {view==='ri_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" pdfOpts={SALES_PDF} onBack={()=>go('received_invoices')}/>}
+        </React.Fragment>
       </div>
       {toast&&<div className="toast">{toast}</div>}
       {confirmDlg&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setConfirmDlg(null)}>

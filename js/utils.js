@@ -398,6 +398,7 @@ const ensurePDF=()=>Promise.all([
   window.jspdf?null:loadScript(LAZY_SRC.jspdf),
   typeof ARIAL_REGULAR_BASE64!=='undefined'?null:loadScript(LAZY_SRC.fonts),
 ]);
+const ensureZIP=()=>window.JSZip?Promise.resolve():loadScript(LAZY_SRC.jszip);
 const libLoadFailed=()=>alert(tr('A required component could not be loaded. Check your internet connection and try again.'));
 
 // Logo stored separately (raw, no JSON) to avoid quota issues with large base64
@@ -563,6 +564,66 @@ const Badge=({s})=>{const m=SM[s]||SM.draft;return <span className={`bdg ${m.c}`
 const Btn=({v='bp',onClick,children,style={},...p})=><button className={`btn ${v}`} onClick={onClick} style={style} {...p}>{children}</button>;
 const Fld=({label,children})=><div className="fld"><label>{label}</label>{children}</div>;
 
+// Components declared inside a portal component get a new identity on every render of that portal, so React
+// would unmount and remount them — wiping whatever the user had typed — whenever the portal re-renders (a toast
+// disappearing, a background sync, …). useStableComponents gives each one a wrapper that is created once and
+// always runs the latest declaration, so their state survives; they are reset only by navigation (see navSeq).
+function useStableComponents(defs){
+  const latest=useRef(defs);
+  latest.current=defs;
+  const wrappers=useRef(null);
+  if(!wrappers.current){
+    wrappers.current={};
+    Object.keys(defs).forEach(k=>{
+      const W=props=>latest.current[k](props);
+      W.displayName=k;
+      wrappers.current[k]=W;
+    });
+  }
+  return wrappers.current;
+}
+
+// ── Bulk actions on lists ──
+// Row selection. `ids` are the rows the current filter shows (on every page); rows filtered out are never part
+// of the selection, so "select all" + an action only ever touches what the user can see in the list.
+function useBulkSelect(ids){
+  const[sel,setSel]=useState(()=>new Set());
+  const chosen=ids.filter(id=>sel.has(id));
+  const all=ids.length>0&&chosen.length===ids.length;
+  return{
+    chosen,all,some:chosen.length>0&&!all,
+    has:id=>sel.has(id)&&ids.includes(id),
+    toggle:id=>setSel(s=>{const n=new Set(s);if(n.has(id))n.delete(id);else n.add(id);return n;}),
+    toggleAll:()=>setSel(all?new Set():new Set(ids)),
+    clear:()=>setSel(new Set()),
+  };
+}
+// Header / row checkboxes; clicks don't reach the row (which opens the document)
+const SelTh=({bulk})=>(
+  <th className="sel-col" onClick={e=>e.stopPropagation()}>
+    <input type="checkbox" checked={bulk.all} ref={el=>{if(el)el.indeterminate=bulk.some;}} onChange={bulk.toggleAll} aria-label={tr('Select all')}/>
+  </th>
+);
+const SelTd=({bulk,id})=>(
+  <td className="sel-col" onClick={e=>e.stopPropagation()}>
+    <input type="checkbox" checked={bulk.has(id)} onChange={()=>bulk.toggle(id)} aria-label={tr('Select')}/>
+  </td>
+);
+// Bar that appears at the bottom of the list while rows are selected; Escape clears the selection
+function BulkBar({bulk,children}){
+  useEscape(bulk.clear,bulk.chosen.length>0);
+  if(!bulk.chosen.length)return null;
+  return(<div className="bulk-bar" role="toolbar" aria-label={tr('Bulk actions')}>
+    <span className="bulk-n">{tr('{0} selected',bulk.chosen.length)}</span>
+    {children}
+    <div style={{flex:1}}/>
+    <button className="bulk-clear" onClick={bulk.clear}><Ico n="x" size={13}/>{tr('Clear selection')}</button>
+  </div>);
+}
+const BulkBtn=({icon,danger,disabled,onClick,children})=>(
+  <button className={'bulk-btn'+(danger?' danger':'')} disabled={disabled} onClick={onClick}>{icon&&<Ico n={icon} size={13}/>}{children}</button>
+);
+
 // Escape closes the top-most open dialog — the same as its Cancel / Close / × button. Dialogs register while
 // open, so with a confirm on top of a document window, Escape closes the confirm first.
 const escStack=[];
@@ -640,7 +701,31 @@ const toTitleCase=s=>{
   if(!t)return t;
   return t.toLowerCase().replace(/(^|[\s\-\/])\S/g,c=>c.toUpperCase());
 };
-// Free-text fields (notes, addresses, descriptions) only get their first letter capitalized —
+// Addresses: every word capitalised ("ERZENE MAH. ANKARA CAD. NO:172/67" → "Erzene Mah. Ankara Cad. No:172/67").
+// Words containing digits (postcodes like WC2H 0AR, flat numbers) and country codes stay as typed; Turkish
+// addresses keep their dotted/dotless i (İZMİR → İzmir, BULVARI → Bulvarı). Line breaks are kept.
+const ADDR_KEEP=new Set(['UK','USA','US','UAE','EU','PO','GB','TR']);
+const addrCase=s=>{
+  const t=(s||'').trim();
+  if(!t)return t;
+  // An address with any Turkish letter is Turkish throughout, so a plain I there is a dotless ı
+  const turkish=/[ÇĞİÖŞÜçğıöşü]/.test(t);
+  return t.replace(/[^\s\-\/:.,()]+/g,w=>{
+    if(/\d/.test(w)||ADDR_KEEP.has(w))return w;
+    const lower=[...w].map(ch=>ch==='İ'?'i':ch==='I'?(turkish?'ı':'i'):ch.toLowerCase()).join('');
+    const first=w[0];
+    const head=first===first.toLowerCase()?(first==='i'&&turkish?'İ':first.toUpperCase()):first;
+    return head+lower.slice(1);
+  });
+};
+// Address fields on a Sales & Procurement document
+const addrCaseDoc=d=>({
+  ...d,
+  ...(d.client?{client:{...d.client,address:addrCase(d.client.address)}}:{}),
+  ...(d.shipTo?{shipTo:{...d.shipTo,address:addrCase(d.shipTo.address)}}:{}),
+  ...('supplierAddress' in d?{supplierAddress:addrCase(d.supplierAddress)}:{}),
+});
+// Free-text fields (notes, descriptions) only get their first letter capitalized —
 // title-casing these would wrongly capitalize every word in a sentence.
 const toSentenceCase=s=>{
   const t=(s||'').trim();
