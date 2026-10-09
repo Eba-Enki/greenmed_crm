@@ -359,7 +359,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number',isRec?'Supplier':'Customer','Amount','Status'],...sorted.map(d=>[d.date,d.number,partyName(d),fmt(dt(d.items||[])),d.status])],type)}><Ico n="export"/>{tr("Export")}</Btn>
         </div>
         {filtered.length===0?(
-          <div className="tcard"><div className="empty"><Ico n={type==='invoice'?'invoice':isRec?'received':type==='po'?'po':'quote'} size={40}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div><div className="empty-s">{tr("Get started by creating one")}</div><Btn v="bp bsm" onClick={()=>{setCur(isRec?mkRec():mkDoc(type));go('off_form');}}><Ico n="plus"/>{tr("New {0}", lbl)}</Btn></div></div>
+          <div className="tcard"><div className="empty"><Ico n={type==='invoice'?'invoice':isRec?'received':type==='po'?'po':'quote'} size={40}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div></div></div>
         ):(
           <div className="tcard">
             <table className="dt">
