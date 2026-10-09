@@ -440,17 +440,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
     };
     return(<div className="content">
-      <div className="fbar">
-        <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search customer, quote no...")}/></div>
-        <select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search customer, quote no...")} active={[fs.s,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',dateFrom:'',dateTo:''}))} onExport={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...flatFiltered.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>
+        <FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
           <option value="">{tr("All Statuses")}</option>
           {['draft','sent','approved','locked','passive','closed'].map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}
-        </select>
-        <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder={tr("From")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder={tr("To")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <div style={{flex:1}}/>
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...flatFiltered.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}><Ico n="export"/>{tr("Export")}</Btn>
-      </div>
+        </select></FilterField>
+        <FilterField label={tr("From")}><input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))}/></FilterField>
+        <FilterField label={tr("To")}><input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))}/></FilterField>
+      </ListTools>
       <BulkBar bulk={bulk}>
         <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
         <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>{tr("Export")}</BulkBtn>
@@ -1048,16 +1045,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
     };
     return(<div className="content">
-      <div className="fbar">
-        <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search customer or invoice no...")}/></div>
-        <select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search customer or invoice no...")} active={[fs.s,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',dateFrom:'',dateTo:''}))} onExport={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...sorted.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}>
+        <FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
           <option value="">{tr("All Statuses")}</option><option value="draft">{tr("Draft")}</option><option value="sent">{tr("Sent")}</option>
-        </select>
-        <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder={tr("From")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder={tr("To")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <div style={{flex:1}}/>
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...sorted.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}><Ico n="export"/>{tr("Export")}</Btn>
-      </div>
+        </select></FilterField>
+        <FilterField label={tr("From")}><input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))}/></FilterField>
+        <FilterField label={tr("To")}><input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))}/></FilterField>
+      </ListTools>
       <BulkBar bulk={bulk}>
         <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
         <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...picked.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}>{tr("Export")}</BulkBtn>
@@ -1118,16 +1112,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const lbl=isPQ?tr('Received Quote'):isPO?tr('Purchase Order'):tr('Received Invoice');
     const linkChip=(label,num)=><span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(61,105,22,.09)',color:'#3D6916',border:'1px solid rgba(61,105,22,.18)'}}>{label} {num}</span>;
     return(<div className="content">
-      <div className="fbar">
-        <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search supplier or ref...")}/></div>
-        {isRI&&<select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search supplier or ref...")} active={[fs.s,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',dateFrom:'',dateTo:''}))} onExport={()=>exportExcel([['Date','Number','Supplier','Total',...(isRI?['Status']:[])],...sorted.map(d=>[d.date,d.number,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type)}>
+        {isRI&&<FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
           <option value="">{tr("All")}</option><option value="unpaid">{tr("Unpaid")}</option><option value="paid">{tr("Paid")}</option>
-        </select>}
-        <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder={tr("From")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder={tr("To")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <div style={{flex:1}}/>
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number','Supplier','Total',...(isRI?['Status']:[])],...sorted.map(d=>[d.date,d.number,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type)}><Ico n="export"/>{tr("Export")}</Btn>
-      </div>
+        </select></FilterField>}
+        <FilterField label={tr("From")}><input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))}/></FilterField>
+        <FilterField label={tr("To")}><input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))}/></FilterField>
+      </ListTools>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isRI?'received':'po'} size={38}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={isRI?[0.8,1,1,2,0.9,0.9,1.1,0.9]:[0.8,1,1,2,0.9,0.9,1.3]}/>
@@ -1502,12 +1493,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="st-tabs" role="tablist" style={{marginBottom:14}}>
         {[['match',tr('Matching')],['chain',tr('Supply Chain & Margins')]].map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} className={'st-tab'+(tab===k?' active':'')} onClick={()=>setFilter({tab:k})}>{l}</button>)}
       </div>
-      <div className="fbar">
-        <div className="fbar-s"><Ico n="search"/><input value={f.q} onChange={e=>setFilter({q:e.target.value})} placeholder={tr("Search customer or supplier item...")}/></div>
-        <select value={f.show} onChange={e=>setFilter({show:e.target.value})}>
+      <ListTools q={f.q} onQ={v=>setFilter({q:v})} placeholder={tr("Search customer or supplier item...")} active={[f.show].filter(Boolean).length} onClear={()=>setFilter({show:''})}>
+        <FilterField label={tr("Show")}><select value={f.show} onChange={e=>setFilter({show:e.target.value})}>
           <option value="">{tr("All items")}</option><option value="open">{tr("Not matched")}</option><option value="done">{tr("Matched")}</option>
-        </select>
-      </div>
+        </select></FilterField>
+      </ListTools>
       {tab==='chain'?renderChain():groups.map(({q,base,rows})=>{
         const sym=CURR[q.currency]||'£';
         const shown=rows.filter(visible);
@@ -1668,13 +1658,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const sorted=sortRows(filtered,sort,{date:p=>p.date,no:p=>p.quoteNum,code:p=>p.code,name:p=>p.name,qty:p=>+(p.qty||0),price:p=>+(p.price||0),
       purchasePrice:p=>+(p.purchasePrice||0),project:p=>p.projectId,customer:p=>p.customer});
     return(<div className="content">
-      <div className="fbar">
-        <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search item, customer, project...")}/></div>
-        <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <div style={{flex:1}}/>
-        <span style={{fontSize:12,color:'var(--g500)'}}>{tr("{0} items", filtered.length)}</span>
-      </div>
+      <ListTools q={q} onQ={setQ} placeholder={tr("Search item, customer, project...")} active={[dateFrom,dateTo].filter(Boolean).length} onClear={()=>{setDateFrom('');setDateTo('');}} extra={<><span className="lt-note">{tr("{0} items", filtered.length)}</span></>}>
+        <FilterField label={tr("From")}><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></FilterField>
+        <FilterField label={tr("To")}><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></FilterField>
+      </ListTools>
       <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{tr("All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.")}</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">{tr("Pool is empty")}</div><div className="empty-s">{tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
         <div className="tcard"><table className="dt">
@@ -1749,21 +1736,16 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const total=filtered.reduce((s,e)=>s+(+(e.amount||0)),0);
     const allCats=[...new Set(expenses.map(e=>e.category).filter(Boolean))];
     return(<div className="content">
-      <div className="fbar">
-        <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search...")}/></div>
-        <select value={fs.cat} onChange={e=>setFs(f=>({...f,cat:e.target.value}))}>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.cat,fs.p,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,cat:'',p:'',dateFrom:'',dateTo:''}))} onExport={()=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...sorted.map(e=>[e.date,e.employee,e.category,e.description,e.reference,e.amount,e.currency,e.project])],'expenses')} extra={<>{filtered.length>0&&<span className="lt-note">{tr("Total: £{0}", fmt(total))}</span>} <button className="lt-btn" onClick={()=>go('exp_import')}>{tr("Import Excel")}</button></>}>
+        <FilterField label={tr("Category")}><select value={fs.cat} onChange={e=>setFs(f=>({...f,cat:e.target.value}))}>
           <option value="">{tr("All Categories")}</option>{allCats.map(c=><option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={fs.p} onChange={e=>setFs(f=>({...f,p:e.target.value}))}>
+        </select></FilterField>
+        <FilterField label={tr("Project")}><select value={fs.p} onChange={e=>setFs(f=>({...f,p:e.target.value}))}>
           <option value="">{tr("All Projects")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
-        </select>
-        <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder={tr("From")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder={tr("To")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-        <div style={{flex:1}}/>
-        {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>{tr("Total: £{0}", fmt(total))}</span>}
-        <Btn v="bgh bsm" onClick={()=>go('exp_import')}><Ico n="upload"/>{tr("Import Excel")}</Btn>
-        <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...sorted.map(e=>[e.date,e.employee,e.category,e.description,e.reference,e.amount,e.currency,e.project])],'expenses')}><Ico n="export"/>{tr("Export")}</Btn>
-      </div>
+        </select></FilterField>
+        <FilterField label={tr("From")}><input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))}/></FilterField>
+        <FilterField label={tr("To")}><input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))}/></FilterField>
+      </ListTools>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">{tr("No expenses yet")}</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[0.8,1.2,1,2.4,1.2,0.9,0.6]}/>
@@ -1985,7 +1967,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const f=sortRows(customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()))),sort,
       {company:c=>c.company||c.contact,contact:c=>c.contact,email:c=>c.email,phone:c=>c.phone,type:typeLabel});
     return(<div className="content">
-      <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search...")}/></div><div style={{flex:1}}/></div>
+      <ListTools q={q} onQ={setQ} placeholder={tr("Search...")}/>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">{tr("No customers yet")}</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[2,1.4,1.8,1,0.7,0.6]}/>

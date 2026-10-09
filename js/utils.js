@@ -523,6 +523,7 @@ const I={
   pool:<svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
   back:<svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>,
   rev:<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>,
+  filter:<svg viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
   check:<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>,
   clipboard:<svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>,
   tag:<svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
@@ -582,6 +583,35 @@ function useStableComponents(defs){
   }
   return wrappers.current;
 }
+
+// ── List tools ──
+// Search, Filter and Export of a list. They sit at the right end of the page header's tab row (#ph-tools, see
+// PageHeader) so they stay in view while the list scrolls; pages without a tab row show them above the list.
+// The filter fields (children) open in a panel above the list when Filter is pressed; the button shows how many
+// filters are active while the panel is closed.
+function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children}){
+  const[target,setTarget]=useState(null);
+  const[open,setOpen]=useState(false);
+  React.useLayoutEffect(()=>{setTarget(document.getElementById('ph-tools'));},[]);
+  const hasFilters=React.Children.toArray(children).some(Boolean);
+  const tools=(<div className="ltools">
+    {onQ&&<div className="fbar-s lt-search"><Ico n="search"/><input value={q} onChange={e=>onQ(e.target.value)} placeholder={placeholder}/></div>}
+    {hasFilters&&<button className={'lt-btn'+(open?' on':'')} onClick={()=>setOpen(o=>!o)} aria-expanded={open}>
+      <Ico n="filter" size={13}/>{tr('Filter')}{active>0&&<span className="lt-count">{active}</span>}
+    </button>}
+    {extra}
+    {onExport&&<button className="lt-btn" onClick={onExport}>{tr('Export')}</button>}
+  </div>);
+  return(<>
+    {target?ReactDOM.createPortal(tools,target):<div className="lt-inline">{tools}</div>}
+    {open&&hasFilters&&<div className="fpanel">
+      {children}
+      <div style={{flex:1}}/>
+      {active>0&&onClear&&<button className="fp-clear" onClick={onClear}>{tr('Clear filters')}</button>}
+    </div>}
+  </>);
+}
+const FilterField=({label,children})=><label className="fp-f"><span>{label}</span>{children}</label>;
 
 // ── Bulk actions on lists ──
 // Row selection. `ids` are the rows the current filter shows (on every page); rows filtered out are never part
