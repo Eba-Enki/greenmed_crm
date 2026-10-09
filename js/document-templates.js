@@ -465,21 +465,39 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   // measure them; if they (or the signature below them) would not fit, they start on a new page.
   const summary=(lastRowY,draw)=>{
     const P=draw?pdf:{
-      text(){},line(){},
+      text(){},line(){},setDrawColor(){},setLineWidth(){},
       setFont:(...a)=>pdf.setFont(...a),
       setFontSize:(...a)=>pdf.setFontSize(...a),
       splitTextToSize:(...a)=>pdf.splitTextToSize(...a)
     };
-    const notesY=lastRowY+3;
+    const notesY=lastRowY+(opts.modern?5:3);
 
-    P.setFont('Arial','bold');
-    P.setFontSize(8);
-    P.text('Notes :',13.651,notesY+2.5);
-    P.setFont('Arial','normal');
-    // Notes wrap before the totals column; the Total In Words line below moves down to clear them
-    const noteLines=P.splitTextToSize(fixText(doc.notes||''),116);
-    noteLines.forEach((t,k)=>P.text(t,24,notesY+2.5+k*3.3));
-    const notesEndY=notesY+2.5+(noteLines.length-1)*3.3;
+    let notesEndY;
+    if(opts.modern){
+      // Sales letterhead: "TERMS AND CONDITIONS" laid out like the Bill To block — green rule, heading, then the notes
+      P.setDrawColor(150,194,112);
+      P.setLineWidth(0.6);
+      P.line(12.025,notesY,100.025,notesY);
+      P.setLineWidth(borderWidth);
+      P.setDrawColor(158,158,158);
+      P.setFont('Arial','bold');
+      P.setFontSize(9);
+      P.text('TERMS AND CONDITIONS',13.025,notesY+4.6);
+      P.setFont('Arial','normal');
+      P.setFontSize(8.5);
+      const noteLines=String(doc.notes||'').trim()?P.splitTextToSize(fixText(doc.notes),86):[];
+      noteLines.forEach((t,k)=>P.text(t,13.025,notesY+10.4+k*3.8));
+      notesEndY=noteLines.length?notesY+10.4+(noteLines.length-1)*3.8:notesY+4.6;
+    }else{
+      P.setFont('Arial','bold');
+      P.setFontSize(8);
+      P.text('Notes :',13.651,notesY+2.5);
+      P.setFont('Arial','normal');
+      // Notes wrap before the totals column; the Total In Words line below moves down to clear them
+      const noteLines=P.splitTextToSize(fixText(doc.notes||''),116);
+      noteLines.forEach((t,k)=>P.text(t,24,notesY+2.5+k*3.3));
+      notesEndY=notesY+2.5+(noteLines.length-1)*3.3;
+    }
 
     // Sub Total & Total
     const subTotalY=notesY+8;
