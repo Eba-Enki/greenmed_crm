@@ -13,6 +13,7 @@ const RECORD_KEYS = [
     'gm_users',
     'off_i', 'off_q', 'off_p', 'off_r', 'off_pr', 'off_cust', 'off_banktx', 'off_expcat', 'off_incomecat',
     'ops_cust', 'ops_proj', 'ops_sq', 'ops_si', 'ops_pq', 'ops_po', 'ops_ri', 'ops_exp', 'ops_expcat', 'ops_docs',
+    'ops_srcq', 'ops_srci', // source quotes / invoices the group company collects from its own suppliers
 ];
 const SETTING_KEYS = ['off_co', 'off_cnt', 'ops_co', 'ops_cnt', 'ops_pp'];
 const RAW_KEYS = ['gm_logo', 'gm_signature'];

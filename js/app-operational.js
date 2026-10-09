@@ -16,6 +16,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const[purchaseQuotes,setPurchaseQuotes]=useState([]);
   const[purchaseOrders,setPurchaseOrders]=useState([]);
   const[receivedInvoices,setReceivedInvoices]=useState([]);
+  // Quotes and invoices the group company (e.g. Egefe) collects from its own suppliers in Turkey
+  const[srcQuotes,setSrcQuotes]=useState([]);
+  const[srcInvoices,setSrcInvoices]=useState([]);
   const[purchasePrices,setPurchasePrices]=useState({});
   const[expenses,setExpenses]=useState([]);
   const[expCats,setExpCats]=useState([]);
@@ -68,6 +71,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     if(pq)setPurchaseQuotes(migratedPQ);
     if(po)setPurchaseOrders(migratedPO);
     if(ri)setReceivedInvoices(migratedRI);
+    const srq=load('srcq');if(srq)setSrcQuotes(srq);
+    const sri=load('srci');if(sri)setSrcInvoices(sri);
     if(pq&&migratedPQ.some((q,i)=>q!==pq[i]))LS.set(ns+'pq',migratedPQ);
     if(po&&migratedPO.some((p,i)=>p!==po[i]))LS.set(ns+'po',migratedPO);
     if(ri&&migratedRI.some((r,i)=>r!==ri[i]))LS.set(ns+'ri',migratedRI);
@@ -87,6 +92,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sPQ=d=>save('pq',setPurchaseQuotes,d);
   const sPO=d=>save('po',setPurchaseOrders,d);
   const sRI=d=>save('ri',setReceivedInvoices,d);
+  const sSRQ=d=>save('srcq',setSrcQuotes,d);
+  const sSRI=d=>save('srci',setSrcInvoices,d);
   const sPP=(id,price)=>{const next={...purchasePrices,[id]:price};setPurchasePrices(next);LS.set(ns+'pp',next);};
   const poolItems=salesQuotes.filter(q=>q.status!=='draft').flatMap(q=>(q.items||[]).filter(it=>it.desc).map(it=>({id:q.id+'_'+(it.id||''),projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',qty:it.qty,unit:it.unit||'',price:it.price,purchasePrice:purchasePrices[q.id+'_'+(it.id||'')]||'',quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''})));
   const sExp=d=>save('exp',setExpenses,d);
@@ -272,6 +279,45 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // fxRate is how many source-currency units one document-currency unit buys (entered by hand)
   const srcCur=d=>d.srcCurrency||'TRY';
   const srcInDocCur=(d,it)=>{const v=+(it.srcPrice||0);if(!v)return null;if(srcCur(d)===(d.currency||'GBP'))return v;const r=+(d.fxRate||0);return r>0?v/r:null;};
+  // ── SOURCE QUOTES / SOURCE INVOICES ──
+  // The group company collects quotes from its own suppliers (one record each, matched to the customer's lines), then
+  // quotes Green Med by transferring the chosen lines into a received quote. A source line is "pending" until a group
+  // quote uses it ("quoted", quotedIn) or uses another offer for the same customer line ("unused", unusedBy).
+  const mkSrcQuote=()=>({id:null,number:'',date:td(),supplierId:'',supplierCompany:'',currency:'TRY',project:'',projectNumber:'',sqBase:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
+  const mkSrcInvoice=q=>({id:null,number:'',date:td(),supplierId:(q&&q.supplierId)||'',supplierCompany:(q&&q.supplierCompany)||'',currency:(q&&q.currency)||'TRY',
+    project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',
+    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
+  const srcLineState=it=>it.status||'pending';
+  const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>i.desc||i.item).map(srcLineState);
+    if(!s.length||s.every(x=>x==='pending'))return'pending';if(s.every(x=>x==='unused'))return'unused';if(s.includes('pending'))return'partial';return'quoted';};
+  const SRC_STATE={pending:['To be quoted',''],partial:['Partly quoted',''],quoted:['Quoted','ok'],unused:['Not used','off']};
+  const SrcBadge=({s})=><span className={'mt-state '+SRC_STATE[s][1]}>{tr(SRC_STATE[s][0])}</span>;
+  // Invoice of a source line, if one was recorded
+  const srcInvoiceOf=lineId=>lineId?srcInvoices.find(v=>(v.items||[]).some(i=>i.srcId===lineId)):null;
+  // Re-marks the source lines after a group quote is saved (or deleted, removed=true)
+  const syncSrcStatus=(doc,removed)=>{
+    const lines=removed?[]:(doc.items||[]).filter(i=>i.srcq);
+    const used=new Set(lines.map(i=>i.srcq.lineId));
+    const usedKeys=new Set(lines.filter(i=>i.sqKey).map(i=>i.sqKey));
+    const ref={id:doc.id,number:doc.number||''};
+    let changed=false;
+    const next=srcQuotes.map(q=>{
+      let qChanged=false;
+      const items=(q.items||[]).map(it=>{
+        let n=it;
+        if((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id))n={...it,status:'pending',quotedIn:null,unusedBy:null};
+        if(used.has(it.id))n={...n,status:'quoted',quotedIn:ref,unusedBy:null};
+        else if(!removed&&srcLineState(n)==='pending'&&q.sqBase&&q.sqBase===doc.sqBase&&n.sqKey&&usedKeys.has(n.sqKey))n={...n,status:'unused',unusedBy:ref};
+        if(JSON.stringify(n)!==JSON.stringify(it))qChanged=true;
+        return n;
+      });
+      if(!qChanged)return q;
+      changed=true;return{...q,items};
+    });
+    if(changed)sSRQ(next);
+  };
+  const handleSaveSrcQ=q=>{const saved={...q,id:q.id||uid()};sSRQ(upsert(srcQuotes,saved));showToast(tr('Saved ✓'));go('source_quotes');};
+  const handleSaveSrcI=v=>{const saved={...v,id:v.id||uid()};sSRI(upsert(srcInvoices,saved));showToast(tr('Saved ✓'));go('source_invoices');};
   const SHIP_FIELDS=[['date','Ship Date','date'],['incoterm','Incoterm'],['carrier','Carrier'],['awb','AWB / BL No'],['gcb','Customs Declaration (GÇB) No']];
 
   // ── PROCUREMENT LOGIC ──
@@ -289,6 +335,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const pq=addrCaseDoc(pq0);
     const saved={...pq,id:pq.id||uid()};
     commitProc(syncMatchChain('pq',saved,{pq:upsert(purchaseQuotes,saved),po:purchaseOrders,ri:receivedInvoices}));
+    syncSrcStatus(saved);
     showToast(tr('Saved ✓'));go('purchase_quotes');
   };
   const handleConvertPQtoPO=(pq)=>{
@@ -356,6 +403,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   };
   const deletePQ=(id)=>{
     sPQ(purchaseQuotes.filter(x=>x.id!==id));
+    syncSrcStatus({id},true); // its source lines become available again
     sPO(purchaseOrders.map(p=>p.pqId===id?{...p,pqId:null,pqNum:''}:p));
   };
   const deletePO=(id)=>{
@@ -1171,6 +1219,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function ProcurementForm({doc:init,docType,onSave,onCancel}){
     const[doc,setDoc]=useState(init);
     const[items,setItems]=useState(init.items||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
+    const[xfer,setXfer]=useState(null); // "Transfer from source quotes" dialog: {cur,rate,markup,sel:{customer key: source line id}}
+    useEscape(()=>setXfer(null),!!xfer);
     const set=(p,v)=>setDoc(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...doc,items})!==_initStr.current;
@@ -1273,8 +1323,69 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <button className="bbgh bsm" onClick={()=>{set('shipToEnabled',false);set('shipTo.company','');set('shipTo.contact','');set('shipTo.email','');set('shipTo.phone','');set('shipTo.address','');set('shipTo.ref','');}} style={{fontSize:12,color:'var(--red)'}}><Ico n="x"/>{tr("Remove Ship To")}</button>
         </div>
       </div>}
-      <div className="fc"><div className="fct">{tr("Line Items")}</div>
+      <div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:10}}>{tr("Line Items")}<div style={{flex:1}}/>
+          {isPQ&&isGroupDoc(doc)&&doc.sqBase&&<Btn v="bgh bsm" onClick={()=>{
+            const sel={};items.forEach(i=>{if(i.srcq&&i.sqKey)sel[i.sqKey]=i.srcq.lineId;});
+            setXfer({cur:doc.srcCurrency||'TRY',rate:doc.fxRate||'',markup:doc.markup||'',sel});}}><Ico n="convert"/>{tr("Transfer from source quotes")}</Btn>}
+        </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
+        {isPQ&&isGroupDoc(doc)&&!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the project and sales quotation to transfer the collected source quotes.")}</div>}
+        {xfer&&(()=>{
+          const q=latestSQ(doc.sqBase);const dc=doc.currency||'GBP';
+          // Offers still open for this quote: pending lines, plus the ones this quote already uses or set aside
+          const open=srcQuotes.filter(s=>s.sqBase===doc.sqBase).flatMap(s=>(s.items||[]).filter(it=>it.sqKey&&(srcLineState(it)==='pending'||(doc.id&&((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id))))).map(it=>({s,it})));
+          const rows=q?(q.items||[]).map((ci,i)=>({ci,i,key:sqItemKey(ci),offers:open.filter(o=>o.it.sqKey===sqItemKey(ci))})):[];
+          const conv=p=>{const v=+p||0;if(!v)return null;const c=xfer.cur===dc?v:(+xfer.rate>0?v/+xfer.rate:null);return c==null?null:Math.round(c*(1+(+xfer.markup||0)/100)*100)/100;};
+          const pick=(key,id)=>setXfer(x=>({...x,sel:{...x.sel,[key]:id}}));
+          const chosen=rows.filter(r=>xfer.sel[r.key]&&r.offers.some(o=>o.it.id===xfer.sel[r.key]));
+          const needRate=xfer.cur!==dc&&!(+xfer.rate>0);
+          const apply=()=>{
+            const prev=Object.fromEntries(items.filter(i=>i.srcq).map(i=>[i.srcq.lineId,i]));
+            const picked=chosen.map(r=>{const o=r.offers.find(x=>x.it.id===xfer.sel[r.key]);const p=prev[o.it.id];
+              return{...(p||{}),id:(p&&p.id)||uid(),item:o.it.item||'',desc:o.it.desc||'',qty:o.it.qty,unit:o.it.unit||'',price:(v=>v==null?'':String(v))(conv(o.it.price)),
+                sqKey:r.key,srcSupplier:o.s.supplierCompany||'',srcDocNo:o.s.number||'',srcDocDate:o.s.date||'',srcPrice:o.it.price||'',srcq:{qid:o.s.id,lineId:o.it.id}};});
+            const manual=items.filter(i=>!i.srcq&&(i.desc||i.item||+i.price));
+            setItems(picked.length||manual.length?[...picked,...manual]:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
+            setDoc(d=>({...d,srcCurrency:xfer.cur,fxRate:xfer.rate,markup:xfer.markup}));
+            setXfer(null);
+          };
+          return(<div className="mt-overlay" onClick={()=>setXfer(null)}>
+            <div className="mt-dialog mt-dialog-lg" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+              <div className="mt-dialog-h">
+                <div><div className="mt-dialog-k">{tr("Transfer from source quotes")}</div><div className="mt-dialog-t">{q?q.number:''} · {doc.supplierCompany}</div></div>
+                <button className="ab" onClick={()=>setXfer(null)} aria-label={tr("Close")}><Ico n="x"/></button>
+              </div>
+              <div className="mt-dialog-b">
+                <div className="fg g3">
+                  <Fld label={tr("Source Currency")}><select className="fi" value={xfer.cur} onChange={e=>setXfer(x=>({...x,cur:e.target.value}))}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+                  {xfer.cur!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,xfer.cur)}><input className="fi" type="number" min="0" step="0.0001" value={xfer.rate} onChange={e=>setXfer(x=>({...x,rate:e.target.value}))} placeholder="0.0000"/></Fld>:<div/>}
+                  <Fld label={tr("Markup %")}><input className="fi" type="number" step="0.01" value={xfer.markup} onChange={e=>setXfer(x=>({...x,markup:e.target.value}))} placeholder="0"/></Fld>
+                </div>
+                <div style={{fontSize:12,color:'var(--g500)',margin:'4px 0 2px'}}>{tr('Pick one offer per customer item; the others become "Not used". Items left empty stay open for a later quote.')}</div>
+                {rows.length===0?<div className="empty"><div className="empty-t">{tr("The sales quotation has no items")}</div></div>:rows.map(r=><div key={r.key} className="xf-row">
+                  <div className="xf-cust"><span style={{color:'var(--g400)'}}>#{r.i+1}</span> {sqLineText(r.ci)} <span style={{color:'var(--g400)',fontWeight:400}}>· {r.ci.qty} {r.ci.unit||''}</span></div>
+                  {r.offers.length===0?<div className="xf-none">{tr("No open source quote for this item")}</div>:<>
+                    <label className={'mt-cand'+(!xfer.sel[r.key]?' on':'')}><input type="radio" name={'xf-'+r.key} checked={!xfer.sel[r.key]} onChange={()=>pick(r.key,'')}/><div style={{color:'var(--g500)'}}>{tr("Don't transfer now")}</div></label>
+                    {r.offers.map(({s,it})=>{const other=s.currency!==xfer.cur;const v=conv(it.price);return(
+                      <label key={it.id} className={'mt-cand'+(xfer.sel[r.key]===it.id?' on':'')+(other?' dis':'')}>
+                        <input type="radio" name={'xf-'+r.key} disabled={other} checked={xfer.sel[r.key]===it.id} onChange={()=>pick(r.key,it.id)}/>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{color:'var(--g900)'}}><b>{s.supplierCompany||'—'}</b> · {it.desc||it.item||'—'}</div>
+                          <div style={{fontSize:11,color:'var(--g500)',marginTop:2}}>{s.number||'—'} · {it.qty} {it.unit||''} × {CURR[s.currency]||s.currency}{fmt(+(it.price||0))}
+                            {other?<span className="mt-tag" style={{marginLeft:6}}>{tr("in {0} — change the source currency to use it",s.currency)}</span>:v!=null&&<b style={{color:'var(--gm-600)',marginLeft:6}}>→ {CURR[dc]||''}{fmt(v)}</b>}</div>
+                        </div>
+                      </label>);})}
+                  </>}
+                </div>)}
+              </div>
+              <div className="mt-dialog-f">
+                {needRate&&<span className="mt-none" style={{marginRight:'auto'}}>{tr("Enter the exchange rate")}</span>}
+                <Btn v="bgh bsm" onClick={()=>setXfer(null)}>{tr("Cancel")}</Btn>
+                <Btn v="bp bsm" disabled={needRate} onClick={apply}>{tr("Transfer {0} item(s)",chosen.length)}</Btn>
+              </div>
+            </div>
+          </div>);
+        })()}
         <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined}/>
       </div>
       {isGroupDoc(doc)&&(()=>{
@@ -1290,12 +1401,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
           <datalist id="src-suppliers">{srcNames.map(n=><option key={n} value={n}/>)}</datalist>
           <div className="iw" style={{marginTop:12}}><table className="ie">
-            <thead><tr><th style={{width:'4%'}}>#</th><th style={{width:'26%'}}>{tr("Line")}</th><th style={{width:'22%'}}>{tr("Source Supplier")}</th><th style={{width:'14%'}}>{tr("Source Invoice No")}</th><th style={{width:'12%'}}>{tr("Date")}</th><th style={{width:'11%',textAlign:'right'}}>{tr("Unit Price")} ({sc})</th><th style={{width:'11%',textAlign:'right'}}>= {dc}</th></tr></thead>
+            <thead><tr><th style={{width:'4%'}}>#</th><th style={{width:'26%'}}>{tr("Line")}</th><th style={{width:'22%'}}>{tr("Source Supplier")}</th><th style={{width:'14%'}}>{tr("Source Doc No")}</th><th style={{width:'12%'}}>{tr("Date")}</th><th style={{width:'11%',textAlign:'right'}}>{tr("Unit Price")} ({sc})</th><th style={{width:'11%',textAlign:'right'}}>= {dc}</th></tr></thead>
             <tbody>{items.map((it,i)=>{const conv=srcInDocCur({...doc,srcCurrency:sc},it);return(<tr key={it.id}>
               <td style={{color:'var(--g500)',paddingLeft:8}}>{i+1}</td>
               <td style={{color:'var(--g700)',fontSize:12,padding:'0 8px'}}>{it.desc||it.item||'—'}</td>
               <td><input list="src-suppliers" value={it.srcSupplier||''} onChange={e=>setLine(it.id,'srcSupplier',e.target.value)} placeholder={tr("Source supplier...")}/></td>
-              <td><input value={it.srcDocNo||''} onChange={e=>setLine(it.id,'srcDocNo',e.target.value)} placeholder={tr("Invoice no")}/></td>
+              <td><input value={it.srcDocNo||''} onChange={e=>setLine(it.id,'srcDocNo',e.target.value)} placeholder={tr("Quote / invoice no")}/></td>
               <td><input type="date" value={it.srcDocDate||''} onChange={e=>setLine(it.id,'srcDocDate',e.target.value)}/></td>
               <td><input type="number" min="0" step=".01" value={it.srcPrice||''} onChange={e=>setLine(it.id,'srcPrice',e.target.value)} placeholder="0.00" style={{textAlign:'right'}}/></td>
               <td className="lt" style={{color:conv==null?'var(--g300)':undefined}}>{conv==null?(+it.srcPrice?tr("rate?"):'—'):(CURR[dc]||'')+fmt(conv)}</td>
@@ -1331,6 +1442,144 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>}
       </div>
       <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>{tr("Save {0}", lbl)}</Btn></div>
+    </div></div>);
+  }
+
+  // Source quotes (kind 'q') and source invoices (kind 'i'): what the group company's own suppliers quoted / invoiced
+  function SourceList({kind}){
+    const isQ=kind==='q';
+    const docs=isQ?srcQuotes:srcInvoices;
+    const[fs,setFs]=useState({q:'',s:'',p:''});
+    const{sort,onSort}=useSort();
+    const[quickView,setQuickView]=useState(null);
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
+    const ql=fs.q.trim().toLowerCase();
+    const filtered=docs.filter(d=>{
+      if(ql&&![d.number,d.supplierCompany,d.srcqNumber,...(d.items||[]).map(i=>i.desc)].some(x=>(x||'').toLowerCase().includes(ql)))return false;
+      if(isQ&&fs.s&&srcQuoteState(d)!==fs.s)return false;
+      if(fs.p&&d.project!==fs.p)return false;
+      return true;
+    });
+    const sqNum=d=>{const q=latestSQ(d.sqBase);return q?q.number:'';};
+    const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,supplier:d=>d.supplierCompany,project:d=>d.project,sq:sqNum,src:d=>d.srcqNumber,total:d=>dt(d.items||[]),state:srcQuoteState});
+    const lbl=isQ?tr('Source Quote'):tr('Source Invoice');
+    const projNames=[...new Set(docs.map(d=>d.project).filter(Boolean))];
+    const del=d=>{
+      if(isQ&&(d.items||[]).some(i=>srcLineState(i)==='quoted')){showToast(tr('Used in a group company quote — remove it from that quote first'));return;}
+      askConfirm(tr("Delete this {0}?",lbl.toLowerCase()),()=>{isQ?sSRQ(srcQuotes.filter(x=>x.id!==d.id)):sSRI(srcInvoices.filter(x=>x.id!==d.id));showToast(tr('Deleted'));setQuickView(null);});
+    };
+    const lineNote=d=>it=>{
+      const base=sqItemNote(d)(it);
+      if(!isQ)return base;
+      const st=srcLineState(it);
+      const s=st==='quoted'?tr('Quoted in {0}',(it.quotedIn&&it.quotedIn.number)||'—'):st==='unused'?tr('Not used ({0})',(it.unusedBy&&it.unusedBy.number)||'—'):tr('To be quoted');
+      const inv=srcInvoiceOf(it.id);
+      return[base,s,inv&&tr('Invoice {0}',inv.number)].filter(Boolean).join('   ');
+    };
+    return(<div className="content">
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={isQ?tr("Search quote no, supplier or item..."):tr("Search invoice no, supplier or item...")}
+        active={[fs.s,fs.p].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',p:''}))}
+        onExport={()=>exportExcel([isQ?['Date','Quote No','Source Supplier','Project','Sales Quotation','Currency','Total','Status']:['Date','Invoice No','Source Supplier','Source Quote','Project','Currency','Total'],
+          ...sorted.map(d=>isQ?[d.date,d.number,d.supplierCompany,d.project,sqNum(d),d.currency,dt(d.items||[]),SRC_STATE[srcQuoteState(d)][0]]:[d.date,d.number,d.supplierCompany,d.srcqNumber||'',d.project,d.currency,dt(d.items||[])])],isQ?'source-quotes':'source-invoices')}>
+        {isQ&&<FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
+          <option value="">{tr("All")}</option>{Object.entries(SRC_STATE).map(([k,[l]])=><option key={k} value={k}>{tr(l)}</option>)}
+        </select></FilterField>}
+        <FilterField label={tr("Project")}><select value={fs.p} onChange={e=>setFs(f=>({...f,p:e.target.value}))}>
+          <option value="">{tr("All")}</option>{projNames.map(p=><option key={p} value={p}>{p}</option>)}
+        </select></FilterField>
+      </ListTools>
+      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isQ?'rq':'ri'} size={38}/>
+        <div className="empty-t">{docs.length?tr("No items match the filter"):isQ?tr("No source quotes yet"):tr("No source invoices yet")}</div>
+        {!docs.length&&<div className="empty-s">{isQ?tr("Enter each quote the group company collects from its suppliers, linked to the project and the customer's items."):tr("Create a source invoice from a source quote, or add one with + New.")}</div>}</div></div>:(
+        <div className="tcard"><table className="dt">
+          <Cg w={isQ?[0.8,1,1.6,1.2,1,0.9,1]:[0.8,1,1.6,1,1.2,0.9]}/>
+          <thead><tr>
+            <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
+            <SortTh k="no" sort={sort} onSort={onSort}>{isQ?tr("Quote No"):tr("Invoice No")}</SortTh>
+            <SortTh k="supplier" sort={sort} onSort={onSort}>{tr("Source Supplier")}</SortTh>
+            {!isQ&&<SortTh k="src" sort={sort} onSort={onSort}>{tr("Source Quote")}</SortTh>}
+            <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
+            {isQ&&<SortTh k="sq" sort={sort} onSort={onSort}>{tr("Sales Quotation")}</SortTh>}
+            <SortTh k="total" sort={sort} onSort={onSort} className="tar">{tr("Total")}</SortTh>
+            {isQ&&<SortTh k="state" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>}
+          </tr></thead>
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
+            <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+              <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+              <td><span className="dn">{d.number||'—'}</span></td>
+              <td style={{color:'var(--g800)'}}>{d.supplierCompany||'—'}</td>
+              {!isQ&&<td>{d.srcqNumber?<span className="mt-chip">{d.srcqNumber}</span>:<span style={{color:'var(--g300)'}}>—</span>}</td>}
+              <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
+              {isQ&&<td style={{color:'var(--g500)',fontSize:12}}>{sqNum(d)||'—'}</td>}
+              <td className="tar">{CURR[d.currency]||''}{fmt(dt(d.items||[]))}</td>
+              {isQ&&<td className="tac"><SrcBadge s={srcQuoteState(d)}/></td>}
+            </tr>
+          ))}</tbody>
+        </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
+      )}
+      {quickView&&<DocQuickModal doc={quickView} co={co} docType={isQ?'src_quote':'src_invoice'} noPdf itemNote={lineNote(quickView)} onClose={()=>setQuickView(null)}
+        onEdit={()=>{setQuickView(null);setCur(quickView);go(isQ?'source_quotes_form':'source_invoices_form');}}
+        onDelete={()=>del(quickView)}
+        extraActions={isQ?[{label:tr('Create Source Invoice'),onClick:()=>{setQuickView(null);setCur(mkSrcInvoice(quickView));go('source_invoices_form');}}]:[]}/>}
+    </div>);
+  }
+
+  function SourceForm({doc:init,kind,onSave,onCancel}){
+    const isQ=kind==='q';
+    const[doc,setDoc]=useState(init);
+    const[items,setItems]=useState(init.items||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
+    const set=(k,v)=>setDoc(d=>({...d,[k]:v}));
+    const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
+    const _isDirty=()=>JSON.stringify({...doc,items})!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=_isDirty;
+    const lbl=isQ?tr('Source Quote'):tr('Source Invoice');
+    const srcPick=customers.filter(c=>c.type==='source');
+    const sqChoices=[...new Set(salesQuotes.filter(q=>!doc.project||q.project===doc.project).map(sqBaseOf))].concat(doc.sqBase?[doc.sqBase]:[])
+      .filter((b,i,a)=>a.indexOf(b)===i).map(latestSQ).filter(Boolean);
+    const pickSQ=base=>{if(base===(doc.sqBase||''))return;const q=latestSQ(base);
+      setDoc(d=>({...d,sqBase:base,...(q&&!d.project&&q.project?{project:q.project,projectNumber:q.projectNumber||''}:{})}));
+      setItems(its=>its.map(i=>i.sqKey?{...i,sqKey:''}:i));};
+    const pickProject=name=>{const proj=projects.find(p=>p.name===name);const q=latestSQ(doc.sqBase);const keep=!q||!name||q.project===name;
+      setDoc(d=>({...d,project:name,projectNumber:proj?proj.number:'',...(keep?{}:{sqBase:''})}));if(!keep)setItems(its=>its.map(i=>i.sqKey?{...i,sqKey:''}:i));};
+    const used=isQ&&(init.items||[]).filter(i=>srcLineState(i)==='quoted').map(i=>i.quotedIn&&i.quotedIn.number).filter((v,i,a)=>v&&a.indexOf(v)===i);
+    const save=()=>{if(!(doc.number||'').trim()){showToast(isQ?tr('Enter the quote number'):tr('Enter the invoice number'));return;}onSave({...doc,number:doc.number.trim(),items});};
+    return(<div className="content"><div className="fw">
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
+        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}</h2>
+        <div style={{flex:1}}/>
+        <Btn v="bp bsm" onClick={save}>{tr("Save {0}",lbl)}</Btn>
+      </div>
+      {used&&used.length>0&&<div className="mt-banner">{tr("Lines of this quote are used in {0}. Changes here are not copied there.",used.join(', '))}</div>}
+      {!isQ&&doc.srcqNumber&&<div className="mt-banner">{tr("From source quote {0}",doc.srcqNumber)}</div>}
+      <div className="fc"><div className="fct">{tr("Document Details")}</div>
+        <div className="fg g4">
+          <Fld label={isQ?tr("Their Quote No *"):tr("Invoice No *")}><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" placeholder={isQ?tr("as on the filed quote"):tr("as on the invoice")}/></Fld>
+          <Fld label={tr("Date")}><input type="date" value={doc.date||''} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
+          <Fld label={tr("Currency")}><select value={doc.currency||'TRY'} onChange={e=>set('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+          <div/>
+        </div>
+        <div className="fg g2" style={{marginTop:12}}>
+          <Fld label={tr("Source Supplier")}><select value={doc.supplierId||''} onChange={e=>{const c=srcPick.find(x=>x.id===e.target.value);setDoc(d=>({...d,supplierId:c?c.id:'',supplierCompany:c?(c.company||c.contact||''):d.supplierCompany}));}} className="fi">
+            <option value="">{tr("— Select —")}</option>{srcPick.map(c=><option key={c.id} value={c.id}>{c.company||c.contact}</option>)}</select></Fld>
+          <Fld label={tr("Company Name")}><input value={doc.supplierCompany||''} onChange={e=>setDoc(d=>({...d,supplierCompany:e.target.value,supplierId:''}))} className="fi"/></Fld>
+        </div>
+        {srcPick.length===0&&<div style={{fontSize:12,color:'var(--g500)',marginTop:6}}>{tr('Tip: add the supplier under Customers with the relationship "Source Supplier" to pick it here.')}</div>}
+        <div className="fg g2" style={{marginTop:12}}>
+          <Fld label={tr("Project")}><select value={doc.project||''} onChange={e=>pickProject(e.target.value)} className="fi"><option value="">{tr("— None —")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
+          <Fld label={tr("Sales Quotation")}><select value={doc.sqBase||''} onChange={e=>pickSQ(e.target.value)} className="fi"><option value="">{tr("— None —")}</option>
+            {sqChoices.map(q=><option key={sqBaseOf(q)} value={sqBaseOf(q)}>{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</option>)}</select></Fld>
+        </div>
+      </div>
+      <div className="fc"><div className="fct">{tr("Line Items")}</div>
+        {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined}/>
+      </div>
+      <div className="fc"><div className="fct">{tr("Notes")}</div>
+        <Fld label={tr("Notes")}><textarea value={doc.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi"/></Fld>
+      </div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={save}>{tr("Save {0}",lbl)}</Btn></div>
     </div></div>);
   }
 
@@ -1443,7 +1692,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const slug=(project.number||project.name||'project').toLowerCase().replace(/[^a-z0-9]+/g,'-');
       const num=v=>v==null?'':Math.round(v*100)/100;
       if(tab==='chain'){
-        const head=['Quotation','#','Customer Item','Qty','Unit','Sale Currency','Sale','Bought From','Green Med Cost','Source Supplier','Source Invoice No','Source Currency','Source Cost','Source Cost (sale currency)','Green Med Margin','Group Co. Margin','Group Margin','Ship Date','Incoterm','Carrier','AWB / BL No','Customs Declaration (GÇB) No'];
+        const head=['Quotation','#','Customer Item','Qty','Unit','Sale Currency','Sale','Bought From','Green Med Cost','Source Supplier','Source Doc No','Source Invoice No','Source Currency','Source Cost','Source Cost (sale currency)','Green Med Margin','Group Co. Margin','Group Margin','Ship Date','Incoterm','Carrier','AWB / BL No','Customs Declaration (GÇB) No'];
         const rows=groups.flatMap(({q,rows})=>rows.filter(visible).map(r=>{
           const e=lineEconomics(q,r);const L=r.lines;const join=fn=>L.map(fn).filter(Boolean).join('; ');
           const grp=L.filter(({c})=>isGroupDoc(c.lead));
@@ -1451,7 +1700,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           const srcConv=grp.length?grp.reduce((s,{c,it})=>{const u=srcInDocCur(c.lead,it);return s==null||u==null?null:s+(+(it.qty||0))*u;},0):null;
           const sh=fn=>join(({c})=>c.po&&c.po.shipment&&c.po.shipment[fn]);
           return[q.number,r.i+1,sqLineText(r.it),+(r.it.qty||0),r.it.unit||'',q.currency||'GBP',num(e.sale),join(({c})=>c.lead.supplierCompany),num(e.buy),
-            join(({it})=>it.srcSupplier),join(({it})=>it.srcDocNo),grp.length?srcCur(grp[0].c.lead):'',num(srcTot),num(srcConv),num(e.gm),num(e.co),num(e.group),
+            join(({it})=>it.srcSupplier),join(({it})=>it.srcDocNo),join(({it})=>{const inv=it.srcq&&srcInvoiceOf(it.srcq.lineId);return inv&&inv.number;}),grp.length?srcCur(grp[0].c.lead):'',num(srcTot),num(srcConv),num(e.gm),num(e.co),num(e.group),
             sh('date'),sh('incoterm'),sh('carrier'),sh('awb'),sh('gcb')];
         }));
         exportExcel([head,...rows],`supply-chain-${slug}`);return;
@@ -1495,7 +1744,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <div>{CURR[c.lead.currency]||''}{fmt(+(s.qty||0)*+(s.price||0))}</div></div>):<span className="mt-none">{tr("Not matched")}</span>}</td>
               <td>{r.lines.map(({c,it:s})=>{if(!isGroupDoc(c.lead))return <div key={c.lead.id+s.id} className="mt-cell" style={{color:'var(--g400)'}}>{tr("direct purchase")}</div>;
                 const u=srcInDocCur(c.lead,s);return(<div key={c.lead.id+s.id} className="mt-cell">
-                  {s.srcSupplier?<b>{s.srcSupplier}</b>:<span className="mt-none">{tr("Source missing")}</span>}{s.srcDocNo&&<span style={{color:'var(--g500)'}}> · {s.srcDocNo}</span>}
+                  {s.srcSupplier?<b>{s.srcSupplier}</b>:<span className="mt-none">{tr("Source missing")}</span>}{s.srcDocNo&&<span style={{color:'var(--g500)'}}> · {s.srcDocNo}</span>}{(()=>{const inv=s.srcq&&srcInvoiceOf(s.srcq.lineId);return inv&&<span style={{color:'var(--g500)'}}> · {tr('Invoice {0}',inv.number)}</span>;})()}
                   <div>{+s.srcPrice?<>{CURR[srcCur(c.lead)]||''}{fmt(+(s.qty||0)*+s.srcPrice)}{u!=null&&srcCur(c.lead)!==(c.lead.currency||'GBP')&&<span style={{color:'var(--g500)'}}> ≈ {CURR[c.lead.currency]||''}{fmt(+(s.qty||0)*u)}</span>}{u==null&&<span className="mt-none"> · {tr("rate missing")}</span>}</>:<span style={{color:'var(--g300)'}}>—</span>}</div></div>);})}</td>
               <td className="tar" title={e.otherCur?tr('Invoiced in another currency'):''}>{marginCell(qc,e.gm,e.sale)}</td>
               <td className="tar">{e.hasGroup?marginCell(qc,e.co,e.sale):money(qc,null)}</td>
@@ -2412,6 +2661,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     {k:'purchase_quotes',ico:'rq',lbl:tr('Received Quotes'),cnt:purchaseQuotes.length,col:'ops_pq'},
     {k:'purchase_orders',ico:'po',lbl:tr('Purchase Orders'),cnt:purchaseOrders.length,col:'ops_po'},
     {k:'received_invoices',ico:'ri',lbl:tr('Received Invoices'),cnt:receivedInvoices.length,col:'ops_ri'},
+    {k:'source_quotes',ico:'rq',lbl:tr('Source Quotes'),cnt:srcQuotes.length,col:'ops_srcq'},
+    {k:'source_invoices',ico:'ri',lbl:tr('Source Invoices'),cnt:srcInvoices.length,col:'ops_srci'},
     {div:true},
     {group:tr('Project Management')},
     {k:'projects',ico:'project',lbl:tr('Projects'),cnt:projects.length,col:'ops_proj'},
@@ -2428,21 +2679,23 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const NAV=[{k:'home',ico:'home',lbl:tr('Dashboard')},...SB];
   const isNav=k=>view===k||view===k+'_form'||view===k+'_preview';
 
-  const titles={home:tr('Dashboard'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
+  const titles={home:tr('Dashboard'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),source_quotes:tr('Source Quotes'),source_invoices:tr('Source Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
-  const S=useStableComponents({SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
+  const S=useStableComponents({SourceList,SourceForm,SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
         <React.Fragment key={navSeq}>
-        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
+        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','source_quotes_form','source_invoices_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
           <PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={titles[view]||''}>
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
             {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si');setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>{tr("New Invoice")}</Btn>}
             {view==='purchase_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>{tr("New Received Quote")}</Btn>}
+            {view==='source_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkSrcQuote());go('source_quotes_form');}}><Ico n="plus"/>{tr("New Source Quote")}</Btn>}
+            {view==='source_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkSrcInvoice(null));go('source_invoices_form');}}><Ico n="plus"/>{tr("New Source Invoice")}</Btn>}
             {view==='purchase_orders'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>{tr("New Purchase Order")}</Btn>}
             {view==='received_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>{tr("New Received Invoice")}</Btn>}
             {view==='projects'&&<Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>{tr("New Project")}</Btn>}
@@ -2456,6 +2709,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {view==='sales_quotes'&&<S.SalesQuotesList/>}
         {view==='sales_invoices'&&<S.SalesInvoicesList/>}
         {view==='purchase_quotes'&&<S.ProcurementList type="pq" items={purchaseQuotes} title={tr("Received Quotes")}/>}
+        {view==='source_quotes'&&<S.SourceList kind="q"/>}
+        {view==='source_invoices'&&<S.SourceList kind="i"/>}
+        {view==='source_quotes_form'&&cur&&<S.SourceForm doc={cur} kind="q" onSave={handleSaveSrcQ} onCancel={()=>go('source_quotes')}/>}
+        {view==='source_invoices_form'&&cur&&<S.SourceForm doc={cur} kind="i" onSave={handleSaveSrcI} onCancel={()=>go('source_invoices')}/>}
         {view==='purchase_orders'&&<S.ProcurementList type="po" items={purchaseOrders} title={tr("Purchase Orders")}/>}
         {view==='received_invoices'&&<S.ProcurementList type="ri" items={receivedInvoices} title={tr("Received Invoices")}/>}
         {view==='projects'&&<S.ProjectsList/>}

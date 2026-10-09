@@ -72,7 +72,7 @@ const genProjNum=n=>`PRJ-${padN(n)}`;
 const API_BASE='api/';
 const SYNC_JSON_KEYS=['gm_users',
   'off_i','off_q','off_p','off_r','off_pr','off_cust','off_banktx','off_expcat','off_incomecat','off_co','off_cnt',
-  'ops_cust','ops_proj','ops_sq','ops_si','ops_pq','ops_po','ops_ri','ops_exp','ops_expcat','ops_docs','ops_co','ops_cnt','ops_pp'];
+  'ops_cust','ops_proj','ops_sq','ops_si','ops_pq','ops_po','ops_ri','ops_srcq','ops_srci','ops_exp','ops_expcat','ops_docs','ops_co','ops_cnt','ops_pp'];
 const SYNC_RAW_KEYS=['gm_logo','gm_signature'];
 const SYNC_SETTING_KEYS=['off_co','off_cnt','ops_co','ops_cnt','ops_pp',...SYNC_RAW_KEYS];
 const isSyncKey=k=>SYNC_JSON_KEYS.includes(k)||SYNC_RAW_KEYS.includes(k);
@@ -597,7 +597,7 @@ function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children})
     </button>}
     {onQ&&<div className="fbar-s lt-search"><Ico n="search"/><input value={q} onChange={e=>onQ(e.target.value)} placeholder={placeholder}/></div>}
     {extra}
-    {onExport&&<button className="lt-btn" onClick={onExport}>{tr('Export')}</button>}
+    {onExport&&<button className="lt-btn" onClick={onExport}><Ico n="export" size={13}/>{tr('Export to Excel')}</button>}
   </div>);
   return(<>
     <div className="lt-row"><div className="lt-left"/>{tools}</div>

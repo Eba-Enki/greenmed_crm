@@ -919,21 +919,22 @@ function DocPage({doc,co,docType}){
 
 // itemNote (optional): it=>text shown in small print under a line's description (in-app only, never on the PDF)
 function DocSummaryBody({doc,co,docType,itemNote}){
+  const isSrc=docType==='src_quote'||docType==='src_invoice'; // group company's source quote / invoice (supplier side, no ship-to)
   const sym=CURR[doc.currency]||'£';
   const total=dt(doc.items||[]);
   const isInv=docType==='invoice';
   const isPO=docType==='po';
   const isPQ=docType==='quote';
 
-  const typeLabel=isInv?'Commercial Invoice':docType==='sales_quote'?'Sales Quotation':isPO?'Purchase Order':isPQ?'Received Quote':'Document';
+  const typeLabel=isSrc?(docType==='src_quote'?'Source Quote':'Source Invoice'):isInv?'Commercial Invoice':docType==='sales_quote'?'Sales Quotation':isPO?'Purchase Order':isPQ?'Received Quote':'Document';
 
-  const partyLabel=(isPO||isPQ)?'Supplier':'Bill To';
-  const partyCompany=(isPO||isPQ)?(doc.supplierCompany||'—'):((doc.client&&doc.client.company)||'—');
-  const partyContact=(isPO||isPQ)?(doc.supplierContact||''):((doc.client&&doc.client.contact)||'');
-  const partyEmail=(isPO||isPQ)?(doc.supplierEmail||''):((doc.client&&doc.client.email)||'');
-  const partyAddr=(isPO||isPQ)?(doc.supplierAddress||''):((doc.client&&doc.client.address)||'');
+  const partyLabel=(isPO||isPQ||isSrc)?'Supplier':'Bill To';
+  const partyCompany=(isPO||isPQ||isSrc)?(doc.supplierCompany||'—'):((doc.client&&doc.client.company)||'—');
+  const partyContact=(isPO||isPQ||isSrc)?(doc.supplierContact||''):((doc.client&&doc.client.contact)||'');
+  const partyEmail=(isPO||isPQ||isSrc)?(doc.supplierEmail||''):((doc.client&&doc.client.email)||'');
+  const partyAddr=(isPO||isPQ||isSrc)?(doc.supplierAddress||''):((doc.client&&doc.client.address)||'');
 
-  const hasShipTo=((doc.shipToEnabled||doc.shipTo)&&!isPO)||isPQ||isPO;
+  const hasShipTo=!isSrc&&(((doc.shipToEnabled||doc.shipTo)&&!isPO)||isPQ||isPO);
   const shipTo=doc.shipTo||{};
 
   const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
@@ -1041,7 +1042,8 @@ function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
   );
 }
 
-function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfOpts,itemNote}){
+// noPdf: records that are only filed, never printed (source quotes / invoices)
+function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfOpts,itemNote,noPdf}){
   useEscape(onClose);
   const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
   const statusClass=statusMap[doc.status]||'b-draft';
@@ -1064,7 +1066,7 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
           <Btn v="bgh bsm" onClick={onClose}>{tr("Close")}</Btn>
           {onEdit&&<Btn v="bgh bsm" onClick={onEdit}>{tr("Edit")}</Btn>}
           {(extraActions||[]).map((a,i)=><Btn key={i} v="bgh bsm" onClick={a.onClick}>{a.label}</Btn>)}
-          <Btn v="bp bsm" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>{tr("Download PDF")}</Btn>
+          {!noPdf&&<Btn v="bp bsm" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>{tr("Download PDF")}</Btn>}
         </div>
       </div>
     </div>
