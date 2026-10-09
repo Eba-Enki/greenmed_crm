@@ -45,7 +45,7 @@ const docBank=(doc,co)=>{
   return same.find(b=>b.id===doc.bankId)||same.find(b=>b.isDefault)||same[0]||banks.find(b=>b.isDefault)||banks[0]||{};
 };
 
-// Sales & Procurement letterhead: horizontal logo, company lines, big title inside a grey arc (top right),
+// Sales & Procurement letterhead: horizontal logo, company lines, big two-line title (top right),
 // date/number, then Bill To and Ship To side by side between green rules. Returns the y where the table starts.
 let horizontalLogoPng=null;
 const loadHorizontalLogo=async()=>{
@@ -61,31 +61,16 @@ const drawModernHeader=async(pdf,ctx)=>{
   const{doc,co,typeTitle,isInv,isPO,isPQ,isSalesQuote,fixText,borderWidth,billLabel,bill,ship,hasShipTo}=ctx;
   const L=12.025,R=198.025;
   const GREEN=[150,194,112];  // --gm-300, the light brand green
-  const ARC=[154,165,168];
 
-  // Grey arc in the top-right corner
-  const cx=185.5,cy=0,r=37.5,a0=172,a1=58,steps=60;
-  pdf.setDrawColor(...ARC);
-  pdf.setLineWidth(0.9);
-  let prev=null;
-  for(let i=0;i<=steps;i++){
-    const a=(a0-(a0-a1)*i/steps)*Math.PI/180;
-    const pt=[cx+r*Math.cos(a),cy+r*Math.sin(a)];
-    if(prev)pdf.line(prev[0],prev[1],pt[0],pt[1]);
-    prev=pt;
-  }
-  const arcX=y=>cx-Math.sqrt(Math.max(0,r*r-(y-cy)*(y-cy)));
-
-  // Title on two lines (first word, then the rest), right-aligned inside the arc
+  // Title on two lines (first word, then the rest), right-aligned in the top-right corner
   const words=typeTitle.split(' ');
   const tLines=[words[0],words.slice(1).join(' ')].filter(Boolean);
-  const titleRight=196,base=[19,27.5];
   pdf.setTextColor(17,17,17);
   pdf.setFont('Arial','bold');
   let fs=20;
-  const fits=()=>{pdf.setFontSize(fs);return tLines.every((t,i)=>pdf.getTextWidth(t)<=titleRight-arcX(base[i])-3);};
+  const fits=()=>{pdf.setFontSize(fs);return tLines.every(t=>pdf.getTextWidth(t)<=80);};
   while(!fits()&&fs>12)fs-=0.5;
-  tLines.forEach((t,i)=>pdf.text(t,titleRight,base[i],{align:'right'}));
+  tLines.forEach((t,i)=>pdf.text(t,R,[22,30.5][i],{align:'right'}));
 
   // Logo
   try{pdf.addImage(await loadHorizontalLogo(),'PNG',L,21,52,52*18.9/85);}catch(e){console.error('Logo error:',e);}
@@ -103,7 +88,7 @@ const drawModernHeader=async(pdf,ctx)=>{
     const lw=pdf.getTextWidth(label+': ');
     pdf.text(label+':',L,iy);
     pdf.setFont('Arial','normal');
-    const lines=pdf.splitTextToSize(fixText(val),140-lw); // ends before the date block and below the arc
+    const lines=pdf.splitTextToSize(fixText(val),140-lw); // ends before the date block
     lines.forEach((t,k)=>pdf.text(t,L+lw,iy+k*3.9));
     iy+=lines.length*3.9;
   });
@@ -136,7 +121,7 @@ const drawModernHeader=async(pdf,ctx)=>{
     pdf.setFontSize(9);
     pdf.text(heading.toUpperCase(),x+1,y);
     y+=6;
-    pdf.text(fixText(p.company||'—'),x+1,y);
+    pdf.splitTextToSize(fixText(p.company||'—'),colW-2).forEach((t,k)=>{if(k)y+=4;pdf.text(t,x+1,y);});
     pdf.setFont('Arial','normal');
     pdf.setFontSize(8.5);
     [p.address,p.contact,p.email].filter(v=>v&&String(v).trim()).forEach(v=>{
