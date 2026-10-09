@@ -1392,12 +1392,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const sc=srcCur(doc),dc=doc.currency||'GBP';
         const setLine=(id,f,v)=>setItems(its=>its.map(i=>i.id===id?{...i,[f]:v}:i));
         const srcNames=customers.filter(c=>c.type==='source').map(c=>c.company||c.contact).filter(Boolean);
+        const anyXfer=items.some(i=>i.srcq);
         return(<div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Source Supplier")}<span className="mt-internal">{tr("internal — not printed")}</span></div>
-          <div style={{fontSize:12,color:'var(--g500)',marginBottom:12}}>{tr("Who sold each item to {0}, at what price.",doc.supplierCompany||tr('the group company'))}</div>
+          {/* Lines transferred from source quotes take their source data from there (read-only here); typed lines stay editable */}
+          <div style={{fontSize:12,color:'var(--g500)',marginBottom:12}}>{anyXfer
+            ?tr("Transferred lines come from the source quotes — edit the source quote to change them. The rate is used for the margins.")
+            :tr("Who sold each item to {0}, at what price.",doc.supplierCompany||tr('the group company'))}</div>
           <div className="fg g3">
-            <Fld label={tr("Source Currency")}><select value={sc} onChange={e=>set('srcCurrency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+            <Fld label={tr("Source Currency")}>{anyXfer?<input className="fi" value={`${sc} (${CURR[sc]||''})`} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/>
+              :<select value={sc} onChange={e=>set('srcCurrency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select>}</Fld>
             {sc!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,sc)}><input type="number" min="0" step="0.0001" value={doc.fxRate||''} onChange={e=>set('fxRate',e.target.value)} className="fi" placeholder="0.0000"/></Fld>:<div/>}
-            <div/>
+            {anyXfer&&doc.markup?<Fld label={tr("Markup % (at transfer)")}><input className="fi" value={doc.markup} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/></Fld>:<div/>}
           </div>
           <datalist id="src-suppliers">{srcNames.map(n=><option key={n} value={n}/>)}</datalist>
           <div className="iw" style={{marginTop:12}}><table className="ie">
@@ -1405,10 +1410,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <tbody>{items.map((it,i)=>{const conv=srcInDocCur({...doc,srcCurrency:sc},it);return(<tr key={it.id}>
               <td style={{color:'var(--g500)',paddingLeft:8}}>{i+1}</td>
               <td style={{color:'var(--g700)',fontSize:12,padding:'0 8px'}}>{it.desc||it.item||'—'}</td>
+              {it.srcq?<>
+                <td className="src-ro">{it.srcSupplier||'—'}</td>
+                <td className="src-ro">{it.srcDocNo||'—'} <span className="mt-tag ok">{tr("from source quote")}</span></td>
+                <td className="src-ro">{it.srcDocDate||'—'}</td>
+                <td className="src-ro" style={{textAlign:'right'}}>{fmt(+(it.srcPrice||0))}</td>
+              </>:<>
               <td><input list="src-suppliers" value={it.srcSupplier||''} onChange={e=>setLine(it.id,'srcSupplier',e.target.value)} placeholder={tr("Source supplier...")}/></td>
               <td><input value={it.srcDocNo||''} onChange={e=>setLine(it.id,'srcDocNo',e.target.value)} placeholder={tr("Quote / invoice no")}/></td>
               <td><input type="date" value={it.srcDocDate||''} onChange={e=>setLine(it.id,'srcDocDate',e.target.value)}/></td>
               <td><input type="number" min="0" step=".01" value={it.srcPrice||''} onChange={e=>setLine(it.id,'srcPrice',e.target.value)} placeholder="0.00" style={{textAlign:'right'}}/></td>
+              </>}
               <td className="lt" style={{color:conv==null?'var(--g300)':undefined}}>{conv==null?(+it.srcPrice?tr("rate?"):'—'):(CURR[dc]||'')+fmt(conv)}</td>
             </tr>);})}</tbody>
           </table></div>

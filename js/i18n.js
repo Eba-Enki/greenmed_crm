@@ -289,6 +289,8 @@ const I18N_TR={
   'From source quote {0}':'{0} kaynak teklifinden','Their Quote No *':'Firmanın Teklif No *','Invoice No *':'Fatura No *','as on the filed quote':'dosyalanan teklifteki gibi','as on the invoice':'faturadaki gibi',
   'Enter the quote number':'Teklif numarasını girin','Enter the invoice number':'Fatura numarasını girin',
   'Tip: add the supplier under Customers with the relationship "Source Supplier" to pick it here.':'İpucu: tedarikçiyi Müşteriler bölümünde "Kaynak Tedarikçi" ilişkisiyle eklerseniz burada seçebilirsiniz.',
+  'Transferred lines come from the source quotes — edit the source quote to change them. The rate is used for the margins.':'Aktarılan kalemler kaynak tekliflerden gelir — değiştirmek için kaynak teklifi düzenleyin. Kur, marj hesabında kullanılır.',
+  'Markup % (at transfer)':'Kâr Oranı % (aktarımda)','from source quote':'kaynak tekliften',
   'Transfer from source quotes':'Kaynak tekliflerden aktar','Markup %':'Kâr Oranı %','Source Doc No':'Kaynak Belge No','Quote / invoice no':'Teklif / fatura no',
   'Select the project and sales quotation to transfer the collected source quotes.':'Toplanan kaynak teklifleri aktarmak için proje ve satış teklifini seçin.',
   'Pick one offer per customer item; the others become "Not used". Items left empty stay open for a later quote.':'Her müşteri kalemi için bir teklif seçin; diğerleri "Kullanılmadı" olur. Boş bırakılan kalemler sonraki bir teklif için açık kalır.',
