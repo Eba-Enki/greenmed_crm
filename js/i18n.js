@@ -261,6 +261,8 @@ const I18N_TR={
   'Item Matching':'Kalem Eşleştirme','{0} / {1} matched':'{0} / {1} eşleşti','Not matched':'Eşleşmedi','Match':'Eşleştir','Remove match':'Eşleşmeyi kaldır',
   'Matched ✓':'Eşleştirildi ✓','Match removed':'Eşleşme kaldırıldı','Match supplier line to':'Tedarikçi kalemini eşleştir:',
   'matched to this item':'bu kaleme eşleşmiş','matched to {0}':'{0} ile eşleşmiş','RQ':'AT','PO':'SİP','INV':'FAT',
+  'All items':'Tüm kalemler','Matched':'Eşleşti','No items match the filter':'Filtreye uyan kalem yok','Search customer or supplier item...':'Müşteri veya tedarikçi kalemi ara...',
+  'No sales quotations in this project':'Bu projede satış teklifi yok','Customer items appear here once a sales quotation is saved with this project.':'Bu proje seçili bir satış teklifi kaydedildiğinde müşteri kalemleri burada görünür.',
   'No supplier documents in this project':'Bu projede tedarikçi belgesi yok',
   'Enter the received quote with this project selected, then match its lines here or in the quote itself.':'Alınan teklifi bu proje seçili olarak girin, ardından kalemlerini burada veya teklifin kendisinde eşleştirin.',
 };

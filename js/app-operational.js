@@ -1279,50 +1279,77 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     showToast(tr(key?'Matched ✓':'Match removed'));
   };
   const chainDocs=c=>[c.pq&&[tr('RQ'),c.pq.number],c.po&&[tr('PO'),c.po.number],c.ri&&[tr('INV'),c.ri.number]].filter(Boolean);
-  const DocChips=({c})=><span style={{display:'inline-flex',gap:4,flexWrap:'wrap'}}>{chainDocs(c).map(([k,n])=><span key={k} className="mt-chip">{k} {n||'—'}</span>)}</span>;
+  const DocChips=({c})=><span style={{display:'inline-flex',gap:4,flexWrap:'wrap'}}>{chainDocs(c).map(([k,n])=><span key={k} className="mt-chip">{n?`${k} ${n}`:k}</span>)}</span>;
+  // Customer lines of a project's sales quotations (latest revision of each) with the supplier lines matched to them
+  const projMatching=projName=>{
+    const chains=procChains(projName);
+    const linesFor=(base,key)=>chains.filter(c=>c.lead.sqBase===base).flatMap(c=>(c.lead.items||[]).filter(it=>it.sqKey===key).map(it=>({c,it})));
+    const groups=[...new Set(salesQuotes.filter(q=>q.project===projName).map(sqBaseOf))].map(latestSQ).filter(Boolean)
+      .map(q=>({q,base:sqBaseOf(q),rows:(q.items||[]).map((it,i)=>({it,i,key:sqItemKey(it),lines:linesFor(sqBaseOf(q),sqItemKey(it))}))}));
+    const all=groups.flatMap(g=>g.rows);
+    return{chains,groups,total:all.length,done:all.filter(r=>r.lines.length).length};
+  };
+  // Kept outside the page so its search and filter survive the re-render that follows each match
+  const matchFilterRef=useRef({q:'',show:''});
 
-  // Project detail: customer lines of each sales quotation next to the supplier lines matched to them
+  // Item Matching page of a project (opened from the project detail header)
   function ItemMatching({project}){
     const[pick,setPick]=useState(null); // customer line being matched: {base,key,label}
     const[sel,setSel]=useState('');
+    const[f,setF]=useState(matchFilterRef.current);
+    const setFilter=p=>{const n={...f,...p};matchFilterRef.current=n;setF(n);};
     useEscape(()=>setPick(null),!!pick);
-    const groups=[...new Set(salesQuotes.filter(q=>q.project===project.name).map(sqBaseOf))].map(latestSQ).filter(Boolean);
-    if(!groups.length)return null;
-    const chains=procChains(project.name);
-    const linesFor=(base,key)=>chains.filter(c=>c.lead.sqBase===base).flatMap(c=>(c.lead.items||[]).filter(it=>it.sqKey===key).map(it=>({c,it})));
+    const{chains,groups,total,done}=projMatching(project.name);
     const cands=pick?chains.filter(c=>!c.lead.sqBase||c.lead.sqBase===pick.base).flatMap(c=>(c.lead.items||[]).map(it=>({c,it}))):[];
     const lineNo=(base,key)=>{const q=latestSQ(base);const i=q?(q.items||[]).findIndex(x=>sqItemKey(x)===key):-1;return i<0?null:'#'+(i+1);};
-    return(<div style={{marginBottom:16}}>
-      {groups.map(q=>{
-        const base=sqBaseOf(q),sym=CURR[q.currency]||'£';
-        const rows=(q.items||[]).map((it,i)=>({it,i,key:sqItemKey(it),lines:linesFor(base,sqItemKey(it))}));
-        const done=rows.filter(r=>r.lines.length).length;
+    const ql=f.q.trim().toLowerCase();
+    const visible=r=>(f.show!=='open'||!r.lines.length)&&(f.show!=='done'||r.lines.length)
+      &&(!ql||[sqLineText(r.it),...r.lines.flatMap(({c,it})=>[c.lead.supplierCompany,it.desc,it.item])].some(x=>(x||'').toLowerCase().includes(ql)));
+    return(<div className="content">
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
+        <button onClick={()=>go('proj_detail')} className="mt-back"><Ico n="back"/>{project.number||tr("Project")}</button>
+        <h2 style={{fontSize:17,fontWeight:700,color:'var(--g900)'}}>{tr("Item Matching")} — {project.name}</h2>
+        {total>0&&<span className={done===total?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",done,total)}</span>}
+      </div>
+      {groups.length===0?<div className="tcard"><div className="empty"><Ico n="link" size={36}/><div className="empty-t">{tr("No sales quotations in this project")}</div><div className="empty-s">{tr("Customer items appear here once a sales quotation is saved with this project.")}</div></div></div>:<>
+      <div className="fbar">
+        <div className="fbar-s"><Ico n="search"/><input value={f.q} onChange={e=>setFilter({q:e.target.value})} placeholder={tr("Search customer or supplier item...")}/></div>
+        <select value={f.show} onChange={e=>setFilter({show:e.target.value})}>
+          <option value="">{tr("All items")}</option><option value="open">{tr("Not matched")}</option><option value="done">{tr("Matched")}</option>
+        </select>
+      </div>
+      {groups.map(({q,base,rows})=>{
+        const sym=CURR[q.currency]||'£';
+        const shown=rows.filter(visible);
+        const gDone=rows.filter(r=>r.lines.length).length;
         return(<div key={base} style={{marginBottom:16}}>
           <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}>
-            <div className="tcard-hdr-t">{tr("Item Matching")} · {q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
-            <span className={done===rows.length?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",done,rows.length)}</span>
+            <div className="tcard-hdr-t">{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
+            <span className={gDone===rows.length?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",gDone,rows.length)}</span>
           </div>
-          <div className="tcard"><table className="dt">
-            <Cg w={[0.35,2.2,0.6,0.9,3,0.9,0.7]}/>
-            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Sale Price")}</th><th>{tr("Supplier Item")}</th><th className="tar">{tr("Purchase Price")}</th><th/></tr></thead>
-            <tbody>{rows.map(({it,i,key,lines})=><tr key={key}>
-              <td style={{color:'var(--g500)'}}>{i+1}</td>
-              <td style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(it)}</td>
-              <td className="tar">{it.qty} {it.unit||''}</td>
-              <td className="tar">{sym}{fmt(+(it.price||0))}</td>
-              <td>{lines.length?lines.map(({c,it:s})=><div key={c.lead.id+s.id} className="mt-line">
-                  <div><b style={{color:'var(--g900)'}}>{c.lead.supplierCompany||'—'}</b> · {s.desc||s.item||'—'}</div>
-                  <DocChips c={c}/>
-                </div>):<span className="mt-none">{tr("Not matched")}</span>}</td>
-              <td className="tar">{lines.map(({c,it:s})=><div key={c.lead.id+s.id} className="mt-line">{CURR[c.lead.currency]||'£'}{fmt(+(s.price||0))}</div>)}</td>
-              <td><div className="aw">
-                <button className="ab" title={tr("Match")} aria-label={tr("Match")} onClick={()=>{setSel('');setPick({base,key,label:`#${i+1} ${sqLineText(it)}`});}}><Ico n="link"/></button>
-                {lines.map(({c,it:s})=><button key={c.lead.id+s.id} className="ab danger" title={tr("Remove match")} aria-label={tr("Remove match")} onClick={()=>setLineMatch(c,s.id,base,'')}><Ico n="x"/></button>)}
-              </div></td>
-            </tr>)}</tbody>
+          <div className="tcard"><table className="dt mt-tbl">
+            <Cg w={[0.4,2,0.65,1.15,1.3,1.9,2.65,1.45,0.8]}/>
+            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Sale Price")}</th><th>{tr("Supplier")}</th><th>{tr("Supplier Item")}</th><th>{tr("Documents")}</th><th className="tar">{tr("Purchase Price")}</th><th/></tr></thead>
+            <tbody>{shown.length===0?<tr><td colSpan={9}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
+            shown.flatMap(({it,i,key,lines})=>{
+              // One row per matched supplier line; the customer columns span them
+              const n=Math.max(1,lines.length);
+              const matchBtn=<button className="ab" title={tr("Match")} aria-label={tr("Match")} onClick={()=>{setSel('');setPick({base,key,label:`#${i+1} ${sqLineText(it)}`});}}><Ico n="link"/></button>;
+              const cust=[<td key="n" rowSpan={n} style={{color:'var(--g500)'}}>{i+1}</td>,<td key="d" rowSpan={n} style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(it)}</td>,
+                <td key="q" rowSpan={n} className="tar">{it.qty} {it.unit||''}</td>,<td key="p" rowSpan={n} className="tar">{sym}{fmt(+(it.price||0))}</td>];
+              if(!lines.length)return[<tr key={key}>{cust}<td colSpan={4}><span className="mt-none">{tr("Not matched")}</span></td><td><div className="aw">{matchBtn}</div></td></tr>];
+              return lines.map(({c,it:s},j)=><tr key={key+c.lead.id+s.id} className={j>0?'mt-sub':''}>
+                {j===0&&cust}
+                <td style={{color:'var(--g900)',fontWeight:500}}>{c.lead.supplierCompany||'—'}</td>
+                <td>{s.desc||s.item||'—'}</td>
+                <td><DocChips c={c}/></td>
+                <td className="tar">{CURR[c.lead.currency]||'£'}{fmt(+(s.price||0))}</td>
+                <td><div className="aw">{j===0&&matchBtn}<button className="ab danger" title={tr("Remove match")} aria-label={tr("Remove match")} onClick={()=>setLineMatch(c,s.id,base,'')}><Ico n="x"/></button></div></td>
+              </tr>);
+            })}</tbody>
           </table></div>
         </div>);
-      })}
+      })}</>}
       {pick&&<div className="mt-overlay" onClick={()=>setPick(null)}>
         <div className="mt-dialog" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
           <div className="mt-dialog-h">
@@ -1367,6 +1394,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <button onClick={()=>go('projects')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Projects")}</button>
         <h2 style={{fontSize:17,fontWeight:700,color:'var(--g900)'}}>{project.number?`${project.number} — `:''}  {project.name}</h2>
         <Badge s={project.status||'active'}/>
+        {(()=>{const m=projMatching(project.name);return <button className="mt-open" onClick={()=>{setCur(project);go('proj_matching');}}><Ico n="link"/>{tr("Item Matching")}{m.total>0&&<span className={m.done===m.total?'mt-count ok':'mt-count'}>{m.done}/{m.total}</span>}</button>;})()}
         <div style={{flex:1}}/>
         <button className="ab" onClick={()=>{setCur(project);go('proj_form');}}><Ico n="edit"/>{tr("Edit Project")}</button>
       </div>
@@ -1374,7 +1402,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="stats" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
         {[{lbl:tr('Revenue'),val:`£${fmt(revenue)}`,sub:tr("{0} invoices", pI.length),cls:'sc-green'},{lbl:tr('PO Costs'),val:`£${fmt(poTotal)}`,sub:tr("{0} orders", pPO.length),cls:'sc-blue'},{lbl:tr('Expenses'),val:`£${fmt(expTotal)}`,sub:tr("{0} items", pExp.length),cls:'sc-purple'},{lbl:tr('Net'),val:`£${fmt(revenue-poTotal-expTotal)}`,sub:tr('revenue - costs'),cls:revenue-poTotal-expTotal>=0?'sc-teal':'sc-red'}].map(s=><div key={s.lbl} className={`stat-card ${s.cls}`}><div className="stat-val">{s.val}</div><div className="stat-lbl">{s.lbl}</div><div className="stat-sub">{s.sub}</div></div>)}
       </div>
-      <ItemMatching project={project}/>
       {/* Sections */}
       {(()=>{
         const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>d.date};
@@ -2195,7 +2222,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const NAV=[{k:'home',ico:'home',lbl:tr('Dashboard')},...SB];
   const isNav=k=>view===k||view===k+'_form'||view===k+'_preview';
 
-  const titles={home:tr('Dashboard'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
+  const titles={home:tr('Dashboard'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
@@ -2225,6 +2252,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {view==='received_invoices'&&<ProcurementList type="ri" items={receivedInvoices} title={tr("Received Invoices")}/>}
         {view==='projects'&&<ProjectsList/>}
         {view==='proj_detail'&&cur&&<ProjectDetail project={cur}/>}
+        {view==='proj_matching'&&cur&&<ItemMatching project={cur}/>}
         {view==='product_pool'&&<ProductPoolView/>}
         {view==='expenses'&&<ExpensesView/>}
         {view==='customers'&&<CustomersView/>}
