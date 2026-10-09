@@ -1043,7 +1043,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         if(isPQ&&!quickView.linkedPO)extraActions.push({label:tr('Convert to Purchase Order'),onClick:()=>{setQuickView(null);handleConvertPQtoPO(quickView);}});
         if(isPO&&!quickView.linkedRI)extraActions.push({label:tr('Create Received Invoice'),onClick:()=>{setQuickView(null);handleConvertPOtoRI(quickView);}});
         if(isRI&&quickView.status==='unpaid')extraActions.push({label:tr('Mark as Paid'),onClick:()=>{sRI(receivedInvoices.map(x=>x.id===quickView.id?{...x,status:'paid'}:x));showToast(tr('Marked as paid'));setQuickView(null);}});
-        return(<DocQuickModal doc={quickView} co={co} docType={isPO?'po':isRI?'invoice':'quote'} onClose={()=>setQuickView(null)}
+        return(<DocQuickModal doc={quickView} co={co} docType={isPO?'po':isRI?'invoice':'quote'} pdfOpts={SALES_PDF} onClose={()=>setQuickView(null)}
           onEdit={()=>{setQuickView(null);setCur(quickView);go(isPQ?'pq_form':isPO?'po_form':'ri_form');}}
           onDelete={()=>askConfirm(tr("Delete this {0}?", lbl.toLowerCase()),()=>{isPQ?deletePQ(quickView.id):isPO?deletePO(quickView.id):deleteRI(quickView.id);showToast(tr('Deleted'));setQuickView(null);})}
           extraActions={extraActions}/>);
@@ -1070,7 +1070,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}", lbl):tr("New {0}", lbl)}</h2>
         <div style={{flex:1}}/>
-        <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,isPO?'po':isRI?'invoice':'quote')}><Ico n="dl"/>{tr("PDF")}</Btn>
+        <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,isPO?'po':isRI?'invoice':'quote',SALES_PDF)}><Ico n="dl"/>{tr("PDF")}</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>{tr("Save {0}", lbl)}</Btn>
       </div>
       {doc.pqNum&&<div style={{background:'var(--teall)',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--teal)'}}>{tr("From Purchase Quotation:")} <strong>{doc.pqNum}</strong></div>}
@@ -1873,6 +1873,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <div className="fg" style={{alignContent:'start'}}>
               <Fld label={tr("Email")}><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi" placeholder="info@company.com"/></Fld>
               <Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi" placeholder="+44 20 0000 0000"/></Fld>
+              <Fld label="UTR"><input value={c.utr||''} onChange={e=>s('utr',e.target.value)} className="fi" placeholder="12345 67890"/></Fld>
             </div>
           </div>
         </div>
@@ -2091,9 +2092,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {/* PREVIEWS */}
         {view==='sales_quote_preview'&&cur&&<Preview doc={cur} co={co} docType="sales_quote" pdfOpts={FULL_BANK} onBack={()=>go(prev)} onEdit={()=>{go('sales_quote_form','sales_quote_preview');}}/>}
         {view==='sales_invoice_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" pdfOpts={FULL_BANK} onBack={()=>go(prev)}/>}
-        {view==='pq_preview'&&cur&&<Preview doc={cur} co={co} docType="quote" onBack={()=>go('purchase_quotes')}/>}
-        {view==='po_preview'&&cur&&<Preview doc={cur} co={co} docType="po" onBack={()=>go('purchase_orders')}/>}
-        {view==='ri_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" onBack={()=>go('received_invoices')}/>}
+        {view==='pq_preview'&&cur&&<Preview doc={cur} co={co} docType="quote" pdfOpts={SALES_PDF} onBack={()=>go('purchase_quotes')}/>}
+        {view==='po_preview'&&cur&&<Preview doc={cur} co={co} docType="po" pdfOpts={SALES_PDF} onBack={()=>go('purchase_orders')}/>}
+        {view==='ri_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" pdfOpts={SALES_PDF} onBack={()=>go('received_invoices')}/>}
       </div>
       {toast&&<div className="toast">{toast}</div>}
       {confirmDlg&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setConfirmDlg(null)}>
@@ -2115,7 +2116,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 // row) on every save, since AppOperational recreating a nested function component each render
 // gives React a new component identity to mount.
 // Sales quotations and invoices print the full bank block on their PDF
-const FULL_BANK={fullBank:true};
+// Sales & Procurement PDFs use the modern letterhead; sales quotations/invoices also print the full bank block
+const SALES_PDF={modern:true};
+const FULL_BANK={fullBank:true,modern:true};
 // Picks which of the company's accounts in the document's currency is printed on the PDF (stored as doc.bankId)
 function BankSelect({doc,banks,onChange,disabled}){
   const cur=doc.currency||'GBP';

@@ -45,7 +45,131 @@ const docBank=(doc,co)=>{
   return same.find(b=>b.id===doc.bankId)||same.find(b=>b.isDefault)||same[0]||banks.find(b=>b.isDefault)||banks[0]||{};
 };
 
+// Sales & Procurement letterhead: horizontal logo, company lines, big title inside a grey arc (top right),
+// date/number, then Bill To and Ship To side by side between green rules. Returns the y where the table starts.
+let horizontalLogoPng=null;
+const loadHorizontalLogo=async()=>{
+  if(horizontalLogoPng)return horizontalLogoPng;
+  const svg=await (await fetch('brand_assets/logo/logo_horizontal.svg')).text();
+  // The file has wide empty margins; crop the view box to the artwork (x 8.6–93.6, y 9.2–28.1)
+  const cropped=svg.replace(/viewBox="[^"]*"/,'viewBox="8.6 9.2 85 18.9" width="850" height="189"');
+  horizontalLogoPng=await svgToPngDataUrl('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(cropped),52,52*18.9/85);
+  return horizontalLogoPng;
+};
+
+const drawModernHeader=async(pdf,ctx)=>{
+  const{doc,co,typeTitle,isInv,isPO,isPQ,isSalesQuote,fixText,borderWidth,billLabel,bill,ship,hasShipTo}=ctx;
+  const L=12.025,R=198.025;
+  const GREEN=[150,194,112];  // --gm-300, the light brand green
+  const ARC=[154,165,168];
+
+  // Grey arc in the top-right corner
+  const cx=185.5,cy=0,r=37.5,a0=172,a1=58,steps=60;
+  pdf.setDrawColor(...ARC);
+  pdf.setLineWidth(0.9);
+  let prev=null;
+  for(let i=0;i<=steps;i++){
+    const a=(a0-(a0-a1)*i/steps)*Math.PI/180;
+    const pt=[cx+r*Math.cos(a),cy+r*Math.sin(a)];
+    if(prev)pdf.line(prev[0],prev[1],pt[0],pt[1]);
+    prev=pt;
+  }
+  const arcX=y=>cx-Math.sqrt(Math.max(0,r*r-(y-cy)*(y-cy)));
+
+  // Title on two lines (first word, then the rest), right-aligned inside the arc
+  const words=typeTitle.split(' ');
+  const tLines=[words[0],words.slice(1).join(' ')].filter(Boolean);
+  const titleRight=196,base=[19,27.5];
+  pdf.setTextColor(17,17,17);
+  pdf.setFont('Arial','bold');
+  let fs=20;
+  const fits=()=>{pdf.setFontSize(fs);return tLines.every((t,i)=>pdf.getTextWidth(t)<=titleRight-arcX(base[i])-3);};
+  while(!fits()&&fs>12)fs-=0.5;
+  tLines.forEach((t,i)=>pdf.text(t,titleRight,base[i],{align:'right'}));
+
+  // Logo
+  try{pdf.addImage(await loadHorizontalLogo(),'PNG',L,21,52,52*18.9/85);}catch(e){console.error('Logo error:',e);}
+
+  // Company lines: bold label + value; empty ones are left out
+  const info=[
+    ['Address',(co.address||'').split('\n').map(s=>s.trim()).filter(Boolean).join(', ')],
+    ['Phone',co.phone||''],
+    ['UTR',co.utr||''],
+  ].filter(([,v])=>String(v).trim());
+  pdf.setFontSize(9);
+  let iy=40.5;
+  info.forEach(([label,val])=>{
+    pdf.setFont('Arial','bold');
+    const lw=pdf.getTextWidth(label+': ');
+    pdf.text(label+':',L,iy);
+    pdf.setFont('Arial','normal');
+    const lines=pdf.splitTextToSize(fixText(val),140-lw); // ends before the date block and below the arc
+    lines.forEach((t,k)=>pdf.text(t,L+lw,iy+k*3.9));
+    iy+=lines.length*3.9;
+  });
+  const infoEnd=iy-3.9;
+
+  // Date / number block, right-aligned on the labels' colons
+  const numLabel=isInv?'INVOICE NUMBER':isSalesQuote?'QUOTE NUMBER':isPO?'PO NUMBER':isPQ?'QUOTE NUMBER':'NUMBER';
+  const meta=[['DATE',doc.date||td()],[numLabel,doc.number||'']];
+  if(isInv&&doc.quoteNum)meta.push(['PI NUMBER',doc.quoteNum]);
+  pdf.setFont('Arial','normal');
+  pdf.setFontSize(9);
+  const valW=Math.max(...meta.map(([,v])=>pdf.getTextWidth(fixText(v))));
+  const colonX=R-valW-2.5;
+  let my=48;
+  meta.forEach(([label,val])=>{
+    pdf.setFont('Arial','bold');
+    pdf.text(label+' :',colonX,my,{align:'right'});
+    pdf.setFont('Arial','normal');
+    pdf.text(fixText(val),colonX+1.5,my);
+    my+=4;
+  });
+  const metaEnd=my-4;
+
+  // Bill To / Ship To between green rules
+  const top=Math.max(infoEnd,metaEnd)+5;
+  const colW=88;
+  const block=(x,heading,p)=>{
+    let y=top+4.6;
+    pdf.setFont('Arial','bold');
+    pdf.setFontSize(9);
+    pdf.text(heading.toUpperCase(),x+1,y);
+    y+=6;
+    pdf.text(fixText(p.company||'—'),x+1,y);
+    pdf.setFont('Arial','normal');
+    pdf.setFontSize(8.5);
+    [p.address,p.contact,p.email].filter(v=>v&&String(v).trim()).forEach(v=>{
+      pdf.splitTextToSize(fixText(v),colW-2).forEach(t=>{y+=3.8;pdf.text(t,x+1,y);});
+    });
+    return y;
+  };
+  const endL=block(L,billLabel,bill);
+  const endR=hasShipTo?block(R-colW,'Ship To',ship):top;
+  const bottom=Math.max(endL,endR)+3.5;
+  pdf.setDrawColor(...GREEN);
+  pdf.setLineWidth(0.6);
+  pdf.line(L,top,L+colW,top);pdf.line(L,bottom,L+colW,bottom);
+  if(hasShipTo){pdf.line(R-colW,top,R,top);pdf.line(R-colW,bottom,R,bottom);}
+
+  // Project No & Terms (only when filled in)
+  pdf.setLineWidth(borderWidth);
+  pdf.setDrawColor(158,158,158);
+  let tableY=bottom+4;
+  if(String(doc.projectNumber||'').trim()||String(doc.terms||'').trim()){
+    const ry=bottom+5.5;
+    pdf.setFontSize(8);
+    pdf.setFont('Arial','bold');pdf.text('Project No',L+1,ry);
+    pdf.setFont('Arial','normal');pdf.text(': '+fixText(doc.projectNumber||''),L+27,ry);
+    pdf.setFont('Arial','bold');pdf.text('Terms',96,ry);
+    pdf.setFont('Arial','normal');pdf.text(': '+fixText(doc.terms||''),122,ry);
+    tableY=bottom+9;
+  }
+  return tableY;
+};
+
 // opts.fullBank: print the full bank block (account name, number, IBAN, SWIFT/BIC, currency, bank name and address)
+// opts.modern: Sales & Procurement letterhead (drawModernHeader) and no page frame
 const buildStandardPDF=async(doc,co,type,opts={})=>{
   await ensurePDF();
   const {jsPDF}=window.jspdf;
@@ -95,128 +219,137 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   pdf.setLineWidth(borderWidth);
   pdf.setDrawColor(158,158,158); // #9E9E9E
   
-  // Frame
-  pdf.rect(12.025,17.965,186,261);
+  let modernTableY=0;
+  if(opts.modern){
+    modernTableY=await drawModernHeader(pdf,{doc,co,typeTitle,isInv,isPO,isPQ,isSalesQuote,fixText,borderWidth,
+      billLabel:isPO?'Vendor':isPQ?'Supplier':'Bill To',
+      bill:{company:billCompany,address:billAddr,contact:billContact,email:billEmail},
+      ship:{company:shipCompany,address:shipAddr,contact:shipContact,email:shipEmail},hasShipTo});
+  }else{
+    // Frame
+    pdf.rect(12.025,17.965,186,261);
   
-  // Logo - always read fresh from localStorage
-  const pdfLogo=getLogo()||co.logo||'';
-  if(pdfLogo){
-    try{
-      if(pdfLogo.startsWith('data:image/svg')){
-        const pngLogo=await svgToPngDataUrl(pdfLogo,27.20,20.4);
-        pdf.addImage(pngLogo,'PNG',16.031,20.511,27.20,20.4);
-      }else{
-        const imgFormat=pdfLogo.startsWith('data:image/png')?'PNG':pdfLogo.startsWith('data:image/jpeg')||pdfLogo.startsWith('data:image/jpg')?'JPEG':'PNG';
-        pdf.addImage(pdfLogo,imgFormat,16.031,20.511,27.20,20.4);
-      }
-    }catch(e){console.error('Logo error:',e);}
-  }
+    // Logo - always read fresh from localStorage
+    const pdfLogo=getLogo()||co.logo||'';
+    if(pdfLogo){
+      try{
+        if(pdfLogo.startsWith('data:image/svg')){
+          const pngLogo=await svgToPngDataUrl(pdfLogo,27.20,20.4);
+          pdf.addImage(pngLogo,'PNG',16.031,20.511,27.20,20.4);
+        }else{
+          const imgFormat=pdfLogo.startsWith('data:image/png')?'PNG':pdfLogo.startsWith('data:image/jpeg')||pdfLogo.startsWith('data:image/jpg')?'JPEG':'PNG';
+          pdf.addImage(pdfLogo,imgFormat,16.031,20.511,27.20,20.4);
+        }
+      }catch(e){console.error('Logo error:',e);}
+    }
   
-  // Company Name
-  pdf.setFont('Arial','bold');
-  pdf.setFontSize(12);
-  pdf.text(fixText(co.name||'Green Med Ltd'),46.724,24.308+3); // +3 for baseline
-  
-  // Company Address
-  pdf.setFont('Arial','normal');
-  pdf.setFontSize(8);
-  if(addrLines[0])pdf.text(fixText(addrLines[0]),46.724,29.105+2.5);
-  if(addrLines[1])pdf.text(fixText(addrLines[1]),46.724,32.376+2.5);
-  if(addrLines[2])pdf.text(fixText(addrLines[2]),46.724,35.642+2.5);
-  if(addrLines[3])pdf.text(fixText(addrLines[3]),46.724,38.909+2.5);
-  
-  // Title
-  pdf.setFont('Arial','bold');
-  pdf.setFontSize(14);
-  // Title: right-aligned, 3mm from right frame edge (198.025-3=195.025mm)
-  pdf.setTextColor(17,17,17);
-  pdf.text(typeTitle,195.025,24.384+4,{align:'right'});
-  
-  // Invoice# & Date (+PI No for invoices)
-  pdf.setFontSize(10);
-  pdf.text(docLabel,149.437,31.173+3);
-  pdf.text(': '+(doc.number||''),175.122,31.173+3);
-  pdf.text('Date',149.437,36.602+3);
-  pdf.text(': '+(doc.date||td()),175.122,36.602+3);
-  if(isInv&&doc.quoteNum){
-    pdf.text('PI No#',149.437,42.031+3);
-    pdf.text(': '+doc.quoteNum,175.122,42.031+3);
-  }
-  
-  // Horizontal Line 1
-  pdf.line(12.025,47.664,198.025,47.664);
-  
-  // Bill To / Supplier Section
-  const billLabel=isPO?'Vendor':isPQ?'Supplier':'Bill To';
-  pdf.setFont('Arial','bold');
-  pdf.setFontSize(8);
-  pdf.text(billLabel,16.031,49.546+2.5);
-  pdf.setFont('Arial','normal');
-  pdf.text(': '+fixText(billCompany),42.948,49.546+2.5);
-  
-  pdf.setFont('Arial','bold');
-  pdf.text('Address',16.031,54.256+2.5);
-  pdf.setFont('Arial','normal');
-  pdf.text(': '+fixText(billAddr),42.948,54.256+2.5);
-  
-  pdf.setFont('Arial','bold');
-  pdf.text('Contact Person',16.031,58.966+2.5);
-  pdf.setFont('Arial','normal');
-  pdf.text(': '+fixText(billContact),42.948,58.966+2.5);
-  
-  pdf.setFont('Arial','bold');
-  pdf.text('e-mail',16.031,63.676+2.5);
-  pdf.setFont('Arial','normal');
-  pdf.text(': '+fixText(billEmail),42.948,63.676+2.5);
-  
-  // Separator line between Bill To and Ship To (if Ship To exists)
-  if(hasShipTo){
-    pdf.line(12.025,67.5,198.025,67.5); // Centered between sections
-  }
-  
-  // Ship To Section
-  if(hasShipTo){
+    // Company Name
     pdf.setFont('Arial','bold');
-    pdf.text('Ship To',16.031,70.035+2.5);
+    pdf.setFontSize(12);
+    pdf.text(fixText(co.name||'Green Med Ltd'),46.724,24.308+3); // +3 for baseline
+  
+    // Company Address
     pdf.setFont('Arial','normal');
-    pdf.text(': '+fixText(shipCompany),42.948,70.035+2.5);
+    pdf.setFontSize(8);
+    if(addrLines[0])pdf.text(fixText(addrLines[0]),46.724,29.105+2.5);
+    if(addrLines[1])pdf.text(fixText(addrLines[1]),46.724,32.376+2.5);
+    if(addrLines[2])pdf.text(fixText(addrLines[2]),46.724,35.642+2.5);
+    if(addrLines[3])pdf.text(fixText(addrLines[3]),46.724,38.909+2.5);
+  
+    // Title
+    pdf.setFont('Arial','bold');
+    pdf.setFontSize(14);
+    // Title: right-aligned, 3mm from right frame edge (198.025-3=195.025mm)
+    pdf.setTextColor(17,17,17);
+    pdf.text(typeTitle,195.025,24.384+4,{align:'right'});
+  
+    // Invoice# & Date (+PI No for invoices)
+    pdf.setFontSize(10);
+    pdf.text(docLabel,149.437,31.173+3);
+    pdf.text(': '+(doc.number||''),175.122,31.173+3);
+    pdf.text('Date',149.437,36.602+3);
+    pdf.text(': '+(doc.date||td()),175.122,36.602+3);
+    if(isInv&&doc.quoteNum){
+      pdf.text('PI No#',149.437,42.031+3);
+      pdf.text(': '+doc.quoteNum,175.122,42.031+3);
+    }
+  
+    // Horizontal Line 1
+    pdf.line(12.025,47.664,198.025,47.664);
+  
+    // Bill To / Supplier Section
+    const billLabel=isPO?'Vendor':isPQ?'Supplier':'Bill To';
+    pdf.setFont('Arial','bold');
+    pdf.setFontSize(8);
+    pdf.text(billLabel,16.031,49.546+2.5);
+    pdf.setFont('Arial','normal');
+    pdf.text(': '+fixText(billCompany),42.948,49.546+2.5);
+  
+    pdf.setFont('Arial','bold');
+    pdf.text('Address',16.031,54.256+2.5);
+    pdf.setFont('Arial','normal');
+    pdf.text(': '+fixText(billAddr),42.948,54.256+2.5);
+  
+    pdf.setFont('Arial','bold');
+    pdf.text('Contact Person',16.031,58.966+2.5);
+    pdf.setFont('Arial','normal');
+    pdf.text(': '+fixText(billContact),42.948,58.966+2.5);
+  
+    pdf.setFont('Arial','bold');
+    pdf.text('e-mail',16.031,63.676+2.5);
+    pdf.setFont('Arial','normal');
+    pdf.text(': '+fixText(billEmail),42.948,63.676+2.5);
+  
+    // Separator line between Bill To and Ship To (if Ship To exists)
+    if(hasShipTo){
+      pdf.line(12.025,67.5,198.025,67.5); // Centered between sections
+    }
+  
+    // Ship To Section
+    if(hasShipTo){
+      pdf.setFont('Arial','bold');
+      pdf.text('Ship To',16.031,70.035+2.5);
+      pdf.setFont('Arial','normal');
+      pdf.text(': '+fixText(shipCompany),42.948,70.035+2.5);
     
-    pdf.setFont('Arial','bold');
-    pdf.text('Address',16.031,74.745+2.5);
-    pdf.setFont('Arial','normal');
-    pdf.text(': '+fixText(shipAddr),42.948,74.745+2.5);
+      pdf.setFont('Arial','bold');
+      pdf.text('Address',16.031,74.745+2.5);
+      pdf.setFont('Arial','normal');
+      pdf.text(': '+fixText(shipAddr),42.948,74.745+2.5);
     
-    pdf.setFont('Arial','bold');
-    pdf.text('Contact Person',16.031,79.455+2.5);
-    pdf.setFont('Arial','normal');
-    pdf.text(': '+fixText(shipContact),42.948,79.455+2.5);
+      pdf.setFont('Arial','bold');
+      pdf.text('Contact Person',16.031,79.455+2.5);
+      pdf.setFont('Arial','normal');
+      pdf.text(': '+fixText(shipContact),42.948,79.455+2.5);
     
+      pdf.setFont('Arial','bold');
+      pdf.text('e-mail',16.031,84.165+2.5);
+      pdf.setFont('Arial','normal');
+      pdf.text(': '+fixText(shipEmail),42.948,84.165+2.5);
+    }
+  
+    // Horizontal Line 2
+    pdf.line(12.025,88.447+yo,198.025,88.447+yo);
+  
+    // Project No & Terms
     pdf.setFont('Arial','bold');
-    pdf.text('e-mail',16.031,84.165+2.5);
+    pdf.text('Project No',16.031,90.217+yo+2.5);
     pdf.setFont('Arial','normal');
-    pdf.text(': '+fixText(shipEmail),42.948,84.165+2.5);
+    pdf.text(': '+fixText(doc.projectNumber||''),42.948,90.217+yo+2.5);
+  
+    pdf.setFont('Arial','bold');
+    pdf.text('Terms',96,90.217+yo+2.5);
+    pdf.setFont('Arial','normal');
+    pdf.text(': '+fixText(doc.terms||''),122,90.217+yo+2.5);
+  
+    // Horizontal Line 3
+    pdf.line(12.025,94.971+yo,198.025,94.971+yo);
+  
   }
-  
-  // Horizontal Line 2
-  pdf.line(12.025,88.447+yo,198.025,88.447+yo);
-  
-  // Project No & Terms
-  pdf.setFont('Arial','bold');
-  pdf.text('Project No',16.031,90.217+yo+2.5);
-  pdf.setFont('Arial','normal');
-  pdf.text(': '+fixText(doc.projectNumber||''),42.948,90.217+yo+2.5);
-  
-  pdf.setFont('Arial','bold');
-  pdf.text('Terms',96,90.217+yo+2.5);
-  pdf.setFont('Arial','normal');
-  pdf.text(': '+fixText(doc.terms||''),122,90.217+yo+2.5);
-  
-  // Horizontal Line 3
-  pdf.line(12.025,94.971+yo,198.025,94.971+yo);
-  
+
   // Table
   const tableX=12.025;
-  const tableY=95.538+yo;
+  const tableY=opts.modern?modernTableY:95.538+yo;
   const tableW=186;
   const headerH=5.421;
   const rowH=4.854;
@@ -290,7 +423,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     pdf.setLineWidth(borderWidth);
     pdf.setDrawColor(158,158,158);
     pdf.setTextColor(17,17,17);
-    pdf.rect(12.025,FRAME_TOP,186,261);
+    if(!opts.modern)pdf.rect(12.025,FRAME_TOP,186,261);
     pdf.setFont('Arial','bold');
     pdf.setFontSize(9);
     pdf.text(fixText(co.name||'Green Med Ltd'),16.031,FRAME_TOP+5.3);
