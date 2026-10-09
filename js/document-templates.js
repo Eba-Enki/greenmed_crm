@@ -282,31 +282,48 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     const n=Math.max(...cells.map(c=>c.length));
     return{cells,h:Math.max(rowH,rowH+(n-1)*lineH)};
   });
-  const bodyH=rows.reduce((s,r)=>s+r.h,0);
+  // Pages: every page has the same frame; a page that continues the document starts with a slim band
+  // (company, document type and number) instead of the full letterhead
+  const FRAME_TOP=17.965,FRAME_BOT=278.965;
+  const newPage=()=>{
+    pdf.addPage();
+    pdf.setLineWidth(borderWidth);
+    pdf.setDrawColor(158,158,158);
+    pdf.setTextColor(17,17,17);
+    pdf.rect(12.025,FRAME_TOP,186,261);
+    pdf.setFont('Arial','bold');
+    pdf.setFontSize(9);
+    pdf.text(fixText(co.name||'Green Med Ltd'),16.031,FRAME_TOP+5.3);
+    pdf.text(typeTitle+'   '+docLabel+' '+(doc.number||''),195.025,FRAME_TOP+5.3,{align:'right'});
+    pdf.line(12.025,FRAME_TOP+8,198.025,FRAME_TOP+8);
+    return FRAME_TOP+8;
+  };
 
-  // Table border
-  pdf.rect(tableX,tableY,tableW,headerH+bodyH);
-  
-  // Header row
-  pdf.setFont('Arial','bold');
-  pdf.setFontSize(8);
-  
-  // Header horizontal line
-  pdf.line(tableX,tableY+headerH,tableX+tableW,tableY+headerH);
-  
-  // Header vertical lines & text
-  cols.forEach((col,i)=>{
-    if(i<cols.length-1){
-      pdf.line(tableX+col.x+col.w,tableY,tableX+col.x+col.w,tableY+headerH);
-    }
-    const textX=tableX+col.x+(col.align==='center'?col.w/2:col.align==='right'?col.w-3:2);
-    pdf.text(col.label,textX,tableY+headerH/2+1,{align:col.align});
-  });
-  
-  // Data rows
-  pdf.setFont('Arial','normal');
-  let y=tableY+headerH;
+  // Table header row (repeated at the top of every page the table runs onto)
+  const drawTableHeader=top=>{
+    pdf.setFont('Arial','bold');
+    pdf.setFontSize(8);
+    pdf.line(tableX,top+headerH,tableX+tableW,top+headerH);
+    cols.forEach((col,i)=>{
+      if(i<cols.length-1){
+        pdf.line(tableX+col.x+col.w,top,tableX+col.x+col.w,top+headerH);
+      }
+      const textX=tableX+col.x+(col.align==='center'?col.w/2:col.align==='right'?col.w-3:2);
+      pdf.text(col.label,textX,top+headerH/2+1,{align:col.align});
+    });
+    pdf.setFont('Arial','normal');
+    return top+headerH;
+  };
+
+  // Data rows; a row that does not fit moves to a new page, and each page's part of the table gets its own border
+  let segTop=tableY;
+  let y=drawTableHeader(tableY);
   rows.forEach(({cells,h})=>{
+    if(y+h>FRAME_BOT&&y>segTop+headerH){
+      pdf.rect(tableX,segTop,tableW,y-segTop);
+      segTop=newPage();
+      y=drawTableHeader(segTop);
+    }
     // Row horizontal line
     pdf.line(tableX,y+h,tableX+tableW,y+h);
 
@@ -324,108 +341,133 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     });
     y+=h;
   });
+  pdf.rect(tableX,segTop,tableW,y-segTop);
 
-  // Notes & Totals
-  const lastRowY=tableY+headerH+bodyH;
-  const notesY=lastRowY+3;
-  
-  pdf.setFont('Arial','bold');
-  pdf.setFontSize(8);
-  pdf.text('Notes :',13.651,notesY+2.5);
-  pdf.setFont('Arial','normal');
-  // Notes wrap before the totals column; the Total In Words line below moves down to clear them
-  const noteLines=pdf.splitTextToSize(fixText(doc.notes||''),116);
-  noteLines.forEach((t,k)=>pdf.text(t,24,notesY+2.5+k*3.3));
-  const notesEndY=notesY+2.5+(noteLines.length-1)*3.3;
+  // Notes, totals, total in words and bank details stay together. They are laid out once without drawing to
+  // measure them; if they (or the signature below them) would not fit, they start on a new page.
+  const summary=(lastRowY,draw)=>{
+    const P=draw?pdf:{
+      text(){},line(){},
+      setFont:(...a)=>pdf.setFont(...a),
+      setFontSize:(...a)=>pdf.setFontSize(...a),
+      splitTextToSize:(...a)=>pdf.splitTextToSize(...a)
+    };
+    const notesY=lastRowY+3;
 
-  // Sub Total & Total
-  const subTotalY=notesY+8;
-  pdf.setFont('Arial','normal');
-  pdf.setFontSize(8);
-  pdf.text('Sub Total',146.775,subTotalY+2.5);
-  pdf.text(fmt(total),195-3,subTotalY+2.5,{align:'right'});
-  
-  const totalY=subTotalY+4.5;
-  pdf.setFont('Arial','bold');
-  pdf.setFontSize(9);
-  pdf.text('Total',151.252,totalY+2.5);
-  pdf.text(sym+fmt(total),195-3,totalY+2.5,{align:'right'});
-  
-  // Horizontal Line 4
-  const totalWordsY=Math.max(totalY+6,notesEndY+3.5);
-  pdf.line(12.025,totalWordsY-1,198.025,totalWordsY-1);
-  
-  // Total In Words - Arial 8pt bold (label) + Arial 8pt regular (value)
-  // Show for sales_quote and po (purchase orders) regardless of currency
-  if(doc.currency==='GBP'||(type==='sales_quote'||type==='po')){
-    pdf.setFont('Arial','bold');
-    pdf.setFontSize(8);
-    pdf.text('Total In Words :',13.651,totalWordsY+2.5);
-    pdf.setFont('Arial','normal');
-    pdf.setFontSize(8);
-    pdf.text(fixText(toW(total,doc.currency||'GBP')),39,totalWordsY+2.5);
-  }
-  
-  // Bank Details - only for invoices and sales quotes, NOT for purchase quotes
-  if(!isPQ){
-    // Horizontal Line 5
-    const bankY=totalWordsY+8;
-    pdf.line(12.025,bankY-2,198.025,bankY-2);
-    
-    // Bank Details
-    pdf.setFont('Arial','normal');
-    pdf.setFontSize(8);
-    let line6Y=bankY+12;
-    if(opts.fullBank){
-      // Two columns: account details on the left, currency and bank on the right (long values wrap)
-      const b=docBank(doc,co);
-      const lh=3.267;
-      const col=(rows,lx,vx,w)=>{
-        let y=bankY+2.5;
-        rows.forEach(([label,val])=>{
-          // Colon in its own column like the Bill To block; wrapped lines align under the value
-          pdf.setFont('Arial','bold');pdf.text(label,lx,y);
-          pdf.setFont('Arial','normal');pdf.text(':',vx,y);
-          const lines=val?pdf.splitTextToSize(fixText(val),w):[''];
-          lines.forEach(t=>{pdf.text(t,vx+2,y);y+=lh;});
-        });
-        return y;
-      };
-      const endL=col([['Account Name',b.accountName||co.name||''],['Account No',b.accountNumber||''],['IBAN',b.iban||''],['SWIFT/BIC',b.bic||'']],13.651,35,65);
-      const endR=col([['Currency',b.currency||doc.currency||'GBP'],['Bank Name',b.bankName||''],['Bank Address',b.bankAddress||'']],108,128.5,64);
-      line6Y=Math.max(endL,endR)-lh+3;
-    }else{
-      pdf.text('Account Number: '+(defaultBank.accountNumber||''),13.651,bankY+2.5);
-      pdf.text('IBAN: '+(defaultBank.iban||''),13.651,bankY+3.267+2.5);
-      pdf.text('BIC: '+(defaultBank.bic||''),13.651,bankY+6.533+2.5);
+    P.setFont('Arial','bold');
+    P.setFontSize(8);
+    P.text('Notes :',13.651,notesY+2.5);
+    P.setFont('Arial','normal');
+    // Notes wrap before the totals column; the Total In Words line below moves down to clear them
+    const noteLines=P.splitTextToSize(fixText(doc.notes||''),116);
+    noteLines.forEach((t,k)=>P.text(t,24,notesY+2.5+k*3.3));
+    const notesEndY=notesY+2.5+(noteLines.length-1)*3.3;
+
+    // Sub Total & Total
+    const subTotalY=notesY+8;
+    P.setFont('Arial','normal');
+    P.setFontSize(8);
+    P.text('Sub Total',146.775,subTotalY+2.5);
+    P.text(fmt(total),195-3,subTotalY+2.5,{align:'right'});
+
+    const totalY=subTotalY+4.5;
+    P.setFont('Arial','bold');
+    P.setFontSize(9);
+    P.text('Total',151.252,totalY+2.5);
+    P.text(sym+fmt(total),195-3,totalY+2.5,{align:'right'});
+
+    // Horizontal Line 4
+    const totalWordsY=Math.max(totalY+6,notesEndY+3.5);
+    P.line(12.025,totalWordsY-1,198.025,totalWordsY-1);
+    let endY=totalWordsY+4;
+
+    // Total In Words - Arial 8pt bold (label) + Arial 8pt regular (value)
+    // Show for sales_quote and po (purchase orders) regardless of currency
+    if(doc.currency==='GBP'||(type==='sales_quote'||type==='po')){
+      P.setFont('Arial','bold');
+      P.setFontSize(8);
+      P.text('Total In Words :',13.651,totalWordsY+2.5);
+      P.setFont('Arial','normal');
+      P.setFontSize(8);
+      P.text(fixText(toW(total,doc.currency||'GBP')),39,totalWordsY+2.5);
     }
 
-    // Horizontal Line 6 (dynamically positioned after bank details)
-    pdf.line(12.025,line6Y,198.025,line6Y);
-  }
-  
+    // Bank Details - only for invoices and sales quotes, NOT for purchase quotes
+    if(!isPQ){
+      // Horizontal Line 5
+      const bankY=totalWordsY+8;
+      P.line(12.025,bankY-2,198.025,bankY-2);
+
+      // Bank Details
+      P.setFont('Arial','normal');
+      P.setFontSize(8);
+      let line6Y=bankY+12;
+      if(opts.fullBank){
+        // Two columns: account details on the left, currency and bank on the right (long values wrap)
+        const b=docBank(doc,co);
+        const lh=3.267;
+        const col=(rows,lx,vx,w)=>{
+          let y=bankY+2.5;
+          rows.forEach(([label,val])=>{
+            // Colon in its own column like the Bill To block; wrapped lines align under the value
+            P.setFont('Arial','bold');P.text(label,lx,y);
+            P.setFont('Arial','normal');P.text(':',vx,y);
+            const lines=val?P.splitTextToSize(fixText(val),w):[''];
+            lines.forEach(t=>{P.text(t,vx+2,y);y+=lh;});
+          });
+          return y;
+        };
+        const endL=col([['Account Name',b.accountName||co.name||''],['Account No',b.accountNumber||''],['IBAN',b.iban||''],['SWIFT/BIC',b.bic||'']],13.651,35,65);
+        const endR=col([['Currency',b.currency||doc.currency||'GBP'],['Bank Name',b.bankName||''],['Bank Address',b.bankAddress||'']],108,128.5,64);
+        line6Y=Math.max(endL,endR)-lh+3;
+      }else{
+        P.text('Account Number: '+(defaultBank.accountNumber||''),13.651,bankY+2.5);
+        P.text('IBAN: '+(defaultBank.iban||''),13.651,bankY+3.267+2.5);
+        P.text('BIC: '+(defaultBank.bic||''),13.651,bankY+6.533+2.5);
+      }
+
+      // Horizontal Line 6 (dynamically positioned after bank details)
+      P.line(12.025,line6Y,198.025,line6Y);
+      endY=line6Y;
+    }
+    return endY;
+  };
+
   // Footer position (fixed at bottom of page)
   const footerY=285.176;
-  
-  // Footer (FIXED position at bottom of page)
-  pdf.text('web: '+(co.website||'www.greenmed.uk'),50.694,footerY+2.5);
-  pdf.text('|',84.126,footerY+0.401+2.5);
-  pdf.text('e-mail: '+(co.email||'info@greenmed.uk'),87.473,footerY+2.5);
-  pdf.text('|',123.908,footerY+0.401+2.5);
-  pdf.text('Tel: '+(co.phone||'+44 750 751 6818'),127.255,footerY+2.5);
-  
-  // Signature (if enabled) - always on last page
+
+  // Signature (if enabled) sits above the footer on the last page, so the summary must end above it there
   const pdfSignature=getSignature()||co.signature||'';
-  if(doc.signatureEnabled&&pdfSignature){
+  const withSignature=!!(doc.signatureEnabled&&pdfSignature);
+  const sigY=footerY-35;
+  const summaryLimit=withSignature?sigY-1:FRAME_BOT-1;
+  let summaryTop=y;
+  if(summary(summaryTop,false)>summaryLimit)summaryTop=newPage();
+  summary(summaryTop,true);
+
+  if(withSignature){
     try{
-      const totalPages=pdf.internal.getNumberOfPages();
-      pdf.setPage(totalPages); // Go to last page
-      const sigY=footerY-35;
       const imgFormat=pdfSignature.startsWith('data:image/png')?'PNG':pdfSignature.startsWith('data:image/jpeg')||pdfSignature.startsWith('data:image/jpg')?'JPEG':'PNG';
       pdf.addImage(pdfSignature,imgFormat,150,sigY,45.93,29.59);
     }catch(e){console.error('Signature error:',e);}
   }
-  
+
+  // Footer (FIXED position at bottom of every page) with the page number bottom-right
+  const pageCount=pdf.internal.getNumberOfPages();
+  for(let p=1;p<=pageCount;p++){
+    pdf.setPage(p);
+    pdf.setFont('Arial','normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(17,17,17);
+    pdf.text('web: '+(co.website||'www.greenmed.uk'),50.694,footerY+2.5);
+    pdf.text('|',84.126,footerY+0.401+2.5);
+    pdf.text('e-mail: '+(co.email||'info@greenmed.uk'),87.473,footerY+2.5);
+    pdf.text('|',123.908,footerY+0.401+2.5);
+    pdf.text('Tel: '+(co.phone||'+44 750 751 6818'),127.255,footerY+2.5);
+    pdf.text(p+'/'+pageCount,198.025,footerY+2.5,{align:'right'});
+  }
+  pdf.setPage(pageCount);
+
   return pdf;
 };
 
