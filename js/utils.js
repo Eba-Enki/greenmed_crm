@@ -603,7 +603,6 @@ function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children})
     <div className="lt-row"><div className="lt-left"/>{tools}</div>
     {open&&hasFilters&&<div className="fpanel">
       {children}
-      <div style={{flex:1}}/>
       {active>0&&onClear&&<button className="fp-clear" onClick={onClear}>{tr('Clear filters')}</button>}
     </div>}
   </>);
