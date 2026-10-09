@@ -82,17 +82,17 @@ const drawModernHeader=async(pdf,ctx)=>{
     ['UTR',co.utr||''],
   ].filter(([,v])=>String(v).trim());
   pdf.setFontSize(9);
-  let iy=40.5;
+  let iy=42;
   info.forEach(([label,val])=>{
     pdf.setFont('Arial','bold');
     const lw=pdf.getTextWidth(label+': ');
     pdf.text(label+':',L,iy);
     pdf.setFont('Arial','normal');
     const lines=pdf.splitTextToSize(fixText(val),140-lw); // ends before the date block
-    lines.forEach((t,k)=>pdf.text(t,L+lw,iy+k*3.9));
-    iy+=lines.length*3.9;
+    lines.forEach((t,k)=>pdf.text(t,L+lw,iy+k*4.6));
+    iy+=lines.length*4.6;
   });
-  const infoEnd=iy-3.9;
+  const infoEnd=iy-4.6;
 
   // Date / number block, right-aligned on the labels' colons
   const numLabel=isInv?'INVOICE NUMBER':isSalesQuote?'QUOTE NUMBER':isPO?'PO NUMBER':isPQ?'QUOTE NUMBER':'NUMBER';
@@ -102,53 +102,53 @@ const drawModernHeader=async(pdf,ctx)=>{
   pdf.setFontSize(9);
   const valW=Math.max(...meta.map(([,v])=>pdf.getTextWidth(fixText(v))));
   const colonX=R-valW-2.5;
-  let my=48;
+  let my=50;
   meta.forEach(([label,val])=>{
     pdf.setFont('Arial','bold');
     pdf.text(label+' :',colonX,my,{align:'right'});
     pdf.setFont('Arial','normal');
     pdf.text(fixText(val),colonX+1.5,my);
-    my+=4;
+    my+=4.8;
   });
-  const metaEnd=my-4;
+  const metaEnd=my-4.8;
 
   // Bill To / Ship To between green rules
-  const top=Math.max(infoEnd,metaEnd)+5;
+  const top=Math.max(infoEnd,metaEnd)+9;
   const colW=88;
   const block=(x,heading,p)=>{
-    let y=top+4.6;
+    let y=top+6;
     pdf.setFont('Arial','bold');
     pdf.setFontSize(9);
     pdf.text(heading.toUpperCase(),x+1,y);
-    y+=6;
-    pdf.splitTextToSize(fixText(p.company||'—'),colW-2).forEach((t,k)=>{if(k)y+=4;pdf.text(t,x+1,y);});
+    y+=7.5;
+    pdf.splitTextToSize(fixText(p.company||'—'),colW-2).forEach((t,k)=>{if(k)y+=4.6;pdf.text(t,x+1,y);});
     pdf.setFont('Arial','normal');
     pdf.setFontSize(8.5);
     [addrCase(p.address),p.contact,p.email].filter(v=>v&&String(v).trim()).forEach(v=>{
-      pdf.splitTextToSize(fixText(v),colW-2).forEach(t=>{y+=3.8;pdf.text(t,x+1,y);});
+      pdf.splitTextToSize(fixText(v),colW-2).forEach(t=>{y+=4.5;pdf.text(t,x+1,y);});
     });
     return y;
   };
   const endL=block(L,billLabel,bill);
   const endR=hasShipTo?block(R-colW,'Ship To',ship):top;
-  const bottom=Math.max(endL,endR)+3.5;
+  const bottom=Math.max(endL,endR)+5.5;
   pdf.setDrawColor(...GREEN);
-  pdf.setLineWidth(0.6);
+  pdf.setLineWidth(0.3);
   pdf.line(L,top,L+colW,top);pdf.line(L,bottom,L+colW,bottom);
   if(hasShipTo){pdf.line(R-colW,top,R,top);pdf.line(R-colW,bottom,R,bottom);}
 
   // Project No & Terms (only when filled in)
   pdf.setLineWidth(borderWidth);
   pdf.setDrawColor(158,158,158);
-  let tableY=bottom+4;
+  let tableY=bottom+7;
   if(String(doc.projectNumber||'').trim()||String(doc.terms||'').trim()){
-    const ry=bottom+5.5;
+    const ry=bottom+7.5;
     pdf.setFontSize(8);
     pdf.setFont('Arial','bold');pdf.text('Project No',L+1,ry);
     pdf.setFont('Arial','normal');pdf.text(': '+fixText(doc.projectNumber||''),L+27,ry);
     pdf.setFont('Arial','bold');pdf.text('Terms',96,ry);
     pdf.setFont('Arial','normal');pdf.text(': '+fixText(doc.terms||''),122,ry);
-    tableY=bottom+9;
+    tableY=bottom+12.5;
   }
   return tableY;
 };
@@ -336,8 +336,8 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   const tableX=12.025;
   const tableY=opts.modern?modernTableY:95.538+yo;
   const tableW=186;
-  const headerH=5.421;
-  const rowH=4.854;
+  const headerH=opts.modern?7:5.421;
+  const rowH=opts.modern?6.4:4.854;
   
   // Check which optional columns are used
   const hasBrand=(doc.items||[]).some(it=>it.brand);
@@ -378,7 +378,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   
   // Cell text per row: left-aligned columns (item, description, brand…) wrap onto extra lines instead of
   // being cut off, and each row grows to fit its tallest cell
-  const lineH=3.3;
+  const lineH=opts.modern?3.7:3.3;
   pdf.setFont('Arial','normal');
   pdf.setFontSize(8);
   const rows=(doc.items||[]).map((it,i)=>{
@@ -470,24 +470,24 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
       setFontSize:(...a)=>pdf.setFontSize(...a),
       splitTextToSize:(...a)=>pdf.splitTextToSize(...a)
     };
-    const notesY=lastRowY+(opts.modern?5:3);
+    const notesY=lastRowY+(opts.modern?9:3);
 
     let notesEndY;
     if(opts.modern){
       // Sales letterhead: "TERMS AND CONDITIONS" laid out like the Bill To block — green rule, heading, then the notes
       P.setDrawColor(150,194,112);
-      P.setLineWidth(0.6);
+      P.setLineWidth(0.3);
       P.line(12.025,notesY,100.025,notesY);
       P.setLineWidth(borderWidth);
       P.setDrawColor(158,158,158);
       P.setFont('Arial','bold');
       P.setFontSize(9);
-      P.text('TERMS AND CONDITIONS',13.025,notesY+4.6);
+      P.text('TERMS AND CONDITIONS',13.025,notesY+6);
       P.setFont('Arial','normal');
       P.setFontSize(8.5);
       const noteLines=String(doc.notes||'').trim()?P.splitTextToSize(fixText(doc.notes),86):[];
-      noteLines.forEach((t,k)=>P.text(t,13.025,notesY+10.4+k*3.8));
-      notesEndY=noteLines.length?notesY+10.4+(noteLines.length-1)*3.8:notesY+4.6;
+      noteLines.forEach((t,k)=>P.text(t,13.025,notesY+12.5+k*4.4));
+      notesEndY=noteLines.length?notesY+12.5+(noteLines.length-1)*4.4:notesY+6;
     }else{
       P.setFont('Arial','bold');
       P.setFontSize(8);
@@ -500,20 +500,20 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     }
 
     // Sub Total & Total
-    const subTotalY=notesY+8;
+    const subTotalY=notesY+(opts.modern?9.5:8);
     P.setFont('Arial','normal');
     P.setFontSize(8);
     P.text('Sub Total',146.775,subTotalY+2.5);
     P.text(fmt(total),195-3,subTotalY+2.5,{align:'right'});
 
-    const totalY=subTotalY+4.5;
+    const totalY=subTotalY+(opts.modern?6:4.5);
     P.setFont('Arial','bold');
     P.setFontSize(9);
     P.text('Total',151.252,totalY+2.5);
     P.text(sym+fmt(total),195-3,totalY+2.5,{align:'right'});
 
     // Horizontal Line 4
-    const totalWordsY=Math.max(totalY+6,notesEndY+3.5);
+    const totalWordsY=opts.modern?Math.max(totalY+9,notesEndY+7):Math.max(totalY+6,notesEndY+3.5);
     P.line(12.025,totalWordsY-1,198.025,totalWordsY-1);
     let endY=totalWordsY+4;
 
@@ -531,7 +531,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     // Bank Details - only for invoices and sales quotes, NOT for purchase quotes
     if(!isPQ){
       // Horizontal Line 5
-      const bankY=totalWordsY+8;
+      const bankY=totalWordsY+(opts.modern?11:8);
       P.line(12.025,bankY-2,198.025,bankY-2);
 
       // Bank Details
@@ -541,9 +541,9 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
       if(opts.fullBank){
         // Two columns: account details on the left, currency and bank on the right (long values wrap)
         const b=docBank(doc,co);
-        const lh=3.267;
+        const lh=opts.modern?4.2:3.267;
         const col=(rows,lx,vx,w)=>{
-          let y=bankY+2.5;
+          let y=bankY+(opts.modern?4:2.5);
           rows.forEach(([label,val])=>{
             // Colon in its own column like the Bill To block; wrapped lines align under the value
             P.setFont('Arial','bold');P.text(label,lx,y);
@@ -555,7 +555,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
         };
         const endL=col([['Account Name',b.accountName||co.name||''],['Account No',b.accountNumber||''],['IBAN',b.iban||''],['SWIFT/BIC',b.bic||'']],13.651,35,65);
         const endR=col([['Currency',b.currency||doc.currency||'GBP'],['Bank Name',b.bankName||''],['Bank Address',b.bankAddress||'']],108,128.5,64);
-        line6Y=Math.max(endL,endR)-lh+3;
+        line6Y=Math.max(endL,endR)-lh+(opts.modern?4.5:3);
       }else{
         P.text('Account Number: '+(defaultBank.accountNumber||''),13.651,bankY+2.5);
         P.text('IBAN: '+(defaultBank.iban||''),13.651,bankY+3.267+2.5);
