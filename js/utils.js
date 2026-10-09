@@ -593,7 +593,7 @@ function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children})
   const hasFilters=React.Children.toArray(children).some(Boolean);
   const tools=(<div className="ltools">
     {hasFilters&&<button className={'lt-btn'+(open?' on':'')} onClick={()=>setOpen(o=>!o)} aria-expanded={open}>
-      <Ico n="filter" size={13}/>{tr('Filter')}{active>0&&<span className="lt-count">{active}</span>}
+      <Ico n="filter" size={13}/>{tr('Filter')}{active>0&&<span className="cnt-badge">{active}</span>}
     </button>}
     {onQ&&<div className="fbar-s lt-search"><Ico n="search"/><input value={q} onChange={e=>onQ(e.target.value)} placeholder={placeholder}/></div>}
     {extra}
@@ -611,18 +611,31 @@ function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children})
 const FilterField=({label,children})=><label className="fp-f"><span>{label}</span>{children}</label>;
 
 // ── Bulk actions on lists ──
-// Row selection. `ids` are the rows the current filter shows (on every page); rows filtered out are never part
-// of the selection, so "select all" + an action only ever touches what the user can see in the list.
+// Row selection. `ids` are the rows the current filter shows, in the order shown (on every page); rows filtered
+// out are never part of the selection, so "select all" + an action only ever touches what the user can see.
+// Shift-clicking a box ticks (or unticks) every row between it and the box clicked before.
 function useBulkSelect(ids){
   const[sel,setSel]=useState(()=>new Set());
+  const anchor=useRef(null);
   const chosen=ids.filter(id=>sel.has(id));
   const all=ids.length>0&&chosen.length===ids.length;
   return{
     chosen,all,some:chosen.length>0&&!all,
     has:id=>sel.has(id)&&ids.includes(id),
-    toggle:id=>setSel(s=>{const n=new Set(s);if(n.has(id))n.delete(id);else n.add(id);return n;}),
-    toggleAll:()=>setSel(all?new Set():new Set(ids)),
-    clear:()=>setSel(new Set()),
+    toggle:(id,shift)=>{
+      const from=anchor.current;
+      anchor.current=id;
+      setSel(s=>{
+        const n=new Set(s);
+        const on=!n.has(id);
+        const i=ids.indexOf(from),j=ids.indexOf(id);
+        const range=shift&&i>=0&&j>=0?ids.slice(Math.min(i,j),Math.max(i,j)+1):[id];
+        range.forEach(x=>{if(on)n.add(x);else n.delete(x);});
+        return n;
+      });
+    },
+    toggleAll:()=>{anchor.current=null;setSel(all?new Set():new Set(ids));},
+    clear:()=>{anchor.current=null;setSel(new Set());},
   };
 }
 // Header / row checkboxes; clicks don't reach the row (which opens the document)
@@ -633,18 +646,18 @@ const SelTh=({bulk})=>(
 );
 const SelTd=({bulk,id})=>(
   <td className="sel-col" onClick={e=>e.stopPropagation()}>
-    <input type="checkbox" checked={bulk.has(id)} onChange={()=>bulk.toggle(id)} aria-label={tr('Select')}/>
+    <input type="checkbox" checked={bulk.has(id)} onChange={()=>{}} aria-label={tr('Select')}
+      onMouseDown={e=>{if(e.shiftKey)e.preventDefault();}} onClick={e=>bulk.toggle(id,e.shiftKey)}/>
   </td>
 );
 // Bulk actions: shown on the left of the list toolbar (ListTools' .lt-left) only while rows are ticked;
-// Escape or the × clears the selection
+// Escape clears the selection
 function BulkBar({bulk,children}){
   const[slot,setSlot]=useState(null);
   React.useLayoutEffect(()=>{setSlot(document.querySelector('.content .lt-left'));},[]);
   useEscape(bulk.clear,bulk.chosen.length>0);
   if(!bulk.chosen.length)return null;
   const bar=(<div className="bulk-bar" role="toolbar" aria-label={tr('Bulk actions')}>
-    <button className="bulk-clear" onClick={bulk.clear} title={tr('Clear selection')} aria-label={tr('Clear selection')}><Ico n="x" size={13}/></button>
     <span className="bulk-n">{tr('{0} selected',bulk.chosen.length)}</span>
     {children}
   </div>);
@@ -654,7 +667,7 @@ function BulkBar({bulk,children}){
 const BulkBtn=({icon,danger,badge,disabled,onClick,children})=>(
   <button className={'bulk-btn'+(danger?' danger':'')} disabled={disabled} onClick={onClick}>
     {icon&&<Ico n={icon} size={13}/>}{children}
-    {badge>0&&<span className="bulk-badge">{badge}</span>}
+    {badge>0&&<span className="cnt-badge">{badge}</span>}
   </button>
 );
 
