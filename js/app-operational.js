@@ -144,8 +144,23 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       notes:(fromQuote&&fromQuote.notes)||''};
   };
 
+  // Any quotation can be edited; anything past draft asks first (its status and lock stay as they are).
+  // _unlock opens a locked quotation's fields for this edit only and is not saved.
+  const QUOTE_EDIT_WARN={
+    sent:'This quotation has been sent to the customer. Edit it anyway?',
+    approved:'This quotation is approved and locked. Edit it anyway?',
+    locked:'This quotation is approved and locked. Edit it anyway?',
+    passive:'This quotation is passive — a newer revision replaced it. Edit it anyway?',
+    closed:'This quotation is closed — it has been fully invoiced. Edit it anyway?',
+  };
+  const editQuote=q=>{
+    const open=()=>{setCur(q.status==='draft'?q:{...q,_unlock:true});go('sales_quote_form');};
+    const warn=QUOTE_EDIT_WARN[q.status];
+    if(!warn){open();return;}
+    askGlobalConfirm(tr(warn),{confirmLabel:tr('Edit anyway'),cancelLabel:tr('Cancel')}).then(ok=>{if(ok)open();});
+  };
   const handleSaveSQ=q0=>{
-    const q=addrCaseDoc(q0);
+    const{_unlock,...q}=addrCaseDoc(q0);
     const fresh=!q.id;
     const numbered=fresh?assignQuoteNumber(q):q;
     const saved={...numbered,id:numbered.id||uid()};
@@ -609,7 +624,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         if(['sent','approved','locked'].includes(quickView.status))extraActions.push({label:tr('Revise'),onClick:()=>{setQuickView(null);handleNewRevision(quickView);}});
         if(quickView.status==='approved'&&remaining.length>0)extraActions.push({label:tr('Create Invoice'),onClick:()=>{setQuickView(null);setCur(mkSalesInvoice(quickView));go('sales_invoice_form');}});
         return(<DocQuickModal doc={quickView} co={co} docType="sales_quote" pdfOpts={FULL_BANK} onClose={()=>setQuickView(null)}
-          onEdit={quickView.status==='draft'?()=>{setQuickView(null);setCur(quickView);go('sales_quote_form');}:null}
+          onEdit={()=>editQuote(quickView)}
           onDelete={()=>askConfirm(tr('Delete this quotation?'),()=>{deleteSQ(quickView.id);showToast(tr('Deleted'));setQuickView(null);})}
           extraActions={extraActions}/>);
       })()}
@@ -634,7 +649,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const set=(p,v)=>setQ(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
     const fileRef=useRef();
     const savedQ={...q,items};
-    const isLocked=q.locked;
+    const isLocked=q.locked&&!q._unlock;
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...q,items})!==_initStr.current;
     const _handleCancel=()=>{if(!isLocked&&_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
