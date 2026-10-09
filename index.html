@@ -813,6 +813,23 @@ body{background:var(--bz-canvas);background-attachment:fixed;color:var(--bz-ink)
 .sb-dot{width:7px;height:7px;border-radius:50%;background:var(--bz-pill);flex-shrink:0;animation:bzFade .3s var(--bz-ease)}
 /* Row action that needs doing: a small notification dot on the button's top-right corner */
 .ab-act{position:relative}
+/* Bulk actions: checkbox column + a floating bar at the bottom of the list while rows are selected */
+table.dt th.sel-col,table.dt td.sel-col{text-align:center!important;padding-left:10px!important;padding-right:4px!important}
+.sel-col input{width:15px;height:15px;margin:0;vertical-align:middle;accent-color:var(--btn);cursor:pointer}
+.sel-col input:focus-visible{outline:2px solid var(--gm-300);outline-offset:2px}
+table.dt tbody tr.is-sel td{background:rgba(97,154,48,.07)}
+.bulk-bar{position:sticky;bottom:16px;z-index:30;margin-top:14px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:10px 12px 10px 18px;background:var(--dk);color:#fff;border-radius:12px;box-shadow:0 12px 32px rgba(26,42,10,.22),0 2px 6px rgba(26,42,10,.14);animation:bzFade .2s var(--bz-ease)}
+.bulk-n{font-size:13px;font-weight:600;margin-right:6px;white-space:nowrap}
+.bulk-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background .15s,border-color .15s,transform .15s}
+.bulk-btn:hover:not(:disabled){background:rgba(255,255,255,.17);border-color:rgba(255,255,255,.3)}
+.bulk-btn:active:not(:disabled){transform:scale(.97)}
+.bulk-btn:focus-visible,.bulk-clear:focus-visible{outline:2px solid var(--gm-300);outline-offset:2px}
+.bulk-btn:disabled{opacity:.4;cursor:not-allowed}
+.bulk-btn.danger{color:#fecaca;border-color:rgba(248,113,113,.4)}
+.bulk-btn.danger:hover:not(:disabled){background:rgba(229,72,77,.28);border-color:rgba(248,113,113,.6)}
+.bulk-clear{display:inline-flex;align-items:center;gap:5px;background:none;border:none;color:rgba(255,255,255,.72);font-size:12.5px;cursor:pointer;padding:6px 8px;border-radius:6px;transition:background .15s,color .15s}
+.bulk-clear:hover{color:#fff;background:rgba(255,255,255,.08)}
+.bulk-clear:active{background:rgba(255,255,255,.14)}
 .act-dot{position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:50%;background:#e5484d;box-shadow:0 0 0 2px #fff;pointer-events:none;animation:bzFade .3s var(--bz-ease)}
 table.dt td .ab-act+.ab-act{margin-left:6px}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -937,17 +954,17 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 <body>
 <div id="root"><div class="splash" role="status" aria-label="Loading"><img class="splash-logo" src="brand_assets/logo/logo_fl.svg" alt=""><span class="splash-ring"></span></div></div>
 <!-- Loaded on first use, not on page load (see ensureXLSX / ensurePDF in js/utils.js) -->
-<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261009x"}</script>
+<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261009y","jszip":"https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"}</script>
 <script>window.onerror=function(msg,src,line,col,err){document.getElementById('root').innerHTML='<pre style="color:red;background:#fff;padding:20px;font-size:13px">'+msg+'\n'+src+':'+line+'</pre>';return false;};</script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.22.5/babel.min.js"></script>
-<script src="js/i18n.js?v=20261009x"></script>
-<script type="text/babel" src="js/utils.js?v=20261009x"></script>
-<script type="text/babel" src="js/document-templates.js?v=20261009x"></script>
-<script type="text/babel" src="js/app-official.js?v=20261009x"></script>
-<script type="text/babel" src="js/app-operational.js?v=20261009x"></script>
-<script type="text/babel" src="js/app-system.js?v=20261009x"></script>
-<script type="text/babel" src="js/app-shell.js?v=20261009x"></script>
+<script src="js/i18n.js?v=20261009y"></script>
+<script type="text/babel" src="js/utils.js?v=20261009y"></script>
+<script type="text/babel" src="js/document-templates.js?v=20261009y"></script>
+<script type="text/babel" src="js/app-official.js?v=20261009y"></script>
+<script type="text/babel" src="js/app-operational.js?v=20261009y"></script>
+<script type="text/babel" src="js/app-system.js?v=20261009y"></script>
+<script type="text/babel" src="js/app-shell.js?v=20261009y"></script>
 </body>
 </html>

@@ -617,6 +617,32 @@ const savePDF=async(doc,co,type='invoice',opts)=>{
     console.error('PDF generation failed:',e);
   }
 };
+// Builds one PDF per document and downloads them together as a ZIP. onProgress(i,n) runs before each PDF.
+const downloadPDFZip=async(docs,co,type,opts,zipName,onProgress)=>{
+  try{await ensureZIP();}catch(e){libLoadFailed();return false;}
+  try{
+    const zip=new JSZip();
+    const used={};
+    for(let i=0;i<docs.length;i++){
+      if(onProgress)onProgress(i+1,docs.length);
+      const pdf=await buildStandardPDF(docs[i],co,type,opts);
+      const base=`${type}_${docs[i].number||'draft'}`;
+      used[base]=(used[base]||0)+1;
+      zip.file(base+(used[base]>1?'_'+used[base]:'')+'.pdf',pdf.output('arraybuffer'));
+    }
+    const blob=await zip.generateAsync({type:'blob'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${zipName}_${td()}.zip`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+    return true;
+  }catch(e){
+    alert('PDF could not be generated: '+e.message);
+    console.error('PDF ZIP failed:',e);
+    return false;
+  }
+};
 const exportExcel=(rows,name)=>ensureXLSX().then(()=>{const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');XLSX.writeFile(wb,`${name}-${td()}.xlsx`);},libLoadFailed);
 
 // Preview component — mirrors buildStandardPDF layout exactly

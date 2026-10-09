@@ -398,6 +398,7 @@ const ensurePDF=()=>Promise.all([
   window.jspdf?null:loadScript(LAZY_SRC.jspdf),
   typeof ARIAL_REGULAR_BASE64!=='undefined'?null:loadScript(LAZY_SRC.fonts),
 ]);
+const ensureZIP=()=>window.JSZip?Promise.resolve():loadScript(LAZY_SRC.jszip);
 const libLoadFailed=()=>alert(tr('A required component could not be loaded. Check your internet connection and try again.'));
 
 // Logo stored separately (raw, no JSON) to avoid quota issues with large base64
@@ -581,6 +582,47 @@ function useStableComponents(defs){
   }
   return wrappers.current;
 }
+
+// ── Bulk actions on lists ──
+// Row selection. `ids` are the rows the current filter shows (on every page); rows filtered out are never part
+// of the selection, so "select all" + an action only ever touches what the user can see in the list.
+function useBulkSelect(ids){
+  const[sel,setSel]=useState(()=>new Set());
+  const chosen=ids.filter(id=>sel.has(id));
+  const all=ids.length>0&&chosen.length===ids.length;
+  return{
+    chosen,all,some:chosen.length>0&&!all,
+    has:id=>sel.has(id)&&ids.includes(id),
+    toggle:id=>setSel(s=>{const n=new Set(s);if(n.has(id))n.delete(id);else n.add(id);return n;}),
+    toggleAll:()=>setSel(all?new Set():new Set(ids)),
+    clear:()=>setSel(new Set()),
+  };
+}
+// Header / row checkboxes; clicks don't reach the row (which opens the document)
+const SelTh=({bulk})=>(
+  <th className="sel-col" onClick={e=>e.stopPropagation()}>
+    <input type="checkbox" checked={bulk.all} ref={el=>{if(el)el.indeterminate=bulk.some;}} onChange={bulk.toggleAll} aria-label={tr('Select all')}/>
+  </th>
+);
+const SelTd=({bulk,id})=>(
+  <td className="sel-col" onClick={e=>e.stopPropagation()}>
+    <input type="checkbox" checked={bulk.has(id)} onChange={()=>bulk.toggle(id)} aria-label={tr('Select')}/>
+  </td>
+);
+// Bar that appears at the bottom of the list while rows are selected; Escape clears the selection
+function BulkBar({bulk,children}){
+  useEscape(bulk.clear,bulk.chosen.length>0);
+  if(!bulk.chosen.length)return null;
+  return(<div className="bulk-bar" role="toolbar" aria-label={tr('Bulk actions')}>
+    <span className="bulk-n">{tr('{0} selected',bulk.chosen.length)}</span>
+    {children}
+    <div style={{flex:1}}/>
+    <button className="bulk-clear" onClick={bulk.clear}><Ico n="x" size={13}/>{tr('Clear selection')}</button>
+  </div>);
+}
+const BulkBtn=({icon,danger,disabled,onClick,children})=>(
+  <button className={'bulk-btn'+(danger?' danger':'')} disabled={disabled} onClick={onClick}>{icon&&<Ico n={icon} size={13}/>}{children}</button>
+);
 
 // Escape closes the top-most open dialog — the same as its Cancel / Close / × button. Dialogs register while
 // open, so with a confirm on top of a document window, Escape closes the confirm first.

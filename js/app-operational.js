@@ -394,6 +394,35 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // Each revision group sorts by its latest revision
     const sortedGroups=sortRows(filteredGroups,sort,Object.fromEntries(Object.entries(qCols).map(([k,f])=>[k,g=>f(g.latest)])));
     const isExpanded=(base)=>hasFilter||expandedGroups.has(base);
+    // Bulk actions work on each selected group's latest revision — the row the list shows
+    const bulk=useBulkSelect(sortedGroups.map(g=>g.latest.id));
+    const picked=sortedGroups.filter(g=>bulk.has(g.latest.id)).map(g=>g.latest);
+    const pickedDrafts=picked.filter(q=>q.status==='draft');
+    const[zipBusy,setZipBusy]=useState(false);
+    const bulkMarkSent=()=>{
+      const ids=new Set(pickedDrafts.map(q=>q.id));
+      sSQ(salesQuotes.map(x=>ids.has(x.id)?{...x,status:'sent'}:x));
+      const skipped=picked.length-ids.size;
+      showToast(tr('{0} marked as sent',ids.size)+(skipped?' · '+tr('{0} skipped (not a draft)',skipped):''));
+      bulk.clear();
+    };
+    const bulkDelete=()=>{
+      const ids=new Set(pickedDrafts.map(q=>q.id));
+      const kept=picked.length-ids.size;
+      askGlobalConfirm(tr('Delete {0} draft quotations?',ids.size)+(kept?' '+tr('{0} selected quotations are not drafts and will be kept.',kept):''),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+        if(!ok)return;
+        sSQ(salesQuotes.filter(x=>!ids.has(x.id)));
+        sSI(salesInvoices.map(si=>ids.has(si.quoteId)?{...si,quoteId:null,quoteNum:''}:si));
+        showToast(tr('{0} deleted',ids.size));
+        bulk.clear();
+      });
+    };
+    const bulkPDF=async()=>{
+      setZipBusy(true);
+      const done=await downloadPDFZip(picked,co,'sales_quote',FULL_BANK,'sales-quotations',(i,n)=>showToast(tr('Preparing PDFs… {0}/{1}',i,n)));
+      setZipBusy(false);
+      if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
+    };
     return(<div className="content">
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search customer, quote no...")}/></div>
@@ -408,8 +437,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {sortedGroups.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">{tr("No quotations yet")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.8,1,1,2,0.9,1.3,0.9]}/>
+          <Cg w={[0.32,0.8,1,1,2,0.9,1.3,0.9]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{tr("Quote No")}</SortTh>
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
@@ -425,7 +455,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             const remaining=getQuoteRemainingItems(latest);
             const remAmt=dt(remaining.map(i=>({...i,qty:i.remainingQty})));
             return(<React.Fragment key={base}>
-              <tr style={{fontStyle:latest.status==='passive'?'italic':'normal',cursor:'pointer'}} onClick={()=>setQuickView(latest)}>
+              <tr className={bulk.has(latest.id)?'is-sel':''} style={{fontStyle:latest.status==='passive'?'italic':'normal',cursor:'pointer'}} onClick={()=>setQuickView(latest)}>
+                <SelTd bulk={bulk} id={latest.id}/>
                 <td style={{color:'var(--g500)',fontSize:12}}>{latest.date}</td>
                 <td>
                   <div style={{display:'flex',alignItems:'center',gap:5}}>
@@ -465,6 +496,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               </tr>
               {expanded&&history.map(q=>(
                 <tr key={q.id} style={{background:'var(--g50)',fontStyle:'italic',cursor:'pointer'}} onClick={()=>setQuickView(q)}>
+                  <td></td>
                   <td style={{fontSize:12}}>{q.date}</td>
                   <td>
                     <div style={{display:'flex',alignItems:'center',gap:5,paddingLeft:22}}>
@@ -483,6 +515,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           })}</tbody>
         </table><Pagination total={sortedGroups.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
+      <BulkBar bulk={bulk}>
+        <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>{tr("Export")}</BulkBtn>
+        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
+        <BulkBtn icon="trash" danger disabled={!pickedDrafts.length} onClick={bulkDelete}>{tr("Delete drafts")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+      </BulkBar>
       {quickView&&(()=>{
         const remaining=getQuoteRemainingItems(quickView);
         const extraActions=[];
@@ -976,6 +1014,23 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       return true;
     });
     const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,quote:d=>d.quoteNum,customer:d=>d.client&&d.client.company,total:d=>dt(d.items||[]),status:d=>d.status});
+    const bulk=useBulkSelect(sorted.map(d=>d.id));
+    const picked=sorted.filter(d=>bulk.has(d.id));
+    const pickedDrafts=picked.filter(d=>d.status==='draft');
+    const[zipBusy,setZipBusy]=useState(false);
+    const bulkMarkSent=()=>{
+      const ids=new Set(pickedDrafts.map(d=>d.id));
+      sSI(salesInvoices.map(x=>ids.has(x.id)?{...x,status:'sent'}:x));
+      const skipped=picked.length-ids.size;
+      showToast(tr('{0} marked as sent',ids.size)+(skipped?' · '+tr('{0} skipped (not a draft)',skipped):''));
+      bulk.clear();
+    };
+    const bulkPDF=async()=>{
+      setZipBusy(true);
+      const done=await downloadPDFZip(picked,co,'invoice',FULL_BANK,'sales-invoices',(i,n)=>showToast(tr('Preparing PDFs… {0}/{1}',i,n)));
+      setZipBusy(false);
+      if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
+    };
     return(<div className="content">
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search customer or invoice no...")}/></div>
@@ -989,8 +1044,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="invoice" size={38}/><div className="empty-t">{tr("No sales invoices yet")}</div><div className="empty-s">{tr("Approve a quotation and convert it to invoice")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.8,1,1,2,0.9,1.3,0.9]}/>
+          <Cg w={[0.32,0.8,1,1,2,0.9,1.3,0.9]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{tr("Invoice No")}</SortTh>
             <SortTh k="quote" sort={sort} onSort={onSort}>{tr("From Quote")}</SortTh>
@@ -1000,7 +1056,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="status" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
-            <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+            <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+              <SelTd bulk={bulk} id={d.id}/>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
               <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number}</span></td>
               <td>{d.quoteNum?<span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{d.quoteNum}</span>:'—'}</td>
@@ -1014,6 +1071,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           ))}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
+      <BulkBar bulk={bulk}>
+        <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...picked.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}>{tr("Export")}</BulkBtn>
+        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
+      </BulkBar>
       {quickView&&<DocQuickModal doc={quickView} co={co} docType="invoice" pdfOpts={FULL_BANK} onClose={()=>setQuickView(null)}
         onEdit={()=>{const openEdit=()=>{setQuickView(null);setCur(quickView);go('sales_invoice_edit');};if(quickView.status==='sent'){askConfirm(tr('This invoice has been marked as sent. Edit anyway?'),openEdit);}else{openEdit();}}}
         onDelete={()=>askConfirm(tr('Delete this invoice?'),()=>{sSI(salesInvoices.filter(x=>x.id!==quickView.id));showToast(tr('Deleted'));setQuickView(null);})}
