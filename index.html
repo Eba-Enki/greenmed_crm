@@ -677,6 +677,19 @@ table.pv2-tbl tbody tr:last-child td{border-bottom:none}
 .mt-count{font-size:11.5px;font-weight:600;color:var(--amber)}
 .mt-count.ok{color:var(--gm-600)}
 .mt-none{font-size:11.5px;font-weight:600;color:var(--amber)}
+.mt-internal{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:5px;background:var(--g100);color:var(--g500)}
+.mt-check{display:flex;align-items:flex-start;gap:8px;margin-top:12px;font-size:12.5px;color:var(--g600);cursor:pointer;user-select:none}
+.mt-check input{margin-top:2px;accent-color:var(--gm-500)}
+.mt-check:focus-within{outline:2px solid var(--gm-400);outline-offset:2px;border-radius:4px}
+table.mt-wrap th{white-space:normal;line-height:1.25;vertical-align:bottom}
+.mt-pct{font-size:10.5px;color:var(--g500);margin-top:1px}
+.mt-cell+.mt-cell{margin-top:6px;padding-top:6px;border-top:1px dashed var(--g200)}
+.mt-sum{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.mt-sum-c{background:var(--white);border:1px solid var(--g200);border-radius:var(--r);padding:12px 14px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 4px 14px rgba(81,128,40,.05)}
+.mt-sum-l{font-size:11px;font-weight:600;color:var(--g500);text-transform:uppercase;letter-spacing:.4px}
+.mt-sum-v{font-size:17px;font-weight:700;color:var(--g900);margin-top:4px;letter-spacing:-.02em}
+.mt-sum-note{grid-column:1/-1;font-size:11.5px;color:var(--amber)}
+@media(max-width:900px){.mt-sum{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .mt-open{display:inline-flex;align-items:center;gap:6px;margin-left:6px;padding:5px 11px;border:1px solid var(--g200);border-radius:8px;background:var(--white);color:var(--g800);font-size:12.5px;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(15,23,42,.04);transition:background .12s,border-color .12s,box-shadow .12s,transform .12s}
 .mt-open:hover{background:var(--g50);border-color:var(--gm-300);box-shadow:0 2px 8px rgba(81,128,40,.12)}
 .mt-open:focus-visible{outline:2px solid var(--gm-400);outline-offset:2px}

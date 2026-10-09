@@ -227,20 +227,26 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sqMatchOptions=base=>{const q=latestSQ(base);return q?(q.items||[]).map((it,i)=>({key:sqItemKey(it),label:`#${i+1} ${sqLineText(it)}`})):[];};
   // "↳ Customer line (SQ0001.R01 #3)" under a supplier line in quick views
   const sqItemNote=doc=>it=>{
-    const q=doc.sqBase&&it.sqKey&&latestSQ(doc.sqBase);if(!q)return null;
-    const i=(q.items||[]).findIndex(x=>sqItemKey(x)===it.sqKey);
-    return i<0?null:`↳ ${sqLineText(q.items[i])} (${q.number} #${i+1})`;
+    const q=doc.sqBase&&it.sqKey&&latestSQ(doc.sqBase);
+    const i=q?(q.items||[]).findIndex(x=>sqItemKey(x)===it.sqKey):-1;
+    const parts=[i>=0?`↳ ${sqLineText(q.items[i])} (${q.number} #${i+1})`:null,
+      it.srcSupplier?`${tr('Source')}: ${it.srcSupplier}${it.srcDocNo?' · '+it.srcDocNo:''}${+it.srcPrice?' · '+(CURR[srcCur(doc)]||srcCur(doc))+fmt(+it.srcPrice):''}`:null].filter(Boolean);
+    return parts.length?parts.join('   '):null;
   };
   // A converted document's lines remember the line they came from (srcId); older ones pair up by position
   const legacyPair=(parent,child)=>!(child.items||[]).some(x=>x.srcId);
   const parentLine=(parent,child,childItem)=>(parent.items||[]).find(x=>x.id===childItem.srcId)||(legacyPair(parent,child)?(parent.items||[])[(child.items||[]).indexOf(childItem)]:null)||null;
   const childLine=(parent,child,parentItem)=>(child.items||[]).find(x=>x.srcId&&x.srcId===parentItem.id)||(legacyPair(parent,child)?(child.items||[])[(parent.items||[]).indexOf(parentItem)]:null)||null;
-  // A received quote, its PO and the PO's received invoice are one supply; a match changed on any of them is copied
-  // to the others. Works on the given lists and returns them (unchanged arrays when nothing moved).
+  // A received quote, its PO and the PO's received invoice are one supply; a match (and, for a group company, the
+  // source supplier details) changed on any of them is copied to the others. Works on the given lists and returns
+  // them (unchanged arrays when nothing moved).
+  const CHAIN_DOC_FIELDS=['sqBase','srcCurrency','fxRate'];
+  const CHAIN_LINE_FIELDS=['sqKey','srcSupplier','srcDocNo','srcDocDate','srcPrice'];
+  const pickFields=(o,fields)=>fields.reduce((r,f)=>({...r,[f]:o[f]||''}),{});
   const syncMatchChain=(kind,saved,{pq,po,ri})=>{
     const put=(arr,d)=>{const old=arr.find(x=>x.id===d.id);return old&&JSON.stringify(old)===JSON.stringify(d)?arr:arr.map(x=>x.id===d.id?d:x);};
-    const down=(parent,child)=>({...child,sqBase:parent.sqBase||'',items:(child.items||[]).map(x=>{const p=parentLine(parent,child,x);return p?{...x,sqKey:p.sqKey||''}:x;})});
-    const up=(child,parent)=>({...parent,sqBase:child.sqBase||'',items:(parent.items||[]).map(x=>{const c=childLine(parent,child,x);return c?{...x,sqKey:c.sqKey||''}:x;})});
+    const down=(parent,child)=>({...child,...pickFields(parent,CHAIN_DOC_FIELDS),items:(child.items||[]).map(x=>{const p=parentLine(parent,child,x);return p?{...x,...pickFields(p,CHAIN_LINE_FIELDS)}:x;})});
+    const up=(child,parent)=>({...parent,...pickFields(child,CHAIN_DOC_FIELDS),items:(parent.items||[]).map(x=>{const c=childLine(parent,child,x);return c?{...x,...pickFields(c,CHAIN_LINE_FIELDS)}:x;})});
     let o=kind==='po'?saved:null;
     if(kind==='pq'){const o0=po.find(x=>x.pqId===saved.id);if(o0){o=down(saved,o0);po=put(po,o);}}
     if(kind==='ri'){const o0=po.find(x=>x.id===saved.poId);if(o0){o=up(saved,o0);po=put(po,o);}}
@@ -255,16 +261,26 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   };
   const upsert=(arr,d)=>arr.some(x=>x.id===d.id)?arr.map(x=>x.id===d.id?d:x):[...arr,d];
 
+  // ── GROUP COMPANY SUPPLY (e.g. Egefe buys in Turkey and invoices Green Med) ──
+  // Documents of a supplier marked as group company also record, per line, the source supplier that sold the item to it
+  // (name, invoice no/date, unit price in the source currency) and, on the PO, the shipment to the customer.
+  const normName=v=>(v||'').trim().toLowerCase();
+  const isGroupDoc=d=>!!d&&customers.some(c=>c.groupCompany&&(c.type==='supplier'||c.type==='both')&&((d.supplierId&&c.id===d.supplierId)||(!!normName(c.company)&&normName(c.company)===normName(d.supplierCompany))));
+  // fxRate is how many source-currency units one document-currency unit buys (entered by hand)
+  const srcCur=d=>d.srcCurrency||'TRY';
+  const srcInDocCur=(d,it)=>{const v=+(it.srcPrice||0);if(!v)return null;if(srcCur(d)===(d.currency||'GBP'))return v;const r=+(d.fxRate||0);return r>0?v/r:null;};
+  const SHIP_FIELDS=[['date','Ship Date','date'],['incoterm','Incoterm'],['carrier','Carrier'],['awb','AWB / BL No'],['gcb','Customs Declaration (GÇB) No']];
+
   // ── PROCUREMENT LOGIC ──
   const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',sqBase:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkPurchaseOrder=(pq)=>{
     const num=docNum('po');
-    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',sqBase:(pq&&pq.sqBase)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:pq?i.id:undefined})),notes:''};
+    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',sqBase:(pq&&pq.sqBase)||'',supplierId:(pq&&pq.supplierId)||'',srcCurrency:(pq&&pq.srcCurrency)||'',fxRate:(pq&&pq.fxRate)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:pq?i.id:undefined})),notes:''};
   };
   const assignPONumber=(po)=>{
     return isAutoNum('po',po.number)?{...po,number:docNum('po')}:po;
   };
-  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
+  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',supplierId:(po&&po.supplierId)||'',srcCurrency:(po&&po.srcCurrency)||'',fxRate:(po&&po.fxRate)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
 
   const handleSavePQ=pq=>{
     const saved={...pq,id:pq.id||uid()};
@@ -1153,13 +1169,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       <div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Vendor / Supplier")}{supplierLocked&&<span style={{fontSize:11,fontWeight:600,color:'var(--g500)',display:'inline-flex',alignItems:'center',gap:3}}><Ico n="lock" size={11}/>{tr("Locked")}</span>}</div>
         {(()=>{const supPick=customers.filter(c=>{const t=c.type||'customer';return t==='supplier'||t==='both';});return !supplierLocked&&supPick.length>0&&<div style={{marginBottom:12}}>
-          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=supPick.find(x=>x.id===e.target.value);if(c){set('supplierCompany',c.company||'');set('supplierContact',c.contact||'');set('supplierEmail',c.email||'');set('supplierPhone',c.phone||'');set('supplierAddress',c.address||'');}}}>
+          <select className="fi" style={{maxWidth:300}} onChange={e=>{const c=supPick.find(x=>x.id===e.target.value);if(c){set('supplierId',c.id);set('supplierCompany',c.company||'');set('supplierContact',c.contact||'');set('supplierEmail',c.email||'');set('supplierPhone',c.phone||'');set('supplierAddress',c.address||'');}}}>
             <option value="">{tr("— Quick fill —")}</option>
             {supPick.map(c=><option key={c.id} value={c.id}>{c.company?`${c.company} (${c.contact||''})`:c.contact||''}</option>)}
           </select>
         </div>;})()}
         <div className="fg g2">
-          <Fld label={tr("Company Name")}><input value={doc.supplierCompany||''} onChange={e=>set('supplierCompany',e.target.value)} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
+          <Fld label={tr("Company Name")}><input value={doc.supplierCompany||''} onChange={e=>{set('supplierCompany',e.target.value);set('supplierId','');}} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
           <Fld label={tr("Contact Person")}><input value={doc.supplierContact||''} onChange={e=>set('supplierContact',e.target.value)} className="fi" readOnly={supplierLocked} style={supplierLocked?roStyle:{}}/></Fld>
         </div>
         <div className="fg g2" style={{marginTop:12}}>
@@ -1201,6 +1217,46 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
         <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined}/>
       </div>
+      {isGroupDoc(doc)&&(()=>{
+        const sc=srcCur(doc),dc=doc.currency||'GBP';
+        const setLine=(id,f,v)=>setItems(its=>its.map(i=>i.id===id?{...i,[f]:v}:i));
+        const srcNames=customers.filter(c=>c.type==='source').map(c=>c.company||c.contact).filter(Boolean);
+        return(<div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Source Supplier")}<span className="mt-internal">{tr("internal — not printed")}</span></div>
+          <div style={{fontSize:12,color:'var(--g500)',marginBottom:12}}>{tr("Who sold each item to {0}, at what price.",doc.supplierCompany||tr('the group company'))}</div>
+          <div className="fg g3">
+            <Fld label={tr("Source Currency")}><select value={sc} onChange={e=>set('srcCurrency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+            {sc!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,sc)}><input type="number" min="0" step="0.0001" value={doc.fxRate||''} onChange={e=>set('fxRate',e.target.value)} className="fi" placeholder="0.0000"/></Fld>:<div/>}
+            <div/>
+          </div>
+          <datalist id="src-suppliers">{srcNames.map(n=><option key={n} value={n}/>)}</datalist>
+          <div className="iw" style={{marginTop:12}}><table className="ie">
+            <thead><tr><th style={{width:'4%'}}>#</th><th style={{width:'26%'}}>{tr("Line")}</th><th style={{width:'22%'}}>{tr("Source Supplier")}</th><th style={{width:'14%'}}>{tr("Source Invoice No")}</th><th style={{width:'12%'}}>{tr("Date")}</th><th style={{width:'11%',textAlign:'right'}}>{tr("Unit Price")} ({sc})</th><th style={{width:'11%',textAlign:'right'}}>= {dc}</th></tr></thead>
+            <tbody>{items.map((it,i)=>{const conv=srcInDocCur({...doc,srcCurrency:sc},it);return(<tr key={it.id}>
+              <td style={{color:'var(--g500)',paddingLeft:8}}>{i+1}</td>
+              <td style={{color:'var(--g700)',fontSize:12,padding:'0 8px'}}>{it.desc||it.item||'—'}</td>
+              <td><input list="src-suppliers" value={it.srcSupplier||''} onChange={e=>setLine(it.id,'srcSupplier',e.target.value)} placeholder={tr("Source supplier...")}/></td>
+              <td><input value={it.srcDocNo||''} onChange={e=>setLine(it.id,'srcDocNo',e.target.value)} placeholder={tr("Invoice no")}/></td>
+              <td><input type="date" value={it.srcDocDate||''} onChange={e=>setLine(it.id,'srcDocDate',e.target.value)}/></td>
+              <td><input type="number" min="0" step=".01" value={it.srcPrice||''} onChange={e=>setLine(it.id,'srcPrice',e.target.value)} placeholder="0.00" style={{textAlign:'right'}}/></td>
+              <td className="lt" style={{color:conv==null?'var(--g300)':undefined}}>{conv==null?(+it.srcPrice?tr("rate?"):'—'):(CURR[dc]||'')+fmt(conv)}</td>
+            </tr>);})}</tbody>
+          </table></div>
+        </div>);
+      })()}
+      {isPO&&isGroupDoc(doc)&&(()=>{
+        const sh=doc.shipment||{};
+        const setSh=(k,v)=>setDoc(d=>({...d,shipment:{...(d.shipment||{}),[k]:v}}));
+        const q=latestSQ(doc.sqBase);
+        const shipToCustomer=()=>{if(!q)return;const t=q.shipToEnabled&&q.shipTo&&(q.shipTo.company||q.shipTo.address)?q.shipTo:q.client||{};
+          setDoc(d=>({...d,dropShip:true,shipToEnabled:true,shipTo:{company:t.company||'',contact:t.contact||'',email:t.email||'',phone:t.phone||'',address:t.address||'',ref:t.ref||''}}));};
+        return(<div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Shipment")}<span className="mt-internal">{tr("internal — not printed")}</span></div>
+          <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:12}}>
+            <label className="mt-check" style={{margin:0}}><input type="checkbox" checked={!!doc.dropShip} onChange={e=>set('dropShip',e.target.checked)}/><span>{tr("Shipped directly to the customer")}</span></label>
+            {q&&<Btn v="bgh bsm" onClick={shipToCustomer}><Ico n="send"/>{tr("Fill Ship To from {0}",q.number)}</Btn>}
+          </div>
+          <div className="fg g3">{SHIP_FIELDS.map(([k,l,t])=><Fld key={k} label={tr(l)}><input type={t||'text'} value={sh[k]||''} onChange={e=>setSh(k,e.target.value)} className="fi" placeholder={k==='incoterm'?'EXW, FCA, CPT, DAP…':''}/></Fld>)}</div>
+        </div>);
+      })()}
       <div className="fc"><div className="fct">{tr("Notes")}</div>
         <Fld label={tr("Notes")}><textarea value={doc.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi"/></Fld>
         {isPO&&<div style={{marginTop:12}}>
@@ -1290,19 +1346,81 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return{chains,groups,total:all.length,done:all.filter(r=>r.lines.length).length};
   };
   // Kept outside the page so its search and filter survive the re-render that follows each match
-  const matchFilterRef=useRef({q:'',show:''});
+  const matchFilterRef=useRef({q:'',show:'',tab:'match'});
+  // Money along one customer line's supply chain, in the quotation currency. A line bought from a group company costs the
+  // group its source price; one bought directly costs what Green Med paid. Margins stay null when a needed figure is
+  // missing (no match, no source price or rate) or a supplier invoiced in another currency than the quotation.
+  const lineEconomics=(q,row)=>{
+    const sale=+(row.it.qty||0)*+(row.it.price||0);
+    const qc=q.currency||'GBP';
+    if(!row.lines.length)return{sale,matched:false};
+    if(row.lines.some(({c})=>(c.lead.currency||'GBP')!==qc))return{sale,matched:true,otherCur:true};
+    let buy=0,groupCost=0,coMargin=0,hasGroup=false,complete=true;
+    row.lines.forEach(({c,it:s})=>{
+      const amt=+(s.qty||0)*+(s.price||0);buy+=amt;
+      if(isGroupDoc(c.lead)){hasGroup=true;const u=srcInDocCur(c.lead,s);if(u==null){complete=false;return;}const src=+(s.qty||0)*u;groupCost+=src;coMargin+=amt-src;}
+      else groupCost+=amt;
+    });
+    return{sale,matched:true,buy,gm:sale-buy,hasGroup,groupCost:complete?groupCost:null,co:hasGroup&&complete?coMargin:null,group:complete?sale-groupCost:null};
+  };
 
   // Item Matching page of a project (opened from the project detail header)
   function ItemMatching({project}){
     const[pick,setPick]=useState(null); // customer line being matched: {base,key,label}
     const[sel,setSel]=useState('');
     const[f,setF]=useState(matchFilterRef.current);
+    const tab=f.tab||'match';
     const setFilter=p=>{const n={...f,...p};matchFilterRef.current=n;setF(n);};
     useEscape(()=>setPick(null),!!pick);
     const{chains,groups,total,done}=projMatching(project.name);
     const cands=pick?chains.filter(c=>!c.lead.sqBase||c.lead.sqBase===pick.base).flatMap(c=>(c.lead.items||[]).map(it=>({c,it}))):[];
     const lineNo=(base,key)=>{const q=latestSQ(base);const i=q?(q.items||[]).findIndex(x=>sqItemKey(x)===key):-1;return i<0?null:'#'+(i+1);};
     const ql=f.q.trim().toLowerCase();
+    const money=(cur,v)=>v==null?<span style={{color:'var(--g300)'}}>—</span>:<span style={{color:v<0?'var(--red)':undefined}}>{v<0?'-':''}{CURR[cur]||''}{fmt(Math.abs(v))}</span>;
+    const marginCell=(cur,v,sale)=>v==null?money(cur,null):<div>{money(cur,v)}{sale>0&&<div className="mt-pct">{(v/sale*100).toFixed(1)}%</div>}</div>;
+    // Supply chain tab: what each customer line sells for, what it cost Green Med and the group, and how it shipped
+    const renderChain=()=>{
+      const tot={};
+      groups.forEach(({q,rows})=>rows.forEach(r=>{const e=lineEconomics(q,r);const k=q.currency||'GBP';const t=tot[k]||(tot[k]={sale:0,saleDone:0,buy:0,groupCost:0,gm:0,co:0,group:0,open:0});
+        t.sale+=e.sale;if(e.gm==null||e.group==null){t.open++;return;}t.saleDone+=e.sale;t.buy+=e.buy;t.groupCost+=e.groupCost;t.gm+=e.gm;t.co+=e.co||0;t.group+=e.group;}));
+      return(<>
+        {Object.entries(tot).map(([cur,t])=><div key={cur} className="mt-sum">
+          {/* Every figure covers the same lines (those with a complete chain); the project's full sales value is noted under Sales */}
+          {[[tr('Sales'),t.saleDone,0,t.open?tr('of {0} in total',(CURR[cur]||'')+fmt(t.sale)):''],[tr('Green Med Cost'),t.buy],[tr('Group Cost'),t.groupCost],[tr('Green Med Margin'),t.gm,1],[tr('Group Co. Margin'),t.co,1],[tr('Group Margin'),t.group,1]].map(([l,v,m,sub])=>
+            <div key={l} className="mt-sum-c"><div className="mt-sum-l">{l}</div><div className="mt-sum-v" style={{color:m&&v<0?'var(--red)':m?'var(--gm-600)':undefined}}>{v<0?'-':''}{CURR[cur]||''}{fmt(Math.abs(v))}</div>{m?(t.saleDone>0&&<div className="mt-pct">{(v/t.saleDone*100).toFixed(1)}%</div>):(sub&&<div className="mt-pct">{sub}</div>)}</div>)}
+          {t.open>0&&<div className="mt-sum-note">{tr("{0} line(s) left out: not matched, missing source price/rate or invoiced in another currency",t.open)}</div>}
+        </div>)}
+        {groups.map(({q,base,rows})=>{const qc=q.currency||'GBP';const shown=rows.filter(visible);return(<div key={base} style={{marginBottom:16}}>
+          <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}>
+            <div className="tcard-hdr-t">{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
+          </div>
+          <div className="tcard"><table className="dt mt-tbl mt-wrap">
+            <Cg w={[0.35,1.9,1.05,1.55,2.2,1.05,1.05,1.05,2]}/>
+            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Sale")}</th><th>{tr("Bought From")}</th><th>{tr("Source")}</th><th className="tar">{tr("Green Med Margin")}</th><th className="tar">{tr("Group Co. Margin")}</th><th className="tar">{tr("Group Margin")}</th><th>{tr("Shipment")}</th></tr></thead>
+            <tbody>{shown.length===0?<tr><td colSpan={9}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
+            shown.map(r=>{const e=lineEconomics(q,r);return(<tr key={r.key}>
+              <td style={{color:'var(--g500)'}}>{r.i+1}</td>
+              <td style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(r.it)}<div className="mt-pct">{r.it.qty} {r.it.unit||''} × {CURR[qc]||''}{fmt(+(r.it.price||0))}</div></td>
+              <td className="tar">{money(qc,e.sale)}</td>
+              <td>{r.lines.length?r.lines.map(({c,it:s})=><div key={c.lead.id+s.id} className="mt-cell">
+                  <b>{c.lead.supplierCompany||'—'}</b>{isGroupDoc(c.lead)&&<span className="mt-tag ok" style={{marginLeft:5}}>{tr("Group")}</span>}
+                  <div>{CURR[c.lead.currency]||''}{fmt(+(s.qty||0)*+(s.price||0))}</div></div>):<span className="mt-none">{tr("Not matched")}</span>}</td>
+              <td>{r.lines.map(({c,it:s})=>{if(!isGroupDoc(c.lead))return <div key={c.lead.id+s.id} className="mt-cell" style={{color:'var(--g400)'}}>{tr("direct purchase")}</div>;
+                const u=srcInDocCur(c.lead,s);return(<div key={c.lead.id+s.id} className="mt-cell">
+                  {s.srcSupplier?<b>{s.srcSupplier}</b>:<span className="mt-none">{tr("Source missing")}</span>}{s.srcDocNo&&<span style={{color:'var(--g500)'}}> · {s.srcDocNo}</span>}
+                  <div>{+s.srcPrice?<>{CURR[srcCur(c.lead)]||''}{fmt(+(s.qty||0)*+s.srcPrice)}{u!=null&&srcCur(c.lead)!==(c.lead.currency||'GBP')&&<span style={{color:'var(--g500)'}}> ≈ {CURR[c.lead.currency]||''}{fmt(+(s.qty||0)*u)}</span>}{u==null&&<span className="mt-none"> · {tr("rate missing")}</span>}</>:<span style={{color:'var(--g300)'}}>—</span>}</div></div>);})}</td>
+              <td className="tar" title={e.otherCur?tr('Invoiced in another currency'):''}>{marginCell(qc,e.gm,e.sale)}</td>
+              <td className="tar">{e.hasGroup?marginCell(qc,e.co,e.sale):money(qc,null)}</td>
+              <td className="tar">{marginCell(qc,e.group,e.sale)}</td>
+              <td>{r.lines.map(({c,it:s})=>{const sh=(c.po&&c.po.shipment)||{};const any=sh.date||sh.gcb||sh.awb||sh.carrier||sh.incoterm;return(<div key={c.lead.id+s.id} className="mt-cell">
+                  {any?<>{sh.date&&<b>{sh.date}</b>}{c.po.dropShip&&<span className="mt-tag ok" style={{marginLeft:5}}>{tr("Direct")}</span>}
+                    <div style={{color:'var(--g500)',fontSize:11}}>{[sh.incoterm,sh.carrier,sh.awb&&('AWB/BL '+sh.awb),sh.gcb&&('GÇB '+sh.gcb)].filter(Boolean).join(' · ')}</div></>
+                  :<span style={{color:'var(--g300)'}}>{c.po?tr('not shipped yet'):'—'}</span>}</div>);})}</td>
+            </tr>);})}</tbody>
+          </table></div>
+        </div>);})}
+      </>);
+    };
     const visible=r=>(f.show!=='open'||!r.lines.length)&&(f.show!=='done'||r.lines.length)
       &&(!ql||[sqLineText(r.it),...r.lines.flatMap(({c,it})=>[c.lead.supplierCompany,it.desc,it.item])].some(x=>(x||'').toLowerCase().includes(ql)));
     return(<div className="content">
@@ -1312,13 +1430,16 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {total>0&&<span className={done===total?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",done,total)}</span>}
       </div>
       {groups.length===0?<div className="tcard"><div className="empty"><Ico n="link" size={36}/><div className="empty-t">{tr("No sales quotations in this project")}</div><div className="empty-s">{tr("Customer items appear here once a sales quotation is saved with this project.")}</div></div></div>:<>
+      <div className="st-tabs" role="tablist" style={{marginBottom:14}}>
+        {[['match',tr('Matching')],['chain',tr('Supply Chain & Margins')]].map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} className={'st-tab'+(tab===k?' active':'')} onClick={()=>setFilter({tab:k})}>{l}</button>)}
+      </div>
       <div className="fbar">
         <div className="fbar-s"><Ico n="search"/><input value={f.q} onChange={e=>setFilter({q:e.target.value})} placeholder={tr("Search customer or supplier item...")}/></div>
         <select value={f.show} onChange={e=>setFilter({show:e.target.value})}>
           <option value="">{tr("All items")}</option><option value="open">{tr("Not matched")}</option><option value="done">{tr("Matched")}</option>
         </select>
       </div>
-      {groups.map(({q,base,rows})=>{
+      {tab==='chain'?renderChain():groups.map(({q,base,rows})=>{
         const sym=CURR[q.currency]||'£';
         const shown=rows.filter(visible);
         const gDone=rows.filter(r=>r.lines.length).length;
@@ -1791,7 +1912,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[q,setQ]=useState('');
     const{sort,onSort}=useSort('company','asc');
     const {pg,ps,setPg,setPs}=usePagination(q+JSON.stringify(sort));
-    const typeLabel=c=>c.type==='supplier'?tr('Supplier'):c.type==='both'?tr('Customer & Supplier'):tr('Customer');
+    const typeLabel=c=>c.type==='supplier'?tr('Supplier'):c.type==='both'?tr('Customer & Supplier'):c.type==='source'?tr('Source Supplier'):tr('Customer');
     const f=sortRows(customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()))),sort,
       {company:c=>c.company||c.contact,contact:c=>c.contact,email:c=>c.email,phone:c=>c.phone,type:typeLabel});
     return(<div className="content">
@@ -1812,7 +1933,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <td>{c.contact||'—'}</td>
             <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
             <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
-            <td style={{color:'var(--g600)',fontSize:12}}>{typeLabel(c)}</td>
+            <td style={{color:'var(--g600)',fontSize:12}}>{typeLabel(c)}{c.groupCompany&&(c.type==='supplier'||c.type==='both')&&<span className="mt-tag ok" style={{marginLeft:6}}>{tr("Group")}</span>}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(c);go('cust_form');}}><Ico n="edit"/></button>
               <button className="ab danger" onClick={()=>askConfirm(tr("Delete \"{0}\"?", c.company||c.contact),()=>{sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));})}><Ico n="trash"/></button>
@@ -1840,7 +1961,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Customer'):tr('New Customer')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
       <div className="fc"><div className="fct">{tr("Customer Info")}</div>
-        <div className="fg g-2-1"><Fld label={tr("Company Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Relationship")}><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">{tr("Customer")}</option><option value="supplier">{tr("Supplier")}</option><option value="both">{tr("Both")}</option></select></Fld></div>
+        <div className="fg g-2-1"><Fld label={tr("Company Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Relationship")}><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">{tr("Customer")}</option><option value="supplier">{tr("Supplier")}</option><option value="both">{tr("Both")}</option><option value="source">{tr("Source Supplier")}</option></select></Fld></div>
+        {(c.type==='supplier'||c.type==='both')&&<label className="mt-check"><input type="checkbox" checked={!!c.groupCompany} onChange={e=>s('groupCompany',e.target.checked)}/><span><b>{tr("Group company")}</b> — {tr("our own company (e.g. Egefe): its purchase documents also record the source supplier, source price and shipment")}</span></label>}
         <div className="fg g3" style={{marginTop:12}}><Fld label={tr("Contact Person")}><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder={tr("John Smith")}/></Fld><Fld label={tr("Email")}><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
         <div className="fg g2" style={{marginTop:12}}><Fld label={tr("Address")}><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld><Fld label={tr("Notes")}><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={4} className="fi"/></Fld></div>
       </div>
