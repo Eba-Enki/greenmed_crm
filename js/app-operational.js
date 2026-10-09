@@ -79,7 +79,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     setView('home');setCur(null);
   },[]);
 
-  const go=(v,from)=>{setPrev(from||view);setView(v)};
+  const[navSeq,setNavSeq]=useState(0);
+  const go=(v,from)=>{setPrev(from||view);setView(v);setNavSeq(n=>n+1);};
   const save=(key,setter,data)=>{setter(data);LS.set(ns+key,data)};
   const sSQ=d=>save('sq',setSalesQuotes,d);
   const sSI=d=>save('si',setSalesInvoices,d);
@@ -1905,7 +1906,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {showDocForm&&docToEdit&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setShowDocForm(false)}>
         <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:500,maxWidth:'90vw'}}>
           <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{docToEdit.id?tr('Edit Document'):tr('Upload Document')}</div>
-          <DocumentForm doc={docToEdit} onSave={(d)=>{
+          <S.DocumentForm doc={docToEdit} onSave={(d)=>{
             const doc={...d,id:d.id||uid(),uploadDate:d.uploadDate||td()};
             sDocs(doc.id&&documents.find(x=>x.id===doc.id)?documents.map(x=>x.id===doc.id?doc:x):[...documents,doc]);
             setShowDocForm(false);
@@ -2232,10 +2233,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
+  const S=useStableComponents({SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
+        <React.Fragment key={navSeq}>
         {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
           <PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={titles[view]||''}>
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
@@ -2250,39 +2253,40 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>{tr("Upload Document")}</Btn>}
           </PageHeader>
         }
-        {view==='home'&&<Dashboard/>}
-        {view==='sales_quotes'&&<SalesQuotesList/>}
-        {view==='sales_invoices'&&<SalesInvoicesList/>}
-        {view==='purchase_quotes'&&<ProcurementList type="pq" items={purchaseQuotes} title={tr("Received Quotes")}/>}
-        {view==='purchase_orders'&&<ProcurementList type="po" items={purchaseOrders} title={tr("Purchase Orders")}/>}
-        {view==='received_invoices'&&<ProcurementList type="ri" items={receivedInvoices} title={tr("Received Invoices")}/>}
-        {view==='projects'&&<ProjectsList/>}
-        {view==='proj_detail'&&cur&&<ProjectDetail project={cur}/>}
-        {view==='proj_matching'&&cur&&<ItemMatching project={cur}/>}
-        {view==='product_pool'&&<ProductPoolView/>}
-        {view==='expenses'&&<ExpensesView/>}
-        {view==='customers'&&<CustomersView/>}
-        {view==='documents'&&<DocumentsView/>}
-        {view==='settings'&&<OpsSettings/>}
+        {view==='home'&&<S.Dashboard/>}
+        {view==='sales_quotes'&&<S.SalesQuotesList/>}
+        {view==='sales_invoices'&&<S.SalesInvoicesList/>}
+        {view==='purchase_quotes'&&<S.ProcurementList type="pq" items={purchaseQuotes} title={tr("Received Quotes")}/>}
+        {view==='purchase_orders'&&<S.ProcurementList type="po" items={purchaseOrders} title={tr("Purchase Orders")}/>}
+        {view==='received_invoices'&&<S.ProcurementList type="ri" items={receivedInvoices} title={tr("Received Invoices")}/>}
+        {view==='projects'&&<S.ProjectsList/>}
+        {view==='proj_detail'&&cur&&<S.ProjectDetail project={cur}/>}
+        {view==='proj_matching'&&cur&&<S.ItemMatching project={cur}/>}
+        {view==='product_pool'&&<S.ProductPoolView/>}
+        {view==='expenses'&&<S.ExpensesView/>}
+        {view==='customers'&&<S.CustomersView/>}
+        {view==='documents'&&<S.DocumentsView/>}
+        {view==='settings'&&<S.OpsSettings/>}
         {/* FORMS */}
-        {view==='sales_quote_form'&&cur&&<SalesQuoteForm quote={cur} onSave={handleSaveSQ} onCancel={()=>go('sales_quotes')}/>}
-        {view==='sales_invoice_form'&&cur&&<SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go(cur.quoteId?'sales_quotes':'sales_invoices')}/>}
-        {view==='sales_invoice_edit'&&cur&&<SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go('sales_invoices')}/>}
-        {view==='pq_form'&&cur&&<ProcurementForm doc={cur} docType="pq" onSave={handleSavePQ} onCancel={()=>go('purchase_quotes')}/>}
-        {view==='po_form'&&cur&&<ProcurementForm doc={cur} docType="po" onSave={handleSavePO} onCancel={()=>go('purchase_orders')}/>}
-        {view==='ri_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRI} onCancel={()=>go('received_invoices')}/>}
-        {view==='received_invoice_form'&&cur&&<ProcurementForm doc={cur} docType="ri" onSave={handleSaveRIFromPO} onCancel={()=>go('purchase_orders')}/>}
-        {view==='proj_form'&&cur&&<ProjectForm proj={cur} onSave={handleSaveProj} onCancel={()=>go('projects')}/>}
+        {view==='sales_quote_form'&&cur&&<S.SalesQuoteForm quote={cur} onSave={handleSaveSQ} onCancel={()=>go('sales_quotes')}/>}
+        {view==='sales_invoice_form'&&cur&&<S.SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go(cur.quoteId?'sales_quotes':'sales_invoices')}/>}
+        {view==='sales_invoice_edit'&&cur&&<S.SalesInvoiceForm invoice={cur} onSave={handleSaveSI} onCancel={()=>go('sales_invoices')}/>}
+        {view==='pq_form'&&cur&&<S.ProcurementForm doc={cur} docType="pq" onSave={handleSavePQ} onCancel={()=>go('purchase_quotes')}/>}
+        {view==='po_form'&&cur&&<S.ProcurementForm doc={cur} docType="po" onSave={handleSavePO} onCancel={()=>go('purchase_orders')}/>}
+        {view==='ri_form'&&cur&&<S.ProcurementForm doc={cur} docType="ri" onSave={handleSaveRI} onCancel={()=>go('received_invoices')}/>}
+        {view==='received_invoice_form'&&cur&&<S.ProcurementForm doc={cur} docType="ri" onSave={handleSaveRIFromPO} onCancel={()=>go('purchase_orders')}/>}
+        {view==='proj_form'&&cur&&<S.ProjectForm proj={cur} onSave={handleSaveProj} onCancel={()=>go('projects')}/>}
         {view==='exp_form'&&cur&&<ExpenseForm exp={cur} expCats={expCats} projects={projects} mkExpense={mkExpense} onSave={handleSaveExp} onSaveAndNew={handleSaveExpAndNew} onCancel={()=>go('expenses')} dirtyRef={dirtyCheckRef}/>}
-        {view==='exp_cats'&&<ExpCatsView/>}
-        {view==='exp_import'&&<ExpenseImportView/>}
-        {view==='cust_form'&&cur&&<CustomerForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('customers')}/>}
+        {view==='exp_cats'&&<S.ExpCatsView/>}
+        {view==='exp_import'&&<S.ExpenseImportView/>}
+        {view==='cust_form'&&cur&&<S.CustomerForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('customers')}/>}
         {/* PREVIEWS */}
         {view==='sales_quote_preview'&&cur&&<Preview doc={cur} co={co} docType="sales_quote" pdfOpts={FULL_BANK} onBack={()=>go(prev)} onEdit={()=>{go('sales_quote_form','sales_quote_preview');}}/>}
         {view==='sales_invoice_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" pdfOpts={FULL_BANK} onBack={()=>go(prev)}/>}
         {view==='pq_preview'&&cur&&<Preview doc={cur} co={co} docType="quote" pdfOpts={SALES_PDF} onBack={()=>go('purchase_quotes')}/>}
         {view==='po_preview'&&cur&&<Preview doc={cur} co={co} docType="po" pdfOpts={SALES_PDF} onBack={()=>go('purchase_orders')}/>}
         {view==='ri_preview'&&cur&&<Preview doc={cur} co={co} docType="invoice" pdfOpts={SALES_PDF} onBack={()=>go('received_invoices')}/>}
+        </React.Fragment>
       </div>
       {toast&&<div className="toast">{toast}</div>}
       {confirmDlg&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setConfirmDlg(null)}>

@@ -156,6 +156,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
 
   const displayName=`${session.firstName||''} ${session.lastName||''}`.trim()||session.username;
 
+  const S=useStableComponents({SysUserForm});
   return(
     <div className="sys-page">
       <header className="sys-bar no-print">
@@ -172,7 +173,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
 
       <main className="sys-wrap">
         {view==='users'&&renderUsers()}
-        {view==='user_form'&&cur&&<SysUserForm user={cur} onSave={handleSaveUser} onCancel={()=>{setView('users');setCur(null);}}/>}
+        {view==='user_form'&&cur&&<S.SysUserForm key={cur.id||'new'} user={cur} onSave={handleSaveUser} onCancel={()=>{setView('users');setCur(null);}}/>}
       </main>
 
       {toast&&<div className="toast">{toast}</div>}

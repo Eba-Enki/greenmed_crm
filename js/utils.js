@@ -563,6 +563,25 @@ const Badge=({s})=>{const m=SM[s]||SM.draft;return <span className={`bdg ${m.c}`
 const Btn=({v='bp',onClick,children,style={},...p})=><button className={`btn ${v}`} onClick={onClick} style={style} {...p}>{children}</button>;
 const Fld=({label,children})=><div className="fld"><label>{label}</label>{children}</div>;
 
+// Components declared inside a portal component get a new identity on every render of that portal, so React
+// would unmount and remount them — wiping whatever the user had typed — whenever the portal re-renders (a toast
+// disappearing, a background sync, …). useStableComponents gives each one a wrapper that is created once and
+// always runs the latest declaration, so their state survives; they are reset only by navigation (see navSeq).
+function useStableComponents(defs){
+  const latest=useRef(defs);
+  latest.current=defs;
+  const wrappers=useRef(null);
+  if(!wrappers.current){
+    wrappers.current={};
+    Object.keys(defs).forEach(k=>{
+      const W=props=>latest.current[k](props);
+      W.displayName=k;
+      wrappers.current[k]=W;
+    });
+  }
+  return wrappers.current;
+}
+
 // Escape closes the top-most open dialog — the same as its Cancel / Close / × button. Dialogs register while
 // open, so with a confirm on top of a document window, Escape closes the confirm first.
 const escStack=[];
