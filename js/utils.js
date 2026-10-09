@@ -592,10 +592,10 @@ function ListTools({q,onQ,placeholder,active=0,onClear,onExport,extra,children})
   const[open,setOpen]=useState(false);
   const hasFilters=React.Children.toArray(children).some(Boolean);
   const tools=(<div className="ltools">
-    {onQ&&<div className="fbar-s lt-search"><Ico n="search"/><input value={q} onChange={e=>onQ(e.target.value)} placeholder={placeholder}/></div>}
     {hasFilters&&<button className={'lt-btn'+(open?' on':'')} onClick={()=>setOpen(o=>!o)} aria-expanded={open}>
       <Ico n="filter" size={13}/>{tr('Filter')}{active>0&&<span className="lt-count">{active}</span>}
     </button>}
+    {onQ&&<div className="fbar-s lt-search"><Ico n="search"/><input value={q} onChange={e=>onQ(e.target.value)} placeholder={placeholder}/></div>}
     {extra}
     {onExport&&<button className="lt-btn" onClick={onExport}>{tr('Export')}</button>}
   </div>);
@@ -650,8 +650,12 @@ function BulkBar({bulk,children}){
   </div>);
   return slot?ReactDOM.createPortal(bar,slot):bar;
 }
-const BulkBtn=({icon,danger,disabled,onClick,children})=>(
-  <button className={'bulk-btn'+(danger?' danger':'')} disabled={disabled} onClick={onClick}>{icon&&<Ico n={icon} size={13}/>}{children}</button>
+// badge: how many of the selected rows the action applies to, shown in the button's top-right corner
+const BulkBtn=({icon,danger,badge,disabled,onClick,children})=>(
+  <button className={'bulk-btn'+(danger?' danger':'')} disabled={disabled} onClick={onClick}>
+    {icon&&<Ico n={icon} size={13}/>}{children}
+    {badge>0&&<span className="bulk-badge">{badge}</span>}
+  </button>
 );
 
 // Escape closes the top-most open dialog — the same as its Cancel / Close / × button. Dialogs register while

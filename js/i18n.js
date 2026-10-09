@@ -279,7 +279,7 @@ const I18N_TR={
   'No supplier documents in this project':'Bu projede tedarikçi belgesi yok',
   'Export selected':'Seçilenleri aktar','Filter':'Filtre','Clear filters':'Filtreleri temizle','Show':'Göster',
   'Select all':'Tümünü seç','Select':'Seç','Bulk actions':'Toplu işlemler','{0} selected':'{0} seçildi','Clear selection':'Seçimi temizle',
-  'Download PDFs':'PDF\'leri indir','Preparing…':'Hazırlanıyor…','Preparing PDFs… {0}/{1}':'PDF\'ler hazırlanıyor… {0}/{1}','{0} PDFs downloaded':'{0} PDF indirildi',
+  'Preparing…':'Hazırlanıyor…','Preparing PDFs… {0}/{1}':'PDF\'ler hazırlanıyor… {0}/{1}','{0} PDFs downloaded':'{0} PDF indirildi',
   '{0} marked as sent':'{0} kayıt gönderildi olarak işaretlendi','{0} skipped (not a draft)':'{0} kayıt atlandı (taslak değil)',
   'Delete drafts':'Taslakları sil','Delete {0} draft quotations?':'{0} taslak teklif silinsin mi?',
   '{0} selected quotations are not drafts and will be kept.':'Seçilenlerden {0} teklif taslak olmadığı için silinmeyecek.','{0} deleted':'{0} kayıt silindi',
