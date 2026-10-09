@@ -131,7 +131,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       client:(fromQuote&&fromQuote.client)?{...fromQuote.client}:{name:'',company:'',address:'',email:'',phone:'',ref:''},
       shipToEnabled:(fromQuote&&fromQuote.shipToEnabled)||false,
       shipTo:(fromQuote&&fromQuote.shipTo)?{...fromQuote.shipTo}:{company:'',contact:'',email:'',phone:'',address:'',ref:''},
-      items:((fromQuote&&fromQuote.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:'',invoicedQty:0}]).map(i=>({...i,id:uid(),invoicedQty:0})),
+      // Lines keep their key across revisions so procurement matches still point at them
+      items:((fromQuote&&fromQuote.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:'',invoicedQty:0}]).map(i=>({...i,id:uid(),key:fromQuote?sqItemKey(i):undefined,invoicedQty:0})),
       notes:(fromQuote&&fromQuote.notes)||''};
   };
 
@@ -215,20 +216,59 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     showToast(tr('Invoice saved'));go('sales_invoices');
   };
 
+  // ── ITEM MATCHING ──
+  // Supplier lines are matched by hand to the customer's lines: a received quote / PO / received invoice points at a
+  // sales quotation group (sqBase) and each of its lines at one customer line (sqKey). Matches resolve against the
+  // group's latest revision; quotation lines keep their key across revisions (older lines use their id).
+  const sqItemKey=it=>it.key||it.id;
+  const sqBaseOf=q=>q.base||q.number;
+  const latestSQ=base=>base?salesQuotes.filter(q=>sqBaseOf(q)===base).reduce((a,q)=>!a||(q.rev||0)>(a.rev||0)?q:a,null):null;
+  const sqLineText=it=>it.desc||it.item||'—';
+  const sqMatchOptions=base=>{const q=latestSQ(base);return q?(q.items||[]).map((it,i)=>({key:sqItemKey(it),label:`#${i+1} ${sqLineText(it)}`})):[];};
+  // "↳ Customer line (SQ0001.R01 #3)" under a supplier line in quick views
+  const sqItemNote=doc=>it=>{
+    const q=doc.sqBase&&it.sqKey&&latestSQ(doc.sqBase);if(!q)return null;
+    const i=(q.items||[]).findIndex(x=>sqItemKey(x)===it.sqKey);
+    return i<0?null:`↳ ${sqLineText(q.items[i])} (${q.number} #${i+1})`;
+  };
+  // A converted document's lines remember the line they came from (srcId); older ones pair up by position
+  const legacyPair=(parent,child)=>!(child.items||[]).some(x=>x.srcId);
+  const parentLine=(parent,child,childItem)=>(parent.items||[]).find(x=>x.id===childItem.srcId)||(legacyPair(parent,child)?(parent.items||[])[(child.items||[]).indexOf(childItem)]:null)||null;
+  const childLine=(parent,child,parentItem)=>(child.items||[]).find(x=>x.srcId&&x.srcId===parentItem.id)||(legacyPair(parent,child)?(child.items||[])[(parent.items||[]).indexOf(parentItem)]:null)||null;
+  // A received quote, its PO and the PO's received invoice are one supply; a match changed on any of them is copied
+  // to the others. Works on the given lists and returns them (unchanged arrays when nothing moved).
+  const syncMatchChain=(kind,saved,{pq,po,ri})=>{
+    const put=(arr,d)=>{const old=arr.find(x=>x.id===d.id);return old&&JSON.stringify(old)===JSON.stringify(d)?arr:arr.map(x=>x.id===d.id?d:x);};
+    const down=(parent,child)=>({...child,sqBase:parent.sqBase||'',items:(child.items||[]).map(x=>{const p=parentLine(parent,child,x);return p?{...x,sqKey:p.sqKey||''}:x;})});
+    const up=(child,parent)=>({...parent,sqBase:child.sqBase||'',items:(parent.items||[]).map(x=>{const c=childLine(parent,child,x);return c?{...x,sqKey:c.sqKey||''}:x;})});
+    let o=kind==='po'?saved:null;
+    if(kind==='pq'){const o0=po.find(x=>x.pqId===saved.id);if(o0){o=down(saved,o0);po=put(po,o);}}
+    if(kind==='ri'){const o0=po.find(x=>x.id===saved.poId);if(o0){o=up(saved,o0);po=put(po,o);}}
+    if(o&&kind!=='pq'&&o.pqId){const q0=pq.find(x=>x.id===o.pqId);if(q0)pq=put(pq,up(o,q0));}
+    if(o&&kind!=='ri'){const r0=ri.find(x=>x.poId===o.id);if(r0)ri=put(ri,down(o,r0));}
+    return{pq,po,ri};
+  };
+  const commitProc=next=>{
+    if(next.pq!==purchaseQuotes)sPQ(next.pq);
+    if(next.po!==purchaseOrders)sPO(next.po);
+    if(next.ri!==receivedInvoices)sRI(next.ri);
+  };
+  const upsert=(arr,d)=>arr.some(x=>x.id===d.id)?arr.map(x=>x.id===d.id?d:x):[...arr,d];
+
   // ── PROCUREMENT LOGIC ──
-  const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
+  const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',sqBase:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkPurchaseOrder=(pq)=>{
     const num=docNum('po');
-    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''};
+    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',sqBase:(pq&&pq.sqBase)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:pq?i.id:undefined})),notes:''};
   };
   const assignPONumber=(po)=>{
     return isAutoNum('po',po.number)?{...po,number:docNum('po')}:po;
   };
-  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid()})),notes:''});
+  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
 
   const handleSavePQ=pq=>{
-    const fresh=!pq.id;const saved={...pq,id:pq.id||uid()};
-    sPQ(fresh?[...purchaseQuotes,saved]:purchaseQuotes.map(x=>x.id===saved.id?saved:x));
+    const saved={...pq,id:pq.id||uid()};
+    commitProc(syncMatchChain('pq',saved,{pq:upsert(purchaseQuotes,saved),po:purchaseOrders,ri:receivedInvoices}));
     showToast(tr('Saved ✓'));go('purchase_quotes');
   };
   const handleConvertPQtoPO=(pq)=>{
@@ -243,7 +283,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const fresh=!po.id;
     const numbered=fresh?assignPONumber(po):po;
     const saved={...numbered,id:numbered.id||uid()};
-    sPO(fresh?[...purchaseOrders,saved]:purchaseOrders.map(x=>x.id===saved.id?saved:x));
+    commitProc(syncMatchChain('po',saved,{pq:purchaseQuotes,po:upsert(purchaseOrders,saved),ri:receivedInvoices}));
     showToast(tr('Saved ✓'));go('purchase_orders');
   };
   const handleConvertPOtoRI=(po)=>{
@@ -252,16 +292,16 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     go('received_invoice_form');
   };
   const handleSaveRIFromPO=(ri)=>{
-    const fresh=!ri.id;const saved={...ri,id:ri.id||uid()};
+    const saved={...ri,id:ri.id||uid()};
     const pendingPOId=ri._pendingPOId;
     const {_pendingPOId:_,...cleanRI}=saved;
-    sRI(fresh?[...receivedInvoices,cleanRI]:receivedInvoices.map(x=>x.id===cleanRI.id?cleanRI:x));
-    if(pendingPOId)sPO(purchaseOrders.map(x=>x.id===pendingPOId?{...x,linkedRI:{id:cleanRI.id,number:cleanRI.number}}:x));
+    const po=pendingPOId?purchaseOrders.map(x=>x.id===pendingPOId?{...x,linkedRI:{id:cleanRI.id,number:cleanRI.number}}:x):purchaseOrders;
+    commitProc(syncMatchChain('ri',cleanRI,{pq:purchaseQuotes,po,ri:upsert(receivedInvoices,cleanRI)}));
     showToast(tr('Saved ✓'));go('received_invoices');
   };
   const handleSaveRI=ri=>{
-    const fresh=!ri.id;const saved={...ri,id:ri.id||uid()};
-    sRI(fresh?[...receivedInvoices,saved]:receivedInvoices.map(x=>x.id===saved.id?saved:x));
+    const saved={...ri,id:ri.id||uid()};
+    commitProc(syncMatchChain('ri',saved,{pq:purchaseQuotes,po:purchaseOrders,ri:upsert(receivedInvoices,saved)}));
     showToast(tr('Saved ✓'));go('received_invoices');
   };
 
@@ -1043,7 +1083,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         if(isPQ&&!quickView.linkedPO)extraActions.push({label:tr('Convert to Purchase Order'),onClick:()=>{setQuickView(null);handleConvertPQtoPO(quickView);}});
         if(isPO&&!quickView.linkedRI)extraActions.push({label:tr('Create Received Invoice'),onClick:()=>{setQuickView(null);handleConvertPOtoRI(quickView);}});
         if(isRI&&quickView.status==='unpaid')extraActions.push({label:tr('Mark as Paid'),onClick:()=>{sRI(receivedInvoices.map(x=>x.id===quickView.id?{...x,status:'paid'}:x));showToast(tr('Marked as paid'));setQuickView(null);}});
-        return(<DocQuickModal doc={quickView} co={co} docType={isPO?'po':isRI?'invoice':'quote'} pdfOpts={SALES_PDF} onClose={()=>setQuickView(null)}
+        return(<DocQuickModal doc={quickView} co={co} docType={isPO?'po':isRI?'invoice':'quote'} pdfOpts={SALES_PDF} itemNote={sqItemNote(quickView)} onClose={()=>setQuickView(null)}
           onEdit={()=>{setQuickView(null);setCur(quickView);go(isPQ?'pq_form':isPO?'po_form':'ri_form');}}
           onDelete={()=>askConfirm(tr("Delete this {0}?", lbl.toLowerCase()),()=>{isPQ?deletePQ(quickView.id):isPO?deletePO(quickView.id):deleteRI(quickView.id);showToast(tr('Deleted'));setQuickView(null);})}
           extraActions={extraActions}/>);
@@ -1065,6 +1105,27 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const supplierLocked=(isPO&&!!doc.pqId)||(isRI&&!!doc.poId);
     const roStyle={background:'var(--g50)',color:'var(--g700)',cursor:'default'};
     const savedDoc={...doc,items};
+    // Sales quotation whose customer lines this document's lines are matched to (latest revision of each group)
+    const sqChoices=[...new Set(salesQuotes.filter(q=>!doc.project||q.project===doc.project).map(sqBaseOf))].concat(doc.sqBase?[doc.sqBase]:[])
+      .filter((b,i,a)=>a.indexOf(b)===i).map(latestSQ).filter(Boolean);
+    const clearMatches=()=>setItems(its=>its.map(i=>i.sqKey?{...i,sqKey:''}:i));
+    const pickSQ=base=>{
+      if(base===(doc.sqBase||''))return;
+      const q=latestSQ(base);
+      setDoc(d=>({...d,sqBase:base,...(q&&!d.project&&q.project?{project:q.project,projectNumber:q.projectNumber||''}:{})}));
+      clearMatches();
+    };
+    const pickProject=projName=>{
+      const proj=projects.find(p=>p.name===projName);
+      const q=latestSQ(doc.sqBase);
+      const keepSQ=!q||!projName||q.project===projName;
+      setDoc(d=>({...d,project:projName,projectNumber:proj?proj.number:'',...(keepSQ?{}:{sqBase:''})}));
+      if(!keepSQ)clearMatches();
+    };
+    const sqField=<Fld label={tr("Sales Quotation")}><select value={doc.sqBase||''} onChange={e=>pickSQ(e.target.value)} className="fi">
+      <option value="">{tr("— None —")}</option>
+      {sqChoices.map(q=><option key={sqBaseOf(q)} value={sqBaseOf(q)}>{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</option>)}
+    </select></Fld>;
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
@@ -1085,9 +1146,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <div className="fg g3" style={{marginTop:12}}>
           {isRI&&<Fld label={tr("Terms")}><select value={doc.terms||'Due on Receipt'} onChange={e=>set('terms',e.target.value)} className="fi">{ITRM.map(t=><option key={t} value={t}>{t}</option>)}</select></Fld>}
           {isRI&&<Fld label={tr("Status")}><select value={doc.status||'unpaid'} onChange={e=>set('status',e.target.value)} className="fi"><option value="unpaid">{tr("Unpaid")}</option><option value="paid">{tr("Paid")}</option></select></Fld>}
-          <Fld label={tr("Project")}><select value={doc.project||''} onChange={e=>{const projName=e.target.value;const proj=projects.find(p=>p.name===projName);set('project',projName);if(proj)set('projectNumber',proj.number);else set('projectNumber','');}} className="fi"><option value="">{tr("— None —")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
-          {!isRI&&<div/>}
+          <Fld label={tr("Project")}><select value={doc.project||''} onChange={e=>pickProject(e.target.value)} className="fi"><option value="">{tr("— None —")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
+          {!isRI&&sqField}
         </div>
+        {isRI&&<div className="fg g3" style={{marginTop:12}}>{sqField}</div>}
       </div>
       <div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Vendor / Supplier")}{supplierLocked&&<span style={{fontSize:11,fontWeight:600,color:'var(--g500)',display:'inline-flex',alignItems:'center',gap:3}}><Ico n="lock" size={11}/>{tr("Locked")}</span>}</div>
         {(()=>{const supPick=customers.filter(c=>{const t=c.type||'customer';return t==='supplier'||t==='both';});return !supplierLocked&&supPick.length>0&&<div style={{marginBottom:12}}>
@@ -1136,7 +1198,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>
       </div>}
       <div className="fc"><div className="fct">{tr("Line Items")}</div>
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'}/>
+        {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined}/>
       </div>
       <div className="fc"><div className="fct">{tr("Notes")}</div>
         <Fld label={tr("Notes")}><textarea value={doc.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi"/></Fld>
@@ -1198,6 +1261,96 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     </div>);
   }
 
+  // Supplies of a project: a received quote, the PO made from it and that PO's received invoice form one chain;
+  // its latest document (invoice, else PO, else quote) is the one shown and edited
+  const procChains=projName=>{
+    const chains=[];
+    purchaseQuotes.filter(d=>d.project===projName).forEach(q=>{const o=purchaseOrders.find(p=>p.pqId===q.id)||null;chains.push({pq:q,po:o,ri:(o&&receivedInvoices.find(r=>r.poId===o.id))||null});});
+    purchaseOrders.filter(o=>o.project===projName&&!chains.some(c=>c.po&&c.po.id===o.id)).forEach(o=>chains.push({pq:null,po:o,ri:receivedInvoices.find(r=>r.poId===o.id)||null}));
+    receivedInvoices.filter(r=>r.project===projName&&!chains.some(c=>c.ri&&c.ri.id===r.id)).forEach(r=>chains.push({pq:null,po:null,ri:r}));
+    return chains.map(c=>({...c,lead:c.ri||c.po||c.pq,kind:c.ri?'ri':c.po?'po':'pq'}));
+  };
+  // Matches (key) or unmatches ('') one supplier line; a customer line is matched once per document
+  const setLineMatch=(chain,itemId,base,key)=>{
+    const lead={...chain.lead,sqBase:base,items:(chain.lead.items||[]).map(x=>x.id===itemId?{...x,sqKey:key}:(key&&x.sqKey===key?{...x,sqKey:''}:x))};
+    const lists={pq:purchaseQuotes,po:purchaseOrders,ri:receivedInvoices};
+    lists[chain.kind]=upsert(lists[chain.kind],lead);
+    commitProc(syncMatchChain(chain.kind,lead,lists));
+    showToast(tr(key?'Matched ✓':'Match removed'));
+  };
+  const chainDocs=c=>[c.pq&&[tr('RQ'),c.pq.number],c.po&&[tr('PO'),c.po.number],c.ri&&[tr('INV'),c.ri.number]].filter(Boolean);
+  const DocChips=({c})=><span style={{display:'inline-flex',gap:4,flexWrap:'wrap'}}>{chainDocs(c).map(([k,n])=><span key={k} className="mt-chip">{k} {n||'—'}</span>)}</span>;
+
+  // Project detail: customer lines of each sales quotation next to the supplier lines matched to them
+  function ItemMatching({project}){
+    const[pick,setPick]=useState(null); // customer line being matched: {base,key,label}
+    const[sel,setSel]=useState('');
+    useEscape(()=>setPick(null),!!pick);
+    const groups=[...new Set(salesQuotes.filter(q=>q.project===project.name).map(sqBaseOf))].map(latestSQ).filter(Boolean);
+    if(!groups.length)return null;
+    const chains=procChains(project.name);
+    const linesFor=(base,key)=>chains.filter(c=>c.lead.sqBase===base).flatMap(c=>(c.lead.items||[]).filter(it=>it.sqKey===key).map(it=>({c,it})));
+    const cands=pick?chains.filter(c=>!c.lead.sqBase||c.lead.sqBase===pick.base).flatMap(c=>(c.lead.items||[]).map(it=>({c,it}))):[];
+    const lineNo=(base,key)=>{const q=latestSQ(base);const i=q?(q.items||[]).findIndex(x=>sqItemKey(x)===key):-1;return i<0?null:'#'+(i+1);};
+    return(<div style={{marginBottom:16}}>
+      {groups.map(q=>{
+        const base=sqBaseOf(q),sym=CURR[q.currency]||'£';
+        const rows=(q.items||[]).map((it,i)=>({it,i,key:sqItemKey(it),lines:linesFor(base,sqItemKey(it))}));
+        const done=rows.filter(r=>r.lines.length).length;
+        return(<div key={base} style={{marginBottom:16}}>
+          <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}>
+            <div className="tcard-hdr-t">{tr("Item Matching")} · {q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
+            <span className={done===rows.length?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",done,rows.length)}</span>
+          </div>
+          <div className="tcard"><table className="dt">
+            <Cg w={[0.35,2.2,0.6,0.9,3,0.9,0.7]}/>
+            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Sale Price")}</th><th>{tr("Supplier Item")}</th><th className="tar">{tr("Purchase Price")}</th><th/></tr></thead>
+            <tbody>{rows.map(({it,i,key,lines})=><tr key={key}>
+              <td style={{color:'var(--g500)'}}>{i+1}</td>
+              <td style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(it)}</td>
+              <td className="tar">{it.qty} {it.unit||''}</td>
+              <td className="tar">{sym}{fmt(+(it.price||0))}</td>
+              <td>{lines.length?lines.map(({c,it:s})=><div key={c.lead.id+s.id} className="mt-line">
+                  <div><b style={{color:'var(--g900)'}}>{c.lead.supplierCompany||'—'}</b> · {s.desc||s.item||'—'}</div>
+                  <DocChips c={c}/>
+                </div>):<span className="mt-none">{tr("Not matched")}</span>}</td>
+              <td className="tar">{lines.map(({c,it:s})=><div key={c.lead.id+s.id} className="mt-line">{CURR[c.lead.currency]||'£'}{fmt(+(s.price||0))}</div>)}</td>
+              <td><div className="aw">
+                <button className="ab" title={tr("Match")} aria-label={tr("Match")} onClick={()=>{setSel('');setPick({base,key,label:`#${i+1} ${sqLineText(it)}`});}}><Ico n="link"/></button>
+                {lines.map(({c,it:s})=><button key={c.lead.id+s.id} className="ab danger" title={tr("Remove match")} aria-label={tr("Remove match")} onClick={()=>setLineMatch(c,s.id,base,'')}><Ico n="x"/></button>)}
+              </div></td>
+            </tr>)}</tbody>
+          </table></div>
+        </div>);
+      })}
+      {pick&&<div className="mt-overlay" onClick={()=>setPick(null)}>
+        <div className="mt-dialog" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+          <div className="mt-dialog-h">
+            <div><div className="mt-dialog-k">{tr("Match supplier line to")}</div><div className="mt-dialog-t">{pick.label}</div></div>
+            <button className="ab" onClick={()=>setPick(null)} aria-label={tr("Close")}><Ico n="x"/></button>
+          </div>
+          <div className="mt-dialog-b">
+            {cands.length===0?<div className="empty"><div className="empty-t">{tr("No supplier documents in this project")}</div><div className="empty-s">{tr("Enter the received quote with this project selected, then match its lines here or in the quote itself.")}</div></div>:
+            cands.map(({c,it})=>{const v=c.lead.id+'|'+it.id;const other=it.sqKey&&it.sqKey!==pick.key&&c.lead.sqBase===pick.base?lineNo(pick.base,it.sqKey):null;return(
+              <label key={v} className={'mt-cand'+(sel===v?' on':'')}>
+                <input type="radio" name="mt-cand" checked={sel===v} onChange={()=>setSel(v)}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:'var(--g900)'}}><b>{c.lead.supplierCompany||'—'}</b> · {it.desc||it.item||'—'}</div>
+                  <div style={{display:'flex',gap:8,alignItems:'center',marginTop:3,flexWrap:'wrap'}}><DocChips c={c}/><span style={{fontSize:11,color:'var(--g500)'}}>{it.qty} {it.unit||''} · {CURR[c.lead.currency]||'£'}{fmt(+(it.price||0))}</span>
+                    {it.sqKey===pick.key&&c.lead.sqBase===pick.base&&<span className="mt-tag ok">{tr("matched to this item")}</span>}
+                    {other&&<span className="mt-tag">{tr("matched to {0}",other)}</span>}</div>
+                </div>
+              </label>);})}
+          </div>
+          <div className="mt-dialog-f">
+            <Btn v="bgh bsm" onClick={()=>setPick(null)}>{tr("Cancel")}</Btn>
+            <Btn v="bp bsm" disabled={!sel} onClick={()=>{const[docId,itemId]=sel.split('|');const ch=cands.find(x=>x.c.lead.id===docId).c;setPick(null);setLineMatch(ch,itemId,pick.base,pick.key);}}>{tr("Match")}</Btn>
+          </div>
+        </div>
+      </div>}
+    </div>);
+  }
+
   // Project Detail
   function ProjectDetail({project}){
     const pQ=salesQuotes.filter(d=>d.project===project.name);
@@ -1221,6 +1374,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="stats" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
         {[{lbl:tr('Revenue'),val:`£${fmt(revenue)}`,sub:tr("{0} invoices", pI.length),cls:'sc-green'},{lbl:tr('PO Costs'),val:`£${fmt(poTotal)}`,sub:tr("{0} orders", pPO.length),cls:'sc-blue'},{lbl:tr('Expenses'),val:`£${fmt(expTotal)}`,sub:tr("{0} items", pExp.length),cls:'sc-purple'},{lbl:tr('Net'),val:`£${fmt(revenue-poTotal-expTotal)}`,sub:tr('revenue - costs'),cls:revenue-poTotal-expTotal>=0?'sc-teal':'sc-red'}].map(s=><div key={s.lbl} className={`stat-card ${s.cls}`}><div className="stat-val">{s.val}</div><div className="stat-lbl">{s.lbl}</div><div className="stat-sub">{s.sub}</div></div>)}
       </div>
+      <ItemMatching project={project}/>
       {/* Sections */}
       {(()=>{
         const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>d.date};

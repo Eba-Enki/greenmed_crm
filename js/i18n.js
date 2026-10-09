@@ -255,6 +255,14 @@ const I18N_TR={
   'Money In':'Para Girişi','Money Out':'Para Çıkışı',
   'Number {0} is already used by another document.':'{0} numarası başka bir belgede kullanılıyor.',
   'Revision {0} was already created by another user.':'{0} revizyonu başka bir kullanıcı tarafından zaten oluşturuldu.',
+  // Item matching (supplier lines ↔ customer lines)
+  'Customer Item':'Müşteri Kalemi','Supplier Item':'Tedarikçi Kalemi','— Not matched —':'— Eşleşmedi —','(item no longer in quotation)':'(kalem artık teklifte yok)',
+  "Select the sales quotation above to match each line to the customer's item.":'Kalemleri müşteri kalemleriyle eşleştirmek için yukarıdan satış teklifini seçin.',
+  'Item Matching':'Kalem Eşleştirme','{0} / {1} matched':'{0} / {1} eşleşti','Not matched':'Eşleşmedi','Match':'Eşleştir','Remove match':'Eşleşmeyi kaldır',
+  'Matched ✓':'Eşleştirildi ✓','Match removed':'Eşleşme kaldırıldı','Match supplier line to':'Tedarikçi kalemini eşleştir:',
+  'matched to this item':'bu kaleme eşleşmiş','matched to {0}':'{0} ile eşleşmiş','RQ':'AT','PO':'SİP','INV':'FAT',
+  'No supplier documents in this project':'Bu projede tedarikçi belgesi yok',
+  'Enter the received quote with this project selected, then match its lines here or in the quote itself.':'Alınan teklifi bu proje seçili olarak girin, ardından kalemlerini burada veya teklifin kendisinde eşleştirin.',
 };
 
 const tr=(s,...a)=>{

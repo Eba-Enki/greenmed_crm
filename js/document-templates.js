@@ -873,7 +873,8 @@ function DocPage({doc,co,docType}){
   );
 }
 
-function DocSummaryBody({doc,co,docType}){
+// itemNote (optional): it=>text shown in small print under a line's description (in-app only, never on the PDF)
+function DocSummaryBody({doc,co,docType,itemNote}){
   const sym=CURR[doc.currency]||'£';
   const total=dt(doc.items||[]);
   const isInv=docType==='invoice';
@@ -952,7 +953,7 @@ function DocSummaryBody({doc,co,docType}){
                 <tbody>{(doc.items||[]).map((it,i)=>(
                   <tr key={it.id||i}>
                     <td style={{fontFamily:'monospace',fontSize:11,color:'var(--g500)',whiteSpace:'nowrap'}}>{it.item||'—'}</td>
-                    <td style={{color:'var(--g800)'}}>{it.desc||'—'}</td>
+                    <td style={{color:'var(--g800)'}}>{it.desc||'—'}{itemNote&&itemNote(it)&&<div className="pv2-itemnote">{itemNote(it)}</div>}</td>
                     <td style={{textAlign:'right',color:'var(--g700)'}}>{it.qty||'1'}</td>
                     <td style={{fontSize:11,color:'var(--g400)'}}>{it.unit||''}</td>
                     <td style={{textAlign:'right',fontWeight:500,color:'var(--g800)',fontVariantNumeric:'tabular-nums'}}>{sym}{fmt(+(it.price||0))}</td>
@@ -996,7 +997,7 @@ function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
   );
 }
 
-function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfOpts}){
+function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfOpts,itemNote}){
   useEscape(onClose);
   const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
   const statusClass=statusMap[doc.status]||'b-draft';
@@ -1011,7 +1012,7 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
           <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'var(--g400)',lineHeight:1}}>×</button>
         </div>
         <div style={{overflowY:'auto',padding:'20px 24px',flex:1}}>
-          <DocSummaryBody doc={doc} co={co} docType={docType}/>
+          <DocSummaryBody doc={doc} co={co} docType={docType} itemNote={itemNote}/>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,padding:'14px 24px',borderTop:'1px solid var(--g200)',flexShrink:0}}>
           {onDelete&&<button className="ab danger" onClick={onDelete}><Ico n="trash"/></button>}
@@ -1027,19 +1028,32 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
 }
 
 // Generic line items editor
-function ItemsEditor({items,setItems,currency,readOnly}){
+// match (optional): {options:[{key,label}]} adds a "Customer Item" column whose select stores the chosen key
+// in item.sqKey; a key already picked on another line is disabled so each customer item is matched once.
+function ItemsEditor({items,setItems,currency,readOnly,match}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
   const addL=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
   const rmL=id=>setItems(items.filter(i=>i.id!==id));
   const total=dt(items);
+  const heads=match
+    ?[['Item','11%'],['Description','22%'],['Customer Item','20%'],['Qty','7%'],['Unit','7%'],['Unit Price','11%'],['Total','10%'],['','4%']]
+    :[['Item','13%'],['Description','27%'],['Qty','8%'],['Unit','9%'],['Unit Price','12%'],['Total','11%'],['','4%']];
+  const usedKeys=it=>new Set(items.filter(x=>x.id!==it.id&&x.sqKey).map(x=>x.sqKey));
   return(<>
     <div className="iw">
       <table className="ie">
-        <thead><tr>{['Item','Description','Qty','Unit','Unit Price','Total',readOnly?'':''].map((h,i)=><th key={i} style={{textAlign:i>=2&&i<=5?'right':'left',width:i===0?'13%':i===1?'27%':i===2?'8%':i===3?'9%':i===4?'12%':i===5?'11%':'4%'}}>{h&&tr(h)}</th>)}</tr></thead>
+        <thead><tr>{heads.map(([h,w],i)=><th key={i} style={{textAlign:['Qty','Unit Price','Total'].includes(h)?'right':'left',width:w}}>{h&&tr(h)}</th>)}</tr></thead>
         <tbody>{items.map(it=><tr key={it.id}>
           <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Product...")} readOnly={readOnly}/></td>
           <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/></td>
+          {match&&<td>{(()=>{const used=usedKeys(it);return(
+            <select value={it.sqKey||''} onChange={e=>si(it.id,'sqKey',e.target.value)} disabled={readOnly} title={(match.options.find(o=>o.key===it.sqKey)||{}).label||''}
+              style={{width:'100%',color:it.sqKey?'var(--g800)':'var(--g400)'}}>
+              <option value="">{tr("— Not matched —")}</option>
+              {match.options.map(o=><option key={o.key} value={o.key} disabled={used.has(o.key)}>{o.label}</option>)}
+              {it.sqKey&&!match.options.some(o=>o.key===it.sqKey)&&<option value={it.sqKey}>{tr("(item no longer in quotation)")}</option>}
+            </select>);})()}</td>}
           <td><input type="number" value={it.qty} onChange={e=>si(it.id,'qty',e.target.value)} min="0" step=".01" style={{textAlign:'right'}} readOnly={readOnly}/></td>
           <td><input value={it.unit||''} onChange={e=>si(it.id,'unit',e.target.value)} placeholder="pcs" readOnly={readOnly}/></td>
           <td><input type="number" value={it.price} onChange={e=>si(it.id,'price',e.target.value)} min="0" step=".01" placeholder="0.00" style={{textAlign:'right'}} readOnly={readOnly}/></td>
