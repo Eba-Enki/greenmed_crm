@@ -401,22 +401,42 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     sSQ(salesQuotes.filter(x=>x.id!==id));
     sSI(salesInvoices.map(si=>si.quoteId===id?{...si,quoteId:null,quoteNum:''}:si));
   };
-  const deletePQ=(id)=>{
-    sPQ(purchaseQuotes.filter(x=>x.id!==id));
-    syncSrcStatus({id},true); // its source lines become available again
-    sPO(purchaseOrders.map(p=>p.pqId===id?{...p,pqId:null,pqNum:''}:p));
+  // Source-quote lines used by deleted received quotes become available again (what syncSrcStatus(doc,true) does
+  // for one quote, for several at once)
+  const releaseSrcLines=ids=>{
+    let changed=false;
+    const next=srcQuotes.map(q=>{
+      let qChanged=false;
+      const items=(q.items||[]).map(it=>{
+        if(!(it.quotedIn&&ids.has(it.quotedIn.id))&&!(it.unusedBy&&ids.has(it.unusedBy.id)))return it;
+        qChanged=true;return{...it,status:'pending',quotedIn:null,unusedBy:null};
+      });
+      if(!qChanged)return q;
+      changed=true;return{...q,items};
+    });
+    if(changed)sSRQ(next);
   };
-  const deletePO=(id)=>{
-    const po=purchaseOrders.find(x=>x.id===id);
-    sPO(purchaseOrders.filter(x=>x.id!==id));
-    sRI(receivedInvoices.map(r=>r.poId===id?{...r,poId:null,poNum:''}:r));
-    if(po&&po.pqId)sPQ(purchaseQuotes.map(q=>q.id===po.pqId?{...q,linkedPO:null}:q));
+  // Deletes received quotes / purchase orders / received invoices (a Set of ids, one or many) in one pass and
+  // unlinks the documents that pointed at them — calling a single delete repeatedly would work on stale lists
+  const deleteProc=(kind,ids)=>{
+    if(kind==='pq'){
+      sPQ(purchaseQuotes.filter(x=>!ids.has(x.id)));
+      releaseSrcLines(ids);
+      sPO(purchaseOrders.map(p=>ids.has(p.pqId)?{...p,pqId:null,pqNum:''}:p));
+    }else if(kind==='po'){
+      const pqIds=new Set(purchaseOrders.filter(p=>ids.has(p.id)&&p.pqId).map(p=>p.pqId));
+      sPO(purchaseOrders.filter(x=>!ids.has(x.id)));
+      sRI(receivedInvoices.map(r=>ids.has(r.poId)?{...r,poId:null,poNum:''}:r));
+      if(pqIds.size)sPQ(purchaseQuotes.map(q=>pqIds.has(q.id)?{...q,linkedPO:null}:q));
+    }else{
+      const poIds=new Set(receivedInvoices.filter(r=>ids.has(r.id)&&r.poId).map(r=>r.poId));
+      sRI(receivedInvoices.filter(x=>!ids.has(x.id)));
+      if(poIds.size)sPO(purchaseOrders.map(p=>poIds.has(p.id)?{...p,linkedRI:null}:p));
+    }
   };
-  const deleteRI=(id)=>{
-    const ri=receivedInvoices.find(x=>x.id===id);
-    sRI(receivedInvoices.filter(x=>x.id!==id));
-    if(ri&&ri.poId)sPO(purchaseOrders.map(p=>p.id===ri.poId?{...p,linkedRI:null}:p));
-  };
+  const deletePQ=id=>deleteProc('pq',new Set([id]));
+  const deletePO=id=>deleteProc('po',new Set([id]));
+  const deleteRI=id=>deleteProc('ri',new Set([id]));
 
   // ── EXPENSE ──
   const mkExpense=()=>({id:null,date:td(),category:'',description:'',amount:'',currency:'GBP',reference:'',project:'',employee:'',notes:''});
@@ -1159,18 +1179,40 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       linked:d=>isPQ?d.linkedPO&&d.linkedPO.number:isPO?d.pqNum:d.poNum,status:d=>d.status||'unpaid'});
     const lbl=isPQ?tr('Received Quote'):isPO?tr('Purchase Order'):tr('Received Invoice');
     const linkChip=(label,num)=><span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(61,105,22,.09)',color:'#3D6916',border:'1px solid rgba(61,105,22,.18)'}}>{label} {num}</span>;
+    const bulk=useBulkSelect(sorted.map(d=>d.id));
+    const picked=sorted.filter(d=>bulk.has(d.id));
+    const[zipBusy,setZipBusy]=useState(false);
+    const exportRows=docs=>exportExcel([['Date','Number','Supplier','Total',...(isRI?['Status']:[])],...docs.map(d=>[d.date,d.number,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type);
+    const bulkPDF=async()=>{
+      setZipBusy(true);
+      const done=await downloadPDFZip(picked,co,isPO?'po':isRI?'invoice':'quote',SALES_PDF,isPQ?'received-quotes':isPO?'purchase-orders':'received-invoices',(i,n)=>showToast(tr('Preparing PDFs… {0}/{1}',i,n)));
+      setZipBusy(false);
+      if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
+    };
+    const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected documents?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;
+      deleteProc(type,new Set(picked.map(d=>d.id)));
+      showToast(tr('{0} deleted',picked.length));
+      bulk.clear();
+    });
     return(<div className="content">
-      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search supplier or ref...")} active={[fs.s,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',dateFrom:'',dateTo:''}))} onExport={()=>exportExcel([['Date','Number','Supplier','Total',...(isRI?['Status']:[])],...sorted.map(d=>[d.date,d.number,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type)}>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search supplier or ref...")} active={[fs.s,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',dateFrom:'',dateTo:''}))}>
         {isRI&&<FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
           <option value="">{tr("All")}</option><option value="unpaid">{tr("Unpaid")}</option><option value="paid">{tr("Paid")}</option>
         </select></FilterField>}
         <FilterField label={tr("From")}><input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))}/></FilterField>
         <FilterField label={tr("To")}><input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))}/></FilterField>
       </ListTools>
+      <BulkBar bulk={bulk}>
+        <BulkBtn onClick={()=>exportRows(picked)}>{tr("Export selected")}</BulkBtn>
+        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDF')}</BulkBtn>
+        <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+      </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isRI?'received':'po'} size={38}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={isRI?[0.8,1,1,2,0.9,0.9,1.1,0.9]:[0.8,1,1,2,0.9,0.9,1.3]}/>
+          <Cg w={isRI?[0.32,0.8,1,1,2,0.9,0.9,1.1,0.9]:[0.32,0.8,1,1,2,0.9,0.9,1.3]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{tr("No")}</SortTh>
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
@@ -1181,7 +1223,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {isRI&&<SortTh k="status" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>}
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
-            <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+            <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+              <SelTd bulk={bulk} id={d.id}/>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
               <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
@@ -2029,8 +2072,27 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const sorted=sortRows([...filtered].reverse(),sort,{date:e=>e.date,no:e=>e.reference,employee:e=>e.employee,category:e=>e.category,desc:e=>e.description,project:e=>e.project,amount:e=>+(e.amount||0)});
     const total=filtered.reduce((s,e)=>s+(+(e.amount||0)),0);
     const allCats=[...new Set(expenses.map(e=>e.category).filter(Boolean))];
+    const bulk=useBulkSelect(sorted.map(e=>e.id));
+    const picked=sorted.filter(e=>bulk.has(e.id));
+    const catChoices=[...new Set([...expCats.map(c=>typeof c==='string'?c:c.name),...allCats])].filter(Boolean).sort();
+    // Sets one field (category / project) on every selected expense
+    const bulkSet=(field,value)=>{
+      if(!value)return;
+      const ids=new Set(picked.map(e=>e.id));
+      sExp(expenses.map(x=>ids.has(x.id)?{...x,[field]:value}:x));
+      showToast(tr('{0} updated',ids.size));
+      bulk.clear();
+    };
+    const exportRows=rows=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...rows.map(e=>[e.date,e.employee,e.category,e.description,e.reference,e.amount,e.currency,e.project])],'expenses');
+    const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected expenses?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;
+      const ids=new Set(picked.map(e=>e.id));
+      sExp(expenses.filter(x=>!ids.has(x.id)));
+      showToast(tr('{0} deleted',ids.size));
+      bulk.clear();
+    });
     return(<div className="content">
-      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.cat,fs.p,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,cat:'',p:'',dateFrom:'',dateTo:''}))} onExport={()=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...sorted.map(e=>[e.date,e.employee,e.category,e.description,e.reference,e.amount,e.currency,e.project])],'expenses')} extra={<>{filtered.length>0&&<span className="lt-note">{tr("Total: £{0}", fmt(total))}</span>} <button className="lt-btn" onClick={()=>go('exp_import')}>{tr("Import Excel")}</button></>}>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.cat,fs.p,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,cat:'',p:'',dateFrom:'',dateTo:''}))} extra={<>{filtered.length>0&&<span className="lt-note">{tr("Total: £{0}", fmt(total))}</span>} <button className="lt-btn" onClick={()=>go('exp_import')}>{tr("Import Excel")}</button></>}>
         <FilterField label={tr("Category")}><select value={fs.cat} onChange={e=>setFs(f=>({...f,cat:e.target.value}))}>
           <option value="">{tr("All Categories")}</option>{allCats.map(c=><option key={c} value={c}>{c}</option>)}
         </select></FilterField>
@@ -2040,10 +2102,21 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <FilterField label={tr("From")}><input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))}/></FilterField>
         <FilterField label={tr("To")}><input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))}/></FilterField>
       </ListTools>
+      <BulkBar bulk={bulk}>
+        <select className="bulk-select" value="" onChange={e=>bulkSet('category',e.target.value)} aria-label={tr("Set category")}>
+          <option value="">{tr("Set category…")}</option>{catChoices.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="bulk-select" value="" onChange={e=>bulkSet('project',e.target.value)} aria-label={tr("Assign to project")}>
+          <option value="">{tr("Assign to project…")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
+        </select>
+        <BulkBtn onClick={()=>exportRows(picked)}>{tr("Export selected")}</BulkBtn>
+        <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+      </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">{tr("No expenses yet")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.8,1.2,1,2.4,1.2,0.9,0.6]}/>
+          <Cg w={[0.32,0.8,1.2,1,2.4,1.2,0.9,0.6]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="employee" sort={sort} onSort={onSort}>{tr("Employee")}</SortTh>
             <SortTh k="category" sort={sort} onSort={onSort}>{tr("Category")}</SortTh>
@@ -2052,7 +2125,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="amount" sort={sort} onSort={onSort} className="tar">{tr("Amount")}</SortTh>
             <th>{tr("Actions")}</th>
           </tr></thead>
-          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id}>
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id} className={bulk.has(e.id)?'is-sel':''}>
+            <SelTd bulk={bulk} id={e.id}/>
             <td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td>
             <td style={{color:'var(--g700)'}}>{e.employee||'—'}</td>
             <td>{e.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{e.category}</span>:'—'}</td>
@@ -2260,12 +2334,37 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const typeLabel=c=>c.type==='supplier'?tr('Supplier'):c.type==='both'?tr('Customer & Supplier'):c.type==='source'?tr('Source Supplier'):tr('Customer');
     const f=sortRows(customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()))),sort,
       {company:c=>c.company||c.contact,contact:c=>c.contact,email:c=>c.email,phone:c=>c.phone,type:typeLabel});
+    const bulk=useBulkSelect(f.map(c=>c.id));
+    const picked=f.filter(c=>bulk.has(c.id));
+    // A contact named on any sales or purchase document is kept by the bulk delete
+    const inUse=c=>{
+      const n=normName(c.company);
+      const named=d=>!!n&&normName(d.client&&d.client.company)===n;
+      const supplied=d=>d.supplierId===c.id||(!!n&&normName(d.supplierCompany)===n);
+      return salesQuotes.some(named)||salesInvoices.some(named)||[...purchaseQuotes,...purchaseOrders,...receivedInvoices,...srcQuotes,...srcInvoices].some(supplied);
+    };
+    const pickedFree=picked.filter(c=>!inUse(c));
+    const bulkDelete=()=>{
+      const kept=picked.length-pickedFree.length;
+      askGlobalConfirm(tr('Delete {0} contacts?',pickedFree.length)+(kept?' '+tr('{0} selected contacts appear on documents and will be kept.',kept):''),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+        if(!ok)return;
+        const ids=new Set(pickedFree.map(c=>c.id));
+        sCust(customers.filter(x=>!ids.has(x.id)));
+        showToast(tr('{0} deleted',ids.size));
+        bulk.clear();
+      });
+    };
     return(<div className="content">
       <ListTools q={q} onQ={setQ} placeholder={tr("Search...")}/>
+      <BulkBar bulk={bulk}>
+        <BulkBtn onClick={()=>exportExcel([['Company','Contact','Email','Phone','Type','Address'],...picked.map(c=>[c.company||'',c.contact||'',c.email||'',c.phone||'',typeLabel(c),c.address||''])],'contacts')}>{tr("Export selected")}</BulkBtn>
+        <BulkBtn icon="trash" danger badge={pickedFree.length} disabled={!pickedFree.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+      </BulkBar>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">{tr("No customers yet")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[2,1.4,1.8,1,0.7,0.6]}/>
+          <Cg w={[0.3,2,1.4,1.8,1,0.7,0.6]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="company" sort={sort} onSort={onSort}>{tr("Company")}</SortTh>
             <SortTh k="contact" sort={sort} onSort={onSort}>{tr("Contact")}</SortTh>
             <SortTh k="email" sort={sort} onSort={onSort}>{tr("Email")}</SortTh>
@@ -2273,7 +2372,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="type" sort={sort} onSort={onSort}>{tr("Type")}</SortTh>
             <th>{tr("Actions")}</th>
           </tr></thead>
-          <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id}>
+          <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id} className={bulk.has(c.id)?'is-sel':''}>
+            <SelTd bulk={bulk} id={c.id}/>
             <td style={{fontWeight:500}}>{c.company||'—'}</td>
             <td>{c.contact||'—'}</td>
             <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
@@ -2319,11 +2419,45 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function DocumentsView(){
     const{sort,onSort}=useSort();
     useEscape(()=>setShowDocForm(false),showDocForm&&!!docToEdit);
-    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(sort));
+    const[q,setQ]=useState('');
+    const {pg,ps,setPg,setPs}=usePagination(q+JSON.stringify(sort));
     // Fed newest-first so documents uploaded the same day keep their newest-added-first order
-    const rows=sortRows([...documents].reverse(),sort,{date:d=>d.uploadDate,name:d=>d.name,category:d=>d.category,type:d=>d.fileType});
+    const ql=q.trim().toLowerCase();
+    const rows=sortRows([...documents].reverse().filter(d=>!ql||[d.name,d.category].some(x=>(x||'').toLowerCase().includes(ql))),sort,{date:d=>d.uploadDate,name:d=>d.name,category:d=>d.category,type:d=>d.fileType});
+    const bulk=useBulkSelect(rows.map(d=>d.id));
+    const picked=rows.filter(d=>bulk.has(d.id));
+    const docCats=[...new Set(documents.map(d=>d.category).filter(Boolean))].sort();
+    const[zipBusy,setZipBusy]=useState(false);
+    const bulkZip=async()=>{
+      setZipBusy(true);
+      const done=await downloadFilesZip(picked.map(d=>({name:d.name+(d.fileType==='application/pdf'?'.pdf':'.jpg'),dataUrl:d.file})),'documents');
+      setZipBusy(false);
+      if(done){showToast(tr('{0} files downloaded',picked.length));bulk.clear();}
+    };
+    const bulkCategory=value=>{
+      if(!value)return;
+      const ids=new Set(picked.map(d=>d.id));
+      sDocs(documents.map(x=>ids.has(x.id)?{...x,category:value}:x));
+      showToast(tr('{0} updated',ids.size));
+      bulk.clear();
+    };
+    const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected documents?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;
+      const ids=new Set(picked.map(d=>d.id));
+      sDocs(documents.filter(x=>!ids.has(x.id)));
+      showToast(tr('{0} deleted',ids.size));
+      bulk.clear();
+    });
 
     return(<div className="content">
+      {documents.length>0&&<ListTools q={q} onQ={setQ} placeholder={tr("Search name or category...")}/>}
+      <BulkBar bulk={bulk}>
+        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkZip}>{zipBusy?tr('Preparing…'):tr('Download')}</BulkBtn>
+        {docCats.length>0&&<select className="bulk-select" value="" onChange={e=>bulkCategory(e.target.value)} aria-label={tr("Set category")}>
+          <option value="">{tr("Set category…")}</option>{docCats.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>}
+        <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+      </BulkBar>
 
       {documents.length===0&&(
         <div style={{padding:80,textAlign:'center',color:'var(--g400)'}}>
@@ -2335,15 +2469,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
       {documents.length>0&&(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.9,2.2,1,0.8,0.6]}/>
+          <Cg w={[0.3,0.9,2.2,1,0.8,0.6]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Upload Date")}</SortTh>
             <SortTh k="name" sort={sort} onSort={onSort}>{tr("Document Name")}</SortTh>
             <SortTh k="category" sort={sort} onSort={onSort}>{tr("Category")}</SortTh>
             <SortTh k="type" sort={sort} onSort={onSort}>{tr("Type")}</SortTh>
             <th>{tr("Actions")}</th>
           </tr></thead>
-          <tbody>{rows.slice((pg-1)*ps,pg*ps).map(d=><tr key={d.id}>
+          <tbody>{rows.slice((pg-1)*ps,pg*ps).map(d=><tr key={d.id} className={bulk.has(d.id)?'is-sel':''}>
+            <SelTd bulk={bulk} id={d.id}/>
             <td style={{color:'var(--g600)',fontSize:12}}>{d.uploadDate}</td>
             <td style={{fontWeight:500}}>{d.name}</td>
             <td style={{color:'var(--g700)',fontSize:13}}>{d.category||'—'}</td>
@@ -2359,7 +2495,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <button className="ab danger" onClick={()=>askConfirm(tr("Delete \"{0}\"?", d.name),()=>{sDocs(documents.filter(x=>x.id!==d.id));showToast(tr('Deleted'));})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
-        </table><Pagination total={documents.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
+        </table><Pagination total={rows.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
 
       {/* Upload Form Modal */}

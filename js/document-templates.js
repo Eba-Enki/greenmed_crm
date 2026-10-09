@@ -643,6 +643,32 @@ const downloadPDFZip=async(docs,co,type,opts,zipName,onProgress)=>{
     return false;
   }
 };
+// Downloads stored files (data URLs) together as one ZIP; files: [{name,dataUrl}]
+const downloadFilesZip=async(files,zipName)=>{
+  try{await ensureZIP();}catch(e){libLoadFailed();return false;}
+  try{
+    const zip=new JSZip();
+    const used={};
+    files.forEach(f=>{
+      const m=/^data:[^;,]*(;base64)?,(.*)$/.exec(f.dataUrl||'');
+      if(!m)return;
+      used[f.name]=(used[f.name]||0)+1;
+      const name=used[f.name]>1?f.name.replace(/(\.[^.]*)?$/,'_'+used[f.name]+'$1'):f.name;
+      zip.file(name,m[2],m[1]?{base64:true}:{});
+    });
+    const blob=await zip.generateAsync({type:'blob'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`${zipName}_${td()}.zip`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+    return true;
+  }catch(e){
+    alert('ZIP could not be created: '+e.message);
+    console.error('ZIP failed:',e);
+    return false;
+  }
+};
 const exportExcel=(rows,name)=>ensureXLSX().then(()=>{const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');XLSX.writeFile(wb,`${name}-${td()}.xlsx`);},libLoadFailed);
 
 // Preview component — mirrors buildStandardPDF layout exactly
