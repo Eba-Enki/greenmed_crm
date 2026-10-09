@@ -451,6 +451,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <div style={{flex:1}}/>
         <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...flatFiltered.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}><Ico n="export"/>{tr("Export")}</Btn>
       </div>
+      <BulkBar bulk={bulk}>
+        <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>{tr("Export")}</BulkBtn>
+        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
+        <BulkBtn icon="trash" danger disabled={!pickedDrafts.length} onClick={bulkDelete}>{tr("Delete drafts")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+      </BulkBar>
       {sortedGroups.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">{tr("No quotations yet")}</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[0.32,0.8,1,1,2,0.9,1.3,0.9]}/>
@@ -531,12 +537,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           })}</tbody>
         </table><Pagination total={sortedGroups.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
-      <BulkBar bulk={bulk}>
-        <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
-        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>{tr("Export")}</BulkBtn>
-        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
-        <BulkBtn icon="trash" danger disabled={!pickedDrafts.length} onClick={bulkDelete}>{tr("Delete drafts")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
-      </BulkBar>
       {quickView&&(()=>{
         const remaining=getQuoteRemainingItems(quickView);
         const extraActions=[];
@@ -1058,6 +1058,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <div style={{flex:1}}/>
         <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...sorted.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}><Ico n="export"/>{tr("Export")}</Btn>
       </div>
+      <BulkBar bulk={bulk}>
+        <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
+        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...picked.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}>{tr("Export")}</BulkBtn>
+        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
+      </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="invoice" size={38}/><div className="empty-t">{tr("No sales invoices yet")}</div><div className="empty-s">{tr("Approve a quotation and convert it to invoice")}</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[0.32,0.8,1,1,2,0.9,1.3,0.9]}/>
@@ -1087,11 +1092,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           ))}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
-      <BulkBar bulk={bulk}>
-        <BulkBtn icon="send" disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}{pickedDrafts.length?` (${pickedDrafts.length})`:''}</BulkBtn>
-        <BulkBtn icon="export" onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','From Quote'],...picked.map(d=>[d.date,d.number,(d&&d.client&&d.client.company)||'',(d&&d.client&&d.client.contact)||'',fmt(dt(d.items)),d.status,d.quoteNum||''])],'sales-invoices')}>{tr("Export")}</BulkBtn>
-        <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDFs')}</BulkBtn>
-      </BulkBar>
       {quickView&&<DocQuickModal doc={quickView} co={co} docType="invoice" pdfOpts={FULL_BANK} onClose={()=>setQuickView(null)}
         onEdit={()=>{const openEdit=()=>{setQuickView(null);setCur(quickView);go('sales_invoice_edit');};if(quickView.status==='sent'){askConfirm(tr('This invoice has been marked as sent. Edit anyway?'),openEdit);}else{openEdit();}}}
         onDelete={()=>askConfirm(tr('Delete this invoice?'),()=>{sSI(salesInvoices.filter(x=>x.id!==quickView.id));showToast(tr('Deleted'));setQuickView(null);})}
