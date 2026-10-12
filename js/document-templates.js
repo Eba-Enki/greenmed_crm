@@ -137,20 +137,10 @@ const drawModernHeader=async(pdf,ctx)=>{
   pdf.line(L,top,L+colW,top);pdf.line(L,bottom,L+colW,bottom);
   if(hasShipTo){pdf.line(R-colW,top,R,top);pdf.line(R-colW,bottom,R,bottom);}
 
-  // Project No & Terms (only when filled in)
+  // The item table follows straight after Bill To / Ship To (no Project No / Terms line on Sales PDFs)
   pdf.setLineWidth(borderWidth);
   pdf.setDrawColor(158,158,158);
-  let tableY=bottom+7;
-  if(String(doc.projectNumber||'').trim()||String(doc.terms||'').trim()){
-    const ry=bottom+7.5;
-    pdf.setFontSize(8);
-    pdf.setFont('Arial','bold');pdf.text('Project No',L+1,ry);
-    pdf.setFont('Arial','normal');pdf.text(': '+fixText(doc.projectNumber||''),L+27,ry);
-    pdf.setFont('Arial','bold');pdf.text('Terms',96,ry);
-    pdf.setFont('Arial','normal');pdf.text(': '+fixText(doc.terms||''),122,ry);
-    tableY=bottom+12.5;
-  }
-  return tableY;
+  return bottom+7;
 };
 
 // opts.fullBank: print the full bank block (account name, number, IBAN, SWIFT/BIC, currency, bank name and address)
