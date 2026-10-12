@@ -1116,7 +1116,7 @@ function ItemsEditor({items,setItems,currency,readOnly,match}){
     <div className="iw">
       <table className="ie">
         <thead><tr>{heads.map(([h,w],i)=><th key={i} style={{textAlign:['Qty','Unit Price','Total'].includes(h)?'right':'left',width:w}}>{h&&tr(h)}</th>)}</tr></thead>
-        <tbody>{items.map(it=><tr key={it.id}>
+        <tbody onKeyDown={readOnly?undefined:onLineEnter(items,setItems,()=>({id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}))}>{items.map(it=><tr key={it.id} data-line={it.id}>
           <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Product...")} readOnly={readOnly}/></td>
           <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/></td>
           {match&&<td>{(()=>{const used=usedKeys(it);return(

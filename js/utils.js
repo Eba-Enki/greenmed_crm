@@ -640,6 +640,29 @@ function useBulkSelect(ids){
     clear:()=>{anchor.current=null;setSel(new Set());},
   };
 }
+// ── Line item tables ──
+// Enter in a field of a line adds an empty line right below it and puts the cursor in its first field; when the line
+// below is still empty the cursor just moves there. Goes on the table's <tbody>; each line's <tr> carries data-line={id}.
+const lineIsBlank=i=>!(i.item||'').trim()&&!(i.desc||'').trim()&&!+(i.price||0)&&!+(i.cost||0);
+const onLineEnter=(items,setItems,mkLine,isBlank=lineIsBlank)=>e=>{
+  if(e.key!=='Enter'||e.shiftKey||e.ctrlKey||e.altKey||e.metaKey||e.nativeEvent.isComposing)return;
+  const t=e.target;
+  if(t.tagName!=='INPUT'||t.type==='checkbox'||t.readOnly||t.disabled)return;
+  const row=t.closest('tr[data-line]');
+  if(!row)return;
+  e.preventDefault();
+  const body=e.currentTarget;
+  const i=items.findIndex(x=>x.id===row.dataset.line);
+  if(i<0)return;
+  let id;
+  if(items[i+1]&&isBlank(items[i+1]))id=items[i+1].id;
+  else{const n=mkLine();id=n.id;setItems([...items.slice(0,i+1),n,...items.slice(i+1)]);}
+  setTimeout(()=>{
+    const r=body.querySelector(`tr[data-line="${id}"]`);
+    const f=r&&r.querySelector('input:not([type=checkbox]):not([readonly]):not([disabled])');
+    if(f)f.focus();
+  },0);
+};
 // Header / row checkboxes; clicks don't reach the row (which opens the document)
 const SelTh=({bulk})=>(
   <th className="sel-col" onClick={e=>e.stopPropagation()}>

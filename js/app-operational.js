@@ -341,8 +341,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // ── APPROXIMATE COSTS (YM0001) ──
   // Price research before a sales quotation: each line has a purchase price and where it was found (free text),
-  // then three rates in % chosen per line: freight, customs and margin. They compound, as in the old Excel sheet:
-  // offer = cost × (1 + freight%) × (1 + customs%) × (1 + margin%). The offer unit price is rounded to 2 decimals,
+  // then three rates in % chosen per line: freight, customs and margin. Each is a share of the purchase price and they
+  // are added up (freight and customs are estimates passed on to the customer, the margin is earned on the goods):
+  // offer = cost × (1 + freight% + customs% + margin%). The offer unit price is rounded to 2 decimals,
   // the price that goes on the sales quotation, so both documents show the same totals.
   // "Transfer" writes the lines into a draft sales quotation (ce/sq links both ways); transferring again rewrites
   // that draft. Once the quotation is no longer a draft (sent, approved, revised) the approximate cost is read-only.
@@ -351,8 +352,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const ceBlank=v=>String(v??'').trim()==='';
   const ceCalc=it=>{
     const q=ceNum(it.qty),c=ceNum(it.cost);
-    const f=c*(1+ceNum(it.frt)/100),g=f*(1+ceNum(it.cus)/100);
-    const o=Math.round(g*(1+ceNum(it.mar)/100)*100)/100;
+    const fr=ceNum(it.frt)/100,cu=ceNum(it.cus)/100,ma=ceNum(it.mar)/100;
+    const f=c*(1+fr),g=c*(1+fr+cu); // unit price with freight, then with freight and customs
+    const o=Math.round(c*(1+fr+cu+ma)*100)/100;
     return{q,c,f,g,o,tc:c*q,tf:f*q,tg:g*q,to:o*q};
   };
   const ceTotals=items=>(items||[]).reduce((s,it)=>{const x=ceCalc(it);return{c:s.c+x.tc,f:s.f+x.tf,g:s.g+x.tg,o:s.o+x.to};},{c:0,f:0,g:0,o:0});
@@ -848,7 +850,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       ],'quote-import-template');
     };
     
-    return(<div className="content"><div className="fw">
+    return(<div className="content"><div className="fw doc-fw">
       <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
         <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
@@ -990,7 +992,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <th style={{textAlign:'right',width:'10%'}}>{tr("Total")}</th>
               {!isLocked&&<th style={{width:'4%'}}></th>}
             </tr></thead>
-            <tbody>{items.map((it,idx)=>{
+            <tbody onKeyDown={isLocked?undefined:onLineEnter(items,setItems,()=>({id:uid(),item:'',desc:'',qty:'1',unit:'',price:'',invoicedQty:0}))}>{items.map((it,idx)=>{
               const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
               const rmL=id=>setItems(items.filter(i=>i.id!==id));
               const applyPrice=(itemId,price)=>{si(itemId,'price',price);};
@@ -999,7 +1001,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               const warnings=priceWarnings[it.id]||[];
               const flagged=isDup||warnings.length>0;
               return(<React.Fragment key={it.id}>
-                <tr className={flagged?'row-warn':''}>
+                <tr className={flagged?'row-warn':''} data-line={it.id}>
                 <td title={isDup?tr('Duplicate item (same description)'):(warnings.length>0?tr('Previously quoted — see price history below'):'')}><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Item code...")} readOnly={isLocked} style={flagged?{color:'var(--amber)',fontWeight:600}:{}}/></td>
                 <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} onBlur={e=>checkPriceHistory(it.id,e.target.value)} placeholder={tr("Description...")} readOnly={isLocked} style={flagged?{color:'var(--amber)',fontWeight:600}:{}}/></td>
                 {columnSettings.brand&&<td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder={tr("Brand...")} readOnly={isLocked}/></td>}
@@ -1063,7 +1065,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _isDirty=()=>JSON.stringify({...inv,items})!==_initStr.current;
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
-    return(<div className="content"><div className="fw">
+    return(<div className="content"><div className="fw doc-fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("{0} Sales Invoice —", inv.id?tr('Edit'):tr('New'))} <span style={{fontFamily:'Inter',fontWeight:600,color:'var(--gm-500)'}}>{inv.number}</span></h2>
@@ -1383,7 +1385,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <option value="">{tr("— None —")}</option>
       {sqChoices.map(q=><option key={sqBaseOf(q)} value={sqBaseOf(q)}>{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</option>)}
     </select></Fld>;
-    return(<div className="content"><div className="fw">
+    return(<div className="content"><div className="fw doc-fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}", lbl):tr("New {0}", lbl)}</h2>
@@ -1687,7 +1689,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       setDoc(d=>({...d,project:name,projectNumber:proj?proj.number:'',...(keep?{}:{sqBase:''})}));if(!keep)setItems(its=>its.map(i=>i.sqKey?{...i,sqKey:''}:i));};
     const used=isQ&&(init.items||[]).filter(i=>srcLineState(i)==='quoted').map(i=>i.quotedIn&&i.quotedIn.number).filter((v,i,a)=>v&&a.indexOf(v)===i);
     const save=()=>{if(!(doc.number||'').trim()){showToast(isQ?tr('Enter the quote number'):tr('Enter the invoice number'));return;}onSave({...doc,number:doc.number.trim(),items});};
-    return(<div className="content"><div className="fw">
+    return(<div className="content"><div className="fw doc-fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
         <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}</h2>
@@ -2019,13 +2021,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <th style={{textAlign:'left'}}>{tr("Source")}</th>
               {!locked&&<th></th>}
             </tr></thead>
-            <tbody>{items.map((it,idx)=>{
+            <tbody onKeyDown={locked?undefined:onLineEnter(items,setItems,()=>ceLine(doc.rates))}>{items.map((it,idx)=>{
               const x=ceCalc(it);
               const miss=(it.desc||'').trim()&&ceIncomplete(it);
               const empty=k=>miss&&ceBlank(it[k])?'ce-empty':'';
               const sub={frt:x.f,cus:x.g};
               const first=(it.source||'').split('\n').find(s=>s.trim())||'';
-              return(<tr key={it.id} className={(miss?'ce-miss ':'')+(bulk.has(it.id)?'is-sel':'')}>
+              return(<tr key={it.id} data-line={it.id} className={(miss?'ce-miss ':'')+(bulk.has(it.id)?'is-sel':'')}>
                 {!locked&&<SelTd bulk={bulk} id={it.id}/>}
                 <td className="ce-no ce-stk" style={{left:pin[0]}}>{idx+1}</td>
                 <td className="ce-stk ce-stk-end" style={{left:pin[1]}}><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={locked?'':tr("Product name...")} readOnly={locked} title={it.desc||''}/></td>
