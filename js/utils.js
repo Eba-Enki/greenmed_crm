@@ -72,7 +72,7 @@ const genProjNum=n=>`PRJ-${padN(n)}`;
 const API_BASE='api/';
 const SYNC_JSON_KEYS=['gm_users',
   'off_i','off_q','off_p','off_r','off_pr','off_cust','off_banktx','off_expcat','off_incomecat','off_co','off_cnt',
-  'ops_cust','ops_proj','ops_sq','ops_si','ops_pq','ops_po','ops_ri','ops_srcq','ops_srci','ops_exp','ops_expcat','ops_docs','ops_co','ops_cnt','ops_pp'];
+  'ops_cust','ops_proj','ops_sq','ops_si','ops_pq','ops_po','ops_ri','ops_srcq','ops_srci','ops_ce','ops_exp','ops_expcat','ops_docs','ops_co','ops_cnt','ops_pp'];
 const SYNC_RAW_KEYS=['gm_logo','gm_signature'];
 const SYNC_SETTING_KEYS=['off_co','off_cnt','ops_co','ops_cnt','ops_pp',...SYNC_RAW_KEYS];
 const isSyncKey=k=>SYNC_JSON_KEYS.includes(k)||SYNC_RAW_KEYS.includes(k);
@@ -446,7 +446,7 @@ function useSignature(){
 }
 
 const ITRM=['Due on Receipt','Net 7','Net 14','Net 30'];
-const DEF_CO={name:'Green Med Ltd',address:'60 Millmead Business Centre\nMill Mead Road\nLondon N17 9QU\nUnited Kingdom',email:'',phone:'',logo:'',invPfx:'INV',invStart:'1',quoPfx:'QUO',quoStart:'1',poPfx:'PO',poStart:'1',sqPfx:'SQ',sqStart:'1',siPfx:'SI',siStart:'1',selectedTemplate:'standard',website:'www.greenmed.uk',banks:[]};
+const DEF_CO={name:'Green Med Ltd',address:'60 Millmead Business Centre\nMill Mead Road\nLondon N17 9QU\nUnited Kingdom',email:'',phone:'',logo:'',invPfx:'INV',invStart:'1',quoPfx:'QUO',quoStart:'1',poPfx:'PO',poStart:'1',sqPfx:'SQ',sqStart:'1',cePfx:'YM',ceStart:'1',siPfx:'SI',siStart:'1',selectedTemplate:'standard',website:'www.greenmed.uk',banks:[]};
 const TEMPLATES={
   standard:{id:'standard',name:'Standard',description:'Pixel-perfect professional template'}
 };
@@ -532,6 +532,8 @@ const I={
   globe:<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
   chevron:<svg viewBox="0 0 24 24"><polyline points="8 9 12 5 16 9"/><polyline points="16 15 12 19 8 15"/></svg>,
   file:<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
+  calc:<svg viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="11" x2="8.01" y2="11"/><line x1="12" y1="11" x2="12.01" y2="11"/><line x1="16" y1="11" x2="16.01" y2="11"/><line x1="8" y1="15" x2="8.01" y2="15"/><line x1="12" y1="15" x2="12.01" y2="15"/><line x1="16" y1="15" x2="16" y2="18"/><line x1="8" y1="18" x2="12" y2="18"/></svg>,
+  percent:<svg viewBox="0 0 24 24"><line x1="19" y1="5" x2="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>,
   shield:<svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6z"/></svg>,
 };
 const Ico=({n,size=13,style={}})=>{const s={width:size,height:size,stroke:'currentColor',fill:'none',strokeWidth:1.75,strokeLinecap:'round',strokeLinejoin:'round',flexShrink:0,...style};return React.cloneElement(I[n]||I.dash,{style:s,viewBox:'0 0 24 24'});};
@@ -634,6 +636,7 @@ function useBulkSelect(ids){
       });
     },
     toggleAll:()=>{anchor.current=null;setSel(all?new Set():new Set(ids));},
+    add:more=>setSel(s=>new Set([...s,...more])),
     clear:()=>{anchor.current=null;setSel(new Set());},
   };
 }

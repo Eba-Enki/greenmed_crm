@@ -19,6 +19,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Quotes and invoices the group company (e.g. Egefe) collects from its own suppliers in Turkey
   const[srcQuotes,setSrcQuotes]=useState([]);
   const[srcInvoices,setSrcInvoices]=useState([]);
+  // Approximate costs: purchase prices collected per item, then freight / customs / margin rates on top (see CE logic)
+  const[costEsts,setCostEsts]=useState([]);
   const[purchasePrices,setPurchasePrices]=useState({});
   const[expenses,setExpenses]=useState([]);
   const[expCats,setExpCats]=useState([]);
@@ -73,6 +75,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     if(ri)setReceivedInvoices(migratedRI);
     const srq=load('srcq');if(srq)setSrcQuotes(srq);
     const sri=load('srci');if(sri)setSrcInvoices(sri);
+    const ce=load('ce');if(ce)setCostEsts(ce);
     if(pq&&migratedPQ.some((q,i)=>q!==pq[i]))LS.set(ns+'pq',migratedPQ);
     if(po&&migratedPO.some((p,i)=>p!==po[i]))LS.set(ns+'po',migratedPO);
     if(ri&&migratedRI.some((r,i)=>r!==ri[i]))LS.set(ns+'ri',migratedRI);
@@ -94,6 +97,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sRI=d=>save('ri',setReceivedInvoices,d);
   const sSRQ=d=>save('srcq',setSrcQuotes,d);
   const sSRI=d=>save('srci',setSrcInvoices,d);
+  const sCE=d=>save('ce',setCostEsts,d);
   const sPP=(id,price)=>{const next={...purchasePrices,[id]:price};setPurchasePrices(next);LS.set(ns+'pp',next);};
   const poolItems=salesQuotes.filter(q=>q.status!=='draft').flatMap(q=>(q.items||[]).filter(it=>it.desc).map(it=>({id:q.id+'_'+(it.id||''),projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',qty:it.qty,unit:it.unit||'',price:it.price,purchasePrice:purchasePrices[q.id+'_'+(it.id||'')]||'',quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''})));
   const sExp=d=>save('exp',setExpenses,d);
@@ -113,6 +117,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     sq:()=>salesQuotes.map(q=>(q.base||q.number||'').replace(/\.R\d+$/,'')),
     si:()=>salesInvoices.map(d=>d.number),
     po:()=>purchaseOrders.map(d=>d.number),
+    ce:()=>costEsts.map(d=>d.number),
   };
   const docNum=k=>nextDocNum(docPfx(k),co[k+'Start'],usedDocNums[k]());
   const isAutoNum=(k,num)=>!num||num.startsWith(docPfx(k));
@@ -333,6 +338,70 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   };
   const handleSaveSrcQ=q=>{const saved={...q,id:q.id||uid()};sSRQ(upsert(srcQuotes,saved));showToast(tr('Saved ✓'));go('source_quotes');};
   const handleSaveSrcI=v=>{const saved={...v,id:v.id||uid()};sSRI(upsert(srcInvoices,saved));showToast(tr('Saved ✓'));go('source_invoices');};
+
+  // ── APPROXIMATE COSTS (YM0001) ──
+  // Price research before a sales quotation: each line has a purchase price and where it was found (free text),
+  // then three rates in % chosen per line: freight, customs and margin. They compound, as in the old Excel sheet:
+  // offer = cost × (1 + freight%) × (1 + customs%) × (1 + margin%). The offer unit price is rounded to 2 decimals,
+  // the price that goes on the sales quotation, so both documents show the same totals.
+  // "Transfer" writes the lines into a draft sales quotation (ce/sq links both ways); transferring again rewrites
+  // that draft. Once the quotation is no longer a draft (sent, approved, revised) the approximate cost is read-only.
+  const CE_RATES=[['frt','Freight %'],['cus','Customs %'],['mar','Margin %']];
+  const ceNum=v=>{const n=parseFloat(v);return isFinite(n)?n:0;};
+  const ceBlank=v=>String(v??'').trim()==='';
+  const ceCalc=it=>{
+    const q=ceNum(it.qty),c=ceNum(it.cost);
+    const f=c*(1+ceNum(it.frt)/100),g=f*(1+ceNum(it.cus)/100);
+    const o=Math.round(g*(1+ceNum(it.mar)/100)*100)/100;
+    return{q,c,f,g,o,tc:c*q,tf:f*q,tg:g*q,to:o*q};
+  };
+  const ceTotals=items=>(items||[]).reduce((s,it)=>{const x=ceCalc(it);return{c:s.c+x.tc,f:s.f+x.tf,g:s.g+x.tg,o:s.o+x.to};},{c:0,f:0,g:0,o:0});
+  // A named line without a purchase price or with a rate left empty (0 is a rate; empty means "not decided yet")
+  const ceIncomplete=it=>ceBlank(it.cost)||CE_RATES.some(([k])=>ceBlank(it[k]));
+  const ceLine=(rates={})=>({id:uid(),category:'',desc:'',brand:'',model:'',unit:'',qty:'1',cost:'',frt:rates.frt||'',cus:rates.cus||'',mar:rates.mar||'',source:''});
+  const mkCostEst=()=>({id:null,number:docNum('ce'),date:td(),currency:'GBP',project:'',projectNumber:'',clientId:'',
+    client:{company:'',contact:'',email:'',phone:'',address:''},rates:{frt:'',cus:'',mar:''},items:[ceLine()],notes:'',sq:null});
+  const ceQuote=d=>d&&d.sq?salesQuotes.find(q=>q.id===d.sq.id)||null:null;
+  // draft: not transferred (or its quotation was deleted) · transferred: quotation still a draft · locked: quotation sent on
+  const ceState=d=>{const q=ceQuote(d);return!q?'draft':q.status==='draft'?'transferred':'locked';};
+  const CE_STATE={draft:['Draft','b-draft'],transferred:['Transferred to quotation','b-sent'],locked:['Locked','b-locked']};
+  const CeBadge=({s})=><span className={'bdg '+CE_STATE[s][1]}>{tr(CE_STATE[s][0])}</span>;
+  const ceFinal=d=>{
+    const items=(d.items||[]).filter(i=>(i.desc||'').trim()||!ceBlank(i.cost)).map(i=>({...i,desc:(i.desc||'').trim()}));
+    const fresh=!d.id;
+    const number=fresh&&isAutoNum('ce',d.number)?docNum('ce'):(d.number||'').trim();
+    return{...d,id:d.id||uid(),number,items};
+  };
+  const handleSaveCE=d=>{const saved=ceFinal(d);sCE(upsert(costEsts,saved));showToast(tr('Saved ✓'));go('cost_estimates');};
+  const handleDeleteCE=d=>{if(d.id)sCE(costEsts.filter(x=>x.id!==d.id));showToast(tr('Deleted'));go('cost_estimates');};
+  const handleTransferCE=d=>{
+    const ce=ceFinal(d);
+    const old=ceQuote(ce);
+    if(old&&old.status!=='draft'){showToast(tr('The quotation was already sent — it can no longer be changed from here'));return;}
+    const prev=old?old.items||[]:[];
+    // Lines keep their quotation line (id, key, item code) across transfers, so matches made on the quotation survive
+    const items=ce.items.filter(i=>i.desc).map(l=>{
+      const p=prev.find(i=>i.ceLine===l.id);
+      return{...(p||{}),id:(p&&p.id)||uid(),item:(p&&p.item)||'',desc:l.desc,brand:l.brand||'',model:l.model||'',category:l.category||'',
+        qty:String(l.qty||'1'),unit:l.unit||'',price:ceCalc(l).o.toFixed(2),invoicedQty:(p&&p.invoicedQty)||0,ceLine:l.id};
+    });
+    const hasClient=Object.values(ce.client||{}).some(v=>(v||'').trim());
+    const link={id:ce.id,number:ce.number};
+    const base={currency:ce.currency,project:ce.project,projectNumber:ce.projectNumber,items,ce:link};
+    let q;
+    if(old){
+      q=addrCaseDoc({...old,...base,client:hasClient?{...old.client,...ce.client}:old.client});
+      sSQ(salesQuotes.map(x=>x.id===q.id?q:x));
+    }else{
+      const blank=mkSalesQuote(null,0);
+      q=addrCaseDoc(assignQuoteNumber({...blank,...base,client:{...blank.client,...ce.client}}));
+      q={...q,id:uid()};
+      sSQ([...salesQuotes,q]);
+    }
+    sCE(upsert(costEsts,{...ce,sq:{id:q.id,number:q.number}}));
+    showToast(old?tr('Quotation {0} updated',q.number):tr('Quotation {0} created as a draft',q.number));
+    setCur(q);go('sales_quote_form');
+  };
   const SHIP_FIELDS=[['date','Ship Date','date'],['incoterm','Incoterm'],['carrier','Carrier'],['awb','AWB / BL No'],['gcb','Customs Declaration (GÇB) No']];
 
   // ── PROCUREMENT LOGIC ──
@@ -636,7 +705,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function SalesQuoteForm({quote:init,onSave,onCancel}){
     const[q,setQ]=useState(init);
     const[items,setItems]=useState(init.items||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:'',invoicedQty:0}]);
-    const[columnSettings,setColumnSettings]=useState({brand:false,model:false,category:false});
+    // Columns that already hold data (e.g. lines transferred from an approximate cost) start visible
+    const[columnSettings,setColumnSettings]=useState(()=>{const has=f=>(init.items||[]).some(i=>(i[f]||'').trim());return{brand:has('brand'),model:has('model'),category:has('category')};});
     const[priceWarnings,setPriceWarnings]=useState({});
     const[poolTip,setPoolTip]=useState(null);
     const[collapsed,setCollapsed]=useState({details:false,billTo:false,shipTo:false,items:false,notes:false});
@@ -791,6 +861,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <Btn v="bgh bsm" onClick={()=>savePDF(savedQ,co,'sales_quote',FULL_BANK)}><Ico n="dl"/>{tr("PDF")}</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedQ)}>{tr("Save Quotation")}</Btn>
       </div>
+      {q.ce&&costEsts.some(d=>d.id===q.ce.id)&&<div className="mt-banner">{q.status==='draft'
+        ?tr("From approximate cost {0}. Transferring it again replaces the items of this draft.",q.ce.number)
+        :tr("From approximate cost {0}.",q.ce.number)}</div>}
       <div className={`fc fc-collapsible ${collapsed.details?'fc-collapsed':''}`}>
         <div className="fc-header" onClick={()=>toggleSection('details')}>
           <div className="fct" style={{margin:0,padding:0,border:'none'}}>{tr("Quotation Details")}</div>
@@ -1650,6 +1723,406 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <Fld label={tr("Notes")}><textarea value={doc.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi"/></Fld>
       </div>
       <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={save}>{tr("Save {0}",lbl)}</Btn></div>
+    </div></div>);
+  }
+
+  // ── APPROXIMATE COSTS: list, form, Excel import / export ──
+  function CostEstimatesList(){
+    const[fs,setFs]=useState({q:'',s:'',p:''});
+    const{sort,onSort}=useSort();
+    const{pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
+    const ql=fs.q.trim().toLowerCase();
+    const cust=d=>(d.client&&(d.client.company||d.client.contact))||'';
+    const sqNo=d=>{const q=ceQuote(d);return q?q.number:'';};
+    const filtered=costEsts.filter(d=>{
+      if(ql&&![d.number,d.project,cust(d),sqNo(d),...(d.items||[]).map(i=>i.desc)].some(x=>(x||'').toLowerCase().includes(ql)))return false;
+      if(fs.s&&ceState(d)!==fs.s)return false;
+      if(fs.p&&d.project!==fs.p)return false;
+      return true;
+    });
+    const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,project:d=>d.project,customer:cust,items:d=>(d.items||[]).length,
+      cost:d=>ceTotals(d.items).c,offer:d=>ceTotals(d.items).o,sq:sqNo,state:ceState});
+    const projNames=[...new Set(costEsts.map(d=>d.project).filter(Boolean))];
+    const open=d=>{setCur(d);go('cost_estimates_form');};
+    return(<div className="content">
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search number, project, customer or item...")}
+        active={[fs.s,fs.p].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',p:''}))}
+        onExport={()=>exportExcel([['Date','Number','Project','Customer','Currency','Items','Total Cost','Offer Total','Sales Quotation','Status'],
+          ...sorted.map(d=>{const t=ceTotals(d.items);return[d.date,d.number,d.project||'',cust(d),d.currency,(d.items||[]).length,Math.round(t.c*100)/100,Math.round(t.o*100)/100,sqNo(d),CE_STATE[ceState(d)][0]];})],'approximate-costs')}>
+        <FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
+          <option value="">{tr("All")}</option>{Object.entries(CE_STATE).map(([k,[l]])=><option key={k} value={k}>{tr(l)}</option>)}
+        </select></FilterField>
+        <FilterField label={tr("Project")}><select value={fs.p} onChange={e=>setFs(f=>({...f,p:e.target.value}))}>
+          <option value="">{tr("All")}</option>{projNames.map(p=><option key={p} value={p}>{p}</option>)}
+        </select></FilterField>
+      </ListTools>
+      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="calc" size={38}/>
+        <div className="empty-t">{costEsts.length?tr("No items match the filter"):tr("No approximate costs yet")}</div>
+        {!costEsts.length&&<div className="empty-s">{tr("Collect the purchase price of each item, add freight, customs and margin, then transfer the result to a sales quotation.")}</div>}</div></div>:(
+        <div className="tcard"><table className="dt">
+          <Cg w={[0.8,0.9,1.3,1.5,0.6,1,1,0.9,1.1]}/>
+          <thead><tr>
+            <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
+            <SortTh k="no" sort={sort} onSort={onSort}>{tr("Number")}</SortTh>
+            <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
+            <SortTh k="customer" sort={sort} onSort={onSort}>{tr("Customer")}</SortTh>
+            <SortTh k="items" sort={sort} onSort={onSort} className="tac">{tr("Items")}</SortTh>
+            <SortTh k="cost" sort={sort} onSort={onSort} className="tar">{tr("Total Purchase")}</SortTh>
+            <SortTh k="offer" sort={sort} onSort={onSort} className="tar">{tr("Offer Total")}</SortTh>
+            <SortTh k="sq" sort={sort} onSort={onSort}>{tr("Sales Quotation")}</SortTh>
+            <SortTh k="state" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>
+          </tr></thead>
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>{const t=ceTotals(d.items);const sym=CURR[d.currency]||'';return(
+            <tr key={d.id} style={{cursor:'pointer'}} tabIndex={0} onClick={()=>open(d)} onKeyDown={e=>{if(e.key==='Enter')open(d);}}>
+              <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+              <td><span className="dn">{d.number||'—'}</span></td>
+              <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
+              <td style={{color:'var(--g800)'}}>{cust(d)||'—'}</td>
+              <td className="tac">{(d.items||[]).length}</td>
+              <td className="tar">{sym}{fmt(t.c)}</td>
+              <td className="tar" style={{fontWeight:600}}>{sym}{fmt(t.o)}</td>
+              <td>{sqNo(d)?<span className="mt-chip">{sqNo(d)}</span>:<span style={{color:'var(--g300)'}}>—</span>}</td>
+              <td className="tac"><CeBadge s={ceState(d)}/></td>
+            </tr>);})}</tbody>
+        </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
+      )}
+    </div>);
+  }
+
+  // Spreadsheet headers for the item import, compared without case or Turkish letters ("Ürün Adı" → "urun adi").
+  // Only the product name and quantity are required; the first matching column of each kind is used, except the
+  // source, where every matching column (Web, Link…) is joined.
+  const CE_IMPORT_MAP={
+    desc:['urun adi','urun','adi','ad','urun ismi','malzeme','malzeme adi','description','desc','name','item name','item description','product','product name'],
+    qty:['adet','miktar','qty','quantity'],
+    unit:['birim','unit','units','uom','olcu birimi'],
+    brand:['marka','brand'],
+    model:['model'],
+    category:['kategori','category','cat','grup','group'],
+    cost:['birim fiyat','birim alis fiyati','birim alis','alis fiyati','alis','unit cost','unit price','price','cost','purchase price'],
+    source:['kaynak','source','web','link','not','notes','note'],
+  };
+  const ceHdr=h=>String(h??'').toLocaleLowerCase('tr-TR').replace(/ı/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c')
+    .replace(/[*:]/g,'').replace(/\s+/g,' ').trim();
+  const ceHdrKey=h=>{const n=ceHdr(h);if(!n)return null;
+    for(const k in CE_IMPORT_MAP)if(CE_IMPORT_MAP[k].includes(n))return k;
+    return/^(kaynak|source|web|link)\b/.test(n)?'source':null;};
+  // Numbers as typed in Turkish or English sheets: 1.392,21 · 1,392.21 · 1392,21
+  const ceParseNum=v=>{
+    if(typeof v==='number')return v;
+    let s=String(v??'').trim().replace(/[^\d.,-]/g,'');if(!s)return NaN;
+    if(s.includes(',')&&s.includes('.'))s=s.lastIndexOf(',')>s.lastIndexOf('.')?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');
+    else if(s.includes(','))s=s.replace(',','.');
+    return parseFloat(s);
+  };
+  // rows: the sheet as arrays of cells → {rows, skipped, error}. The header row is searched in the first 20 rows,
+  // so a title or merged group headers above it (as in the old cost sheets) do not get in the way.
+  const ceReadSheet=(rows,rates)=>{
+    let hi=-1,map=null;
+    for(let r=0;r<Math.min(rows.length,20)&&hi<0;r++){
+      const m=(rows[r]||[]).map(ceHdrKey);
+      if(m.includes('desc')&&m.includes('qty')){hi=r;map=m;}
+    }
+    if(hi<0)return{error:tr('Could not find the "Product Name" and "Qty" columns. Use "Download Template" to get the expected headers.')};
+    const col=k=>map.indexOf(k);
+    const srcCols=map.map((k,i)=>k==='source'?i:-1).filter(i=>i>=0);
+    const txt=v=>String(v??'').replace(/\s*\n\s*/g,' ').trim();
+    const out=[],skipped=[];
+    for(let r=hi+1;r<rows.length;r++){
+      const row=rows[r]||[];
+      if(row.every(c=>String(c??'').trim()===''))continue;
+      const get=k=>col(k)>=0?row[col(k)]:'';
+      const desc=txt(get('desc'));const qRaw=get('qty');
+      // Rows without a name and quantity are totals or notes under the list
+      if(!desc&&String(qRaw??'').trim()==='')continue;
+      if(!desc){skipped.push({row:r+1,reason:tr('No product name')});continue;}
+      const qty=ceParseNum(qRaw);
+      if(!(qty>0)){skipped.push({row:r+1,reason:tr('Invalid quantity'),desc});continue;}
+      const cost=ceParseNum(get('cost'));
+      out.push({...ceLine(rates),desc,qty:String(qty),cost:isFinite(cost)?String(Math.round(cost*10000)/10000):'',
+        unit:txt(get('unit')),brand:txt(get('brand')),model:txt(get('model')),category:txt(get('category')),
+        source:srcCols.map(i=>String(row[i]??'').trim()).filter(Boolean).join('\n')});
+    }
+    return{rows:out,skipped};
+  };
+  // Report in the layout of the old cost sheet: product cost, freight, customs, margin & offer, then the source
+  const exportCostEst=d=>ensureXLSX().then(()=>{
+    const r2=v=>Math.round(v*100)/100;
+    const rate=v=>ceBlank(v)?'':ceNum(v);
+    const items=(d.items||[]).filter(i=>(i.desc||'').trim()||!ceBlank(i.cost));
+    const T=ceTotals(items);
+    const aoa=[
+      ['Approximate Cost',d.number||'','','Date',d.date||'','','Project',d.project||'','','Customer',(d.client&&(d.client.company||d.client.contact))||'','','Currency',d.currency||''],
+      [],
+      ['PRODUCT COST','','','','','','','','','FREIGHT','','','CUSTOMS','','','MARGIN & OFFER','','','SOURCE'],
+      ['No','Category','Product Name','Brand','Model','Unit','Qty','Unit Cost','Total Cost','Freight %','Unit Price','Total','Customs %','Unit Price','Total','Margin %','Offer Unit Price','Offer Total','Source'],
+      ...items.map((it,i)=>{const x=ceCalc(it);return[i+1,it.category||'',it.desc||'',it.brand||'',it.model||'',it.unit||'',x.q,r2(x.c),r2(x.tc),rate(it.frt),r2(x.f),r2(x.tf),rate(it.cus),r2(x.g),r2(x.tg),rate(it.mar),x.o,r2(x.to),it.source||''];}),
+      ['','','TOTAL','','','','','',r2(T.c),'','',r2(T.f),'','',r2(T.g),'','',r2(T.o),''],
+      [],
+      ['','','Freight cost',r2(T.f-T.c)],['','','Customs cost',r2(T.g-T.f)],['','','Profit',r2(T.o-T.g)],['','','Offer total',r2(T.o)],
+    ];
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!merges']=[[0,8],[9,11],[12,14],[15,17]].map(([a,b])=>({s:{r:2,c:a},e:{r:2,c:b}}));
+    ws['!cols']=[5,18,48,14,14,7,7,11,12,9,11,12,9,11,12,9,13,13,50].map(wch=>({wch}));
+    // Money with thousands separators; No, Qty and the rates stay plain
+    const plain=new Set([0,6,9,12,15]);
+    Object.keys(ws).forEach(a=>{if(a[0]==='!')return;const c=ws[a];const p=XLSX.utils.decode_cell(a);
+      if(c.t==='n'&&p.r>3&&!plain.has(p.c))c.z='#,##0.00';});
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Approximate Cost');
+    XLSX.writeFile(wb,`approximate-cost-${(d.number||'draft').toLowerCase()}-${td()}.xlsx`);
+  },libLoadFailed);
+  const ceLinks=t=>(String(t||'').match(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi)||[]);
+
+  function CostEstimateForm({doc:init,onSave,onCancel,onTransfer,onDelete}){
+    const[doc,setDoc]=useState(init);
+    const[items,setItems]=useState(()=>init.items&&init.items.length?init.items:[ceLine(init.rates)]);
+    const _initStr=useRef(JSON.stringify({...init,items}));
+    const _isDirty=()=>JSON.stringify({...doc,items})!==_initStr.current;
+    const state=ceState(doc);
+    const locked=state==='locked';
+    const linked=ceQuote(doc);
+    const _handleCancel=()=>{if(!locked&&_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=()=>!locked&&_isDirty();
+    const set=(k,v)=>setDoc(d=>({...d,[k]:v}));
+    // A default rate also goes to lines that are still empty (e.g. the blank first line of a new estimate)
+    const setRate=(k,v)=>{
+      setDoc(d=>({...d,rates:{...(d.rates||{}),[k]:v}}));
+      setItems(its=>its.map(i=>!(i.desc||'').trim()&&ceBlank(i.cost)?{...i,[k]:v}:i));
+    };
+    const si=(id,f,v)=>setItems(its=>its.map(i=>i.id===id?{...i,[f]:v}:i));
+    const bulk=useBulkSelect(locked?[]:items.map(i=>i.id));
+    const[rateDlg,setRateDlg]=useState(null); // {frt,cus,mar} for the ticked lines
+    const[srcDlg,setSrcDlg]=useState(null);   // {id,text}
+    const[imp,setImp]=useState(null);         // {file,rows,skipped}
+    useEscape(()=>setRateDlg(null),!!rateDlg);
+    useEscape(()=>setSrcDlg(null),!!srcDlg);
+    useEscape(()=>setImp(null),!!imp);
+    const fileRef=useRef();
+    const sym=CURR[doc.currency]||'';
+    const T=ceTotals(items);
+    const named=items.filter(i=>(i.desc||'').trim());
+    const missing=named.filter(ceIncomplete).length;
+    const cats=[...new Set(items.map(i=>(i.category||'').trim()).filter(Boolean))];
+    const custPick=customers.filter(c=>{const t=c.type||'customer';return t==='customer'||t==='both';});
+    const pickCustomer=id=>{const c=custPick.find(x=>x.id===id);if(!c){set('clientId','');return;}
+      setDoc(d=>({...d,clientId:c.id,client:{company:c.company||'',contact:c.contact||'',email:c.email||'',phone:c.phone||'',address:c.address||''}}));};
+    const pickProject=name=>{const p=projects.find(x=>x.name===name);setDoc(d=>({...d,project:name,projectNumber:p?p.number||'':''}));};
+    const addLine=()=>setItems(its=>[...its,ceLine(doc.rates)]);
+    const rmLine=id=>setItems(its=>{const n=its.filter(i=>i.id!==id);return n.length?n:[ceLine(doc.rates)];});
+    const delSel=()=>{const ids=new Set(bulk.chosen);setItems(its=>{const n=its.filter(i=>!ids.has(i.id));return n.length?n:[ceLine(doc.rates)];});bulk.clear();};
+    const applyRates=()=>{
+      const ids=new Set(bulk.chosen);
+      const patch=Object.fromEntries(CE_RATES.filter(([k])=>!ceBlank(rateDlg[k])).map(([k])=>[k,String(rateDlg[k]).trim()]));
+      if(!Object.keys(patch).length)return;
+      setItems(its=>its.map(i=>ids.has(i.id)?{...i,...patch}:i));
+      setRateDlg(null);bulk.clear();
+    };
+    const transfer=async()=>{
+      if(!named.length){showToast(tr('Add at least one item with a product name'));return;}
+      if(missing&&!(await askGlobalConfirm(tr('{0} item(s) have no purchase price or a rate left empty. Transfer anyway?',missing),{confirmLabel:tr('Transfer anyway')})))return;
+      if(linked&&!(await askGlobalConfirm(tr('The draft quotation {0} will be updated with these items. Changes made to its items there will be replaced.',linked.number),{confirmLabel:tr('Update Quotation')})))return;
+      onTransfer({...doc,items});
+    };
+    const del=async()=>{if(await askGlobalConfirm(tr('Delete this {0}?',tr('Approximate Cost').toLocaleLowerCase(LANG==='tr'?'tr-TR':'en-GB')),{confirmLabel:tr('Yes, Delete')}))onDelete(doc);};
+    const handleFile=e=>{
+      const file=e.target.files[0];e.target.value='';
+      if(!file)return;
+      const isCSV=file.name.toLowerCase().endsWith('.csv');
+      const reader=new FileReader();
+      reader.onload=evt=>{
+        try{
+          const wb=isCSV?XLSX.read(evt.target.result,{type:'string'}):XLSX.read(new Uint8Array(evt.target.result),{type:'array'});
+          const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true});
+          const res=ceReadSheet(rows,doc.rates||{});
+          if(res.error){alert(res.error);return;}
+          setImp({file:file.name,...res});
+        }catch(err){console.error('Import error:',err);alert(tr('Import error: ')+err.message);}
+      };
+      reader.onerror=()=>alert(tr('Failed to read file'));
+      ensureXLSX().then(()=>{if(isCSV)reader.readAsText(file);else reader.readAsArrayBuffer(file);},libLoadFailed);
+    };
+    const confirmImport=()=>{
+      const keep=items.filter(i=>(i.desc||'').trim()||!ceBlank(i.cost));
+      setItems([...keep,...imp.rows]);
+      showToast(tr('{0} items imported',imp.rows.length));
+      setImp(null);
+    };
+    const downloadTemplate=()=>exportExcel([['Category','Product Name','Brand','Model','Unit','Qty','Unit Cost','Source'],
+      ['Microbiology','Vortex Mixer','IKA','Vortex 2','pcs',1,437.31,'https://www.example.com/product']],'approximate-cost-template');
+    const lbl=tr('Approximate Cost');
+    const colW=[...(locked?[]:[34]),34,280,110,110,100,64,68,104,80,80,80,104,116,150,...(locked?[]:[34])];
+    const pin=locked?[0,34]:[34,68]; // left offsets of the pinned # and product name columns
+    return(<div className="content"><div className="fw ce-fw">
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
+        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}{doc.number&&<> — <span style={{color:'var(--gm-500)'}}>{doc.number}</span></>}</h2>
+        <CeBadge s={state}/>
+        <div style={{flex:1}}/>
+        <Btn v="bgh bsm" onClick={()=>exportCostEst({...doc,items})}><Ico n="export"/>{tr("Export to Excel")}</Btn>
+        {doc.id&&!locked&&<Btn v="bgh bsm" onClick={del}><Ico n="trash"/>{tr("Delete")}</Btn>}
+        {!locked&&<Btn v="bex bsm" onClick={transfer}><Ico n="convert"/>{linked?tr("Update Quotation {0}",linked.number):tr("Transfer to Quotation")}</Btn>}
+        {!locked&&<Btn v="bp bsm" onClick={()=>onSave({...doc,items})}>{tr("Save {0}",lbl)}</Btn>}
+      </div>
+      {locked&&<div className="mt-banner">{tr("Transferred to {0}, which has been sent — this approximate cost can no longer be changed. Continue with revisions under Sales Quotations.",linked.number)}</div>}
+      {state==='transferred'&&<div className="mt-banner">{tr("Transferred to the draft quotation {0}. After changing rates or items here, use \"Update Quotation\" to carry them over.",linked.number)}</div>}
+      <div className="fc"><div className="fct">{tr("Details")}</div>
+        <div className="fg g4">
+          <Fld label={tr("Number")}><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={locked}/></Fld>
+          <Fld label={tr("Date")}><input type="date" value={doc.date||''} onChange={e=>set('date',e.target.value)} className="fi" readOnly={locked}/></Fld>
+          <Fld label={tr("Currency")}><select value={doc.currency||'GBP'} onChange={e=>set('currency',e.target.value)} className="fi" disabled={locked}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+          <Fld label={tr("Project")}><select value={doc.project||''} onChange={e=>pickProject(e.target.value)} className="fi" disabled={locked}><option value="">{tr("— None —")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
+        </div>
+        <div className="fg g2" style={{marginTop:12}}>
+          <Fld label={tr("Customer")}><select value={doc.clientId||''} onChange={e=>pickCustomer(e.target.value)} className="fi" disabled={locked}>
+            <option value="">{tr("— Select —")}</option>{custPick.map(c=><option key={c.id} value={c.id}>{c.company||c.contact}</option>)}</select></Fld>
+          <Fld label={tr("Company Name")}><input value={(doc.client&&doc.client.company)||''} onChange={e=>{const v=e.target.value;setDoc(d=>({...d,clientId:'',client:{...(d.client||{}),company:v}}));}} className="fi" readOnly={locked}/></Fld>
+        </div>
+      </div>
+      {!locked&&<div className="fc"><div className="fct">{tr("Default Rates")}</div>
+        <div className="fg g3">
+          {CE_RATES.map(([k,l])=><Fld key={k} label={tr(l)}><input type="number" step="any" value={(doc.rates||{})[k]||''} onChange={e=>setRate(k,e.target.value)} className="fi" placeholder="0"/></Fld>)}
+        </div>
+        <div style={{fontSize:12,color:'var(--g500)',marginTop:8}}>{tr("New and imported lines start with these rates. To change lines already in the list, tick them and use \"Apply Rates\".")}</div>
+      </div>}
+      <div className="fc"><div className="fct">{tr("Line Items")}</div>
+        {!locked&&<div className="lt-row"><div className="lt-left"/>
+          <div className="ltools">
+            {cats.length>0&&<select className="ce-catsel" value="" onChange={e=>{const c=e.target.value;if(c)bulk.add(items.filter(i=>(i.category||'').trim()===c).map(i=>i.id));}} aria-label={tr("Select by category")}>
+              <option value="">{tr("Select by category…")}</option>{cats.map(c=><option key={c} value={c}>{c}</option>)}</select>}
+            <button className="lt-btn" onClick={downloadTemplate}><Ico n="dl" size={13}/>{tr("Download Template")}</button>
+            <button className="lt-btn" onClick={()=>fileRef.current&&fileRef.current.click()}><Ico n="upload" size={13}/>{tr("Import Excel/CSV")}</button>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}} onChange={handleFile}/>
+          </div>
+        </div>}
+        {!locked&&<BulkBar bulk={bulk}>
+          <BulkBtn icon="percent" onClick={()=>setRateDlg({frt:'',cus:'',mar:''})}>{tr("Apply Rates")}</BulkBtn>
+          <BulkBtn icon="trash" danger onClick={delSel}>{tr("Delete")}</BulkBtn>
+        </BulkBar>}
+        {missing>0&&<div className="ce-warn"><Ico n="warn" size={13}/>{tr("{0} item(s) have no purchase price or a rate left empty (marked rows).",missing)}</div>}
+        <div className="iw ce-scroll">
+          {/* Fixed column widths (the table scrolls sideways); tick box, # and product name stay pinned on the left */}
+          <table className="ie" style={{width:colW.reduce((a,b)=>a+b,0)}}>
+            <colgroup>{colW.map((w,i)=><col key={i} style={{width:w}}/>)}</colgroup>
+            <thead><tr>
+              {!locked&&<SelTh bulk={bulk}/>}
+              <th className="ce-stk" style={{left:pin[0]}}>#</th>
+              <th className="ce-stk ce-stk-end" style={{left:pin[1],textAlign:'left'}}>{tr("Product Name")}</th>
+              <th style={{textAlign:'left'}}>{tr("Category")}</th>
+              <th style={{textAlign:'left'}}>{tr("Brand")}</th>
+              <th style={{textAlign:'left'}}>{tr("Model")}</th>
+              <th style={{textAlign:'left'}}>{tr("Unit")}</th>
+              <th style={{textAlign:'right'}}>{tr("Qty")}</th>
+              <th style={{textAlign:'right'}}>{tr("Unit Cost")}</th>
+              {CE_RATES.map(([k,l])=><th key={k} style={{textAlign:'right'}}>{tr(l)}</th>)}
+              <th style={{textAlign:'right'}}>{tr("Offer Unit Price")}</th>
+              <th style={{textAlign:'right'}}>{tr("Offer Total")}</th>
+              <th style={{textAlign:'left'}}>{tr("Source")}</th>
+              {!locked&&<th></th>}
+            </tr></thead>
+            <tbody>{items.map((it,idx)=>{
+              const x=ceCalc(it);
+              const miss=(it.desc||'').trim()&&ceIncomplete(it);
+              const empty=k=>miss&&ceBlank(it[k])?'ce-empty':'';
+              const sub={frt:x.f,cus:x.g};
+              const first=(it.source||'').split('\n').find(s=>s.trim())||'';
+              return(<tr key={it.id} className={(miss?'ce-miss ':'')+(bulk.has(it.id)?'is-sel':'')}>
+                {!locked&&<SelTd bulk={bulk} id={it.id}/>}
+                <td className="ce-no ce-stk" style={{left:pin[0]}}>{idx+1}</td>
+                <td className="ce-stk ce-stk-end" style={{left:pin[1]}}><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={locked?'':tr("Product name...")} readOnly={locked} title={it.desc||''}/></td>
+                <td><input value={it.category||''} onChange={e=>si(it.id,'category',e.target.value)} placeholder={locked?'':tr("Category...")} readOnly={locked}/></td>
+                <td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder={locked?'':tr("Brand...")} readOnly={locked}/></td>
+                <td><input value={it.model||''} onChange={e=>si(it.id,'model',e.target.value)} placeholder={locked?'':tr("Model...")} readOnly={locked}/></td>
+                <td><input value={it.unit||''} onChange={e=>si(it.id,'unit',e.target.value)} placeholder={locked?'':'pcs'} readOnly={locked}/></td>
+                <td><input type="number" value={it.qty||''} onChange={e=>si(it.id,'qty',e.target.value)} min="0" step="any" style={{textAlign:'right'}} readOnly={locked}/></td>
+                <td><input type="number" value={it.cost||''} onChange={e=>si(it.id,'cost',e.target.value)} min="0" step="any" placeholder={locked?'':'0.00'} style={{textAlign:'right'}} readOnly={locked} className={empty('cost')}/></td>
+                {CE_RATES.map(([k])=><td key={k}>
+                  <input type="number" value={it[k]??''} onChange={e=>si(it.id,k,e.target.value)} step="any" placeholder={locked?'':'—'} style={{textAlign:'right'}} readOnly={locked} className={empty(k)} aria-label={tr(CE_RATES.find(r=>r[0]===k)[1])}/>
+                  {sub[k]!=null&&!ceBlank(it.cost)&&<div className="ce-sub">{sym}{fmt(sub[k])}</div>}
+                </td>)}
+                <td className="lt">{sym}{fmt(x.o)}</td>
+                <td className="lt">{sym}{fmt(x.to)}</td>
+                <td>{locked&&!it.source?<span className="ce-src-add" style={{padding:'0 8px'}}>—</span>:
+                  <button className="ce-src" onClick={()=>setSrcDlg({id:it.id,text:it.source||''})} title={it.source||''}>
+                    {first?<>{ceLinks(it.source).length>0&&<Ico n="link" size={12}/>}<span>{first}</span></>:<span className="ce-src-add">{tr("+ Add")}</span>}
+                  </button>}</td>
+                {!locked&&<td style={{textAlign:'center'}}><button className="dlb" onClick={()=>rmLine(it.id)} aria-label={tr("Remove")}>×</button></td>}
+              </tr>);})}</tbody>
+          </table>
+        </div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+          {!locked?<Btn v="bgh bsm" onClick={addLine}><Ico n="plus"/>{tr("Add Line")}</Btn>:<div/>}
+          <div className="totbox"><span className="totlbl">{tr("Offer Total")}</span><span className="totamt">{sym}{fmt(T.o)}</span></div>
+        </div>
+      </div>
+      <div className="ce-sum">
+        {[[tr('Total Purchase'),T.c],[tr('Freight Cost'),T.f-T.c],[tr('Customs Cost'),T.g-T.f],[tr('Landed Cost'),T.g],[tr('Profit'),T.o-T.g],[tr('Offer Total'),T.o,true]].map(([l,v,hl])=>(
+          <div key={l} className={'mt-sum-c'+(hl?' ce-hl':'')}><div className="mt-sum-l">{l}</div><div className="mt-sum-v">{sym}{fmt(v)}</div></div>))}
+      </div>
+      <div className="fc"><div className="fct">{tr("Notes")}</div>
+        <Fld label={tr("Notes")}><textarea value={doc.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi" readOnly={locked}/></Fld>
+      </div>
+      {!locked&&<div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={()=>onSave({...doc,items})}>{tr("Save {0}",lbl)}</Btn></div>}
+
+      {rateDlg&&<div className="mt-overlay" onClick={()=>setRateDlg(null)}>
+        <div className="mt-dialog" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+          <div className="mt-dialog-h">
+            <div><div className="mt-dialog-k">{tr("Apply Rates")}</div><div className="mt-dialog-t">{tr("{0} selected",bulk.chosen.length)}</div></div>
+            <button className="ab" onClick={()=>setRateDlg(null)} aria-label={tr("Close")}><Ico n="x"/></button>
+          </div>
+          <div className="mt-dialog-b">
+            <div className="fg g3">
+              {CE_RATES.map(([k,l],i)=><Fld key={k} label={tr(l)}><input type="number" step="any" className="fi" value={rateDlg[k]} autoFocus={i===0}
+                onChange={e=>{const v=e.target.value;setRateDlg(r=>({...r,[k]:v}));}} onKeyDown={e=>{if(e.key==='Enter')applyRates();}} placeholder={tr("unchanged")}/></Fld>)}
+            </div>
+            <div style={{fontSize:12,color:'var(--g500)',marginTop:4}}>{tr("Leave a field empty to keep the rate the lines already have.")}</div>
+          </div>
+          <div className="mt-dialog-f">
+            <Btn v="bgh bsm" onClick={()=>setRateDlg(null)}>{tr("Cancel")}</Btn>
+            <Btn v="bp bsm" disabled={CE_RATES.every(([k])=>ceBlank(rateDlg[k]))} onClick={applyRates}>{tr("Apply to {0} line(s)",bulk.chosen.length)}</Btn>
+          </div>
+        </div>
+      </div>}
+
+      {srcDlg&&(()=>{const it=items.find(i=>i.id===srcDlg.id);const links=ceLinks(srcDlg.text);return(<div className="mt-overlay" onClick={()=>setSrcDlg(null)}>
+        <div className="mt-dialog" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+          <div className="mt-dialog-h">
+            <div><div className="mt-dialog-k">{tr("Source")}</div><div className="mt-dialog-t">{(it&&it.desc)||'—'}</div></div>
+            <button className="ab" onClick={()=>setSrcDlg(null)} aria-label={tr("Close")}><Ico n="x"/></button>
+          </div>
+          <div className="mt-dialog-b">
+            <textarea className="fi" rows={7} value={srcDlg.text} readOnly={locked} autoFocus={!locked} onChange={e=>{const v=e.target.value;setSrcDlg(s=>({...s,text:v}));}}
+              placeholder={tr("Where the price comes from: website, supplier quote, phone call… Paste links, add notes.")}/>
+            {links.length>0&&<div className="ce-links">{links.map((u,i)=><a key={i} href={/^www\./i.test(u)?'https://'+u:u} target="_blank" rel="noopener noreferrer"><Ico n="link" size={12}/> {u}</a>)}</div>}
+          </div>
+          <div className="mt-dialog-f">
+            {locked?<Btn v="bgh bsm" onClick={()=>setSrcDlg(null)}>{tr("Close")}</Btn>:<>
+              <Btn v="bgh bsm" onClick={()=>setSrcDlg(null)}>{tr("Cancel")}</Btn>
+              <Btn v="bp bsm" onClick={()=>{si(srcDlg.id,'source',srcDlg.text.trim());setSrcDlg(null);}}>{tr("Save")}</Btn></>}
+          </div>
+        </div>
+      </div>);})()}
+
+      {imp&&<div className="mt-overlay" onClick={()=>setImp(null)}>
+        <div className="mt-dialog mt-dialog-lg" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+          <div className="mt-dialog-h">
+            <div><div className="mt-dialog-k">{tr("Import Excel/CSV")}</div><div className="mt-dialog-t">{imp.file}</div></div>
+            <button className="ab" onClick={()=>setImp(null)} aria-label={tr("Close")}><Ico n="x"/></button>
+          </div>
+          <div className="mt-dialog-b">
+            <div style={{fontSize:13,color:'var(--g700)'}}>{tr("{0} item(s) read",imp.rows.length)}{imp.skipped.length>0&&<> · <span style={{color:'var(--amber)',fontWeight:600}}>{tr("{0} row(s) skipped",imp.skipped.length)}</span></>}</div>
+            {imp.skipped.length>0&&<div className="ce-skip">{imp.skipped.map(s=><div key={s.row}>{tr("Row {0}",s.row)}: {s.reason}{s.desc?' — '+s.desc:''}</div>)}</div>}
+            {imp.rows.length>0&&<div className="iw" style={{marginTop:6}}><table className="dt">
+              <Cg w={[0.4,4,0.8,0.8,1.2]}/>
+              <thead><tr><th>#</th><th>{tr("Product Name")}</th><th className="tar">{tr("Qty")}</th><th>{tr("Unit")}</th><th className="tar">{tr("Unit Cost")}</th></tr></thead>
+              <tbody>{imp.rows.map((r,i)=><tr key={r.id}><td style={{color:'var(--g400)'}}>{i+1}</td><td>{r.desc}</td><td className="tar">{r.qty}</td><td>{r.unit||'—'}</td><td className="tar">{r.cost?fmt(+r.cost):'—'}</td></tr>)}</tbody>
+            </table></div>}
+          </div>
+          <div className="mt-dialog-f">
+            <Btn v="bgh bsm" onClick={()=>setImp(null)}>{tr("Cancel")}</Btn>
+            <Btn v="bp bsm" disabled={!imp.rows.length} onClick={confirmImport}>{tr("Add {0} item(s)",imp.rows.length)}</Btn>
+          </div>
+        </div>
+      </div>}
     </div></div>);
   }
 
@@ -2630,7 +3103,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {id:'numbering',icon:'hash',label:tr('Numbering')},
       {id:'bank',icon:'card',label:tr('Bank Details')}
     ];
-    const numRows=[['sq','Sales Quotation','SQ'],['si','Sales Invoice','SI'],['po','Purchase Order','PO']];
+    const numRows=[['ce','Approximate Cost','YM'],['sq','Sales Quotation','SQ'],['si','Sales Invoice','SI'],['po','Purchase Order','PO']];
 
     const assetCard=(label,hint,src,accept,inputRef,onPick,onRemove)=>(
       <div className="st-asset">
@@ -2711,7 +3184,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <tbody>
             {numRows.map(([k,label,def])=>(
               <tr key={k}>
-                <td className="st-num-doc">{label}</td>
+                <td className="st-num-doc">{tr(label)}</td>
                 <td><input value={c[k+'Pfx']??def} onChange={e=>s(k+'Pfx',e.target.value.toUpperCase().replace(/\s/g,''))} className="fi" readOnly={numLocked} placeholder={def}/></td>
                 <td><input type="number" value={c[k+'Start']||'1'} onChange={e=>s(k+'Start',e.target.value)} className="fi" min="1" readOnly={numLocked}/></td>
                 <td className="st-num-next">{nextDocNum((c[k+'Pfx']||'').trim()||def,c[k+'Start'],usedDocNums[k]())}</td>
@@ -2817,6 +3290,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   const SB=[
     {group:tr('Sales')},
+    {k:'cost_estimates',ico:'calc',lbl:tr('Approximate Cost'),cnt:costEsts.length,col:'ops_ce'},
     {k:'sales_quotes',ico:'sq',lbl:tr('Sales Quotations'),cnt:salesQuotes.filter(d=>d.status!=='passive').length,col:'ops_sq'},
     {k:'sales_invoices',ico:'si',lbl:tr('Sales Invoices'),cnt:salesInvoices.length,col:'ops_si'},
     {div:true},
@@ -2842,18 +3316,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const NAV=[{k:'home',ico:'home',lbl:tr('Dashboard')},...SB];
   const isNav=k=>view===k||view===k+'_form'||view===k+'_preview';
 
-  const titles={home:tr('Dashboard'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),source_quotes:tr('Source Quotes'),source_invoices:tr('Source Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
+  const titles={home:tr('Dashboard'),cost_estimates:tr('Approximate Cost'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),source_quotes:tr('Source Quotes'),source_invoices:tr('Source Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
-  const S=useStableComponents({SourceList,SourceForm,SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
+  const S=useStableComponents({CostEstimatesList,CostEstimateForm,SourceList,SourceForm,SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
         <React.Fragment key={navSeq}>
-        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','source_quotes_form','source_invoices_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
+        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','source_quotes_form','source_invoices_form','cost_estimates_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
           <PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={titles[view]||''}>
+            {view==='cost_estimates'&&<Btn v="bp bsm" onClick={()=>{setCur(mkCostEst());go('cost_estimates_form');}}><Ico n="plus"/>{tr("New Approximate Cost")}</Btn>}
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
             {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si');setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>{tr("New Invoice")}</Btn>}
             {view==='purchase_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>{tr("New Received Quote")}</Btn>}
@@ -2869,6 +3344,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </PageHeader>
         }
         {view==='home'&&<S.Dashboard/>}
+        {view==='cost_estimates'&&<S.CostEstimatesList/>}
+        {view==='cost_estimates_form'&&cur&&<S.CostEstimateForm doc={cur} onSave={handleSaveCE} onCancel={()=>go('cost_estimates')} onTransfer={handleTransferCE} onDelete={handleDeleteCE}/>}
         {view==='sales_quotes'&&<S.SalesQuotesList/>}
         {view==='sales_invoices'&&<S.SalesInvoicesList/>}
         {view==='purchase_quotes'&&<S.ProcurementList type="pq" items={purchaseQuotes} title={tr("Received Quotes")}/>}

@@ -14,6 +14,7 @@ const RECORD_KEYS = [
     'off_i', 'off_q', 'off_p', 'off_r', 'off_pr', 'off_cust', 'off_banktx', 'off_expcat', 'off_incomecat',
     'ops_cust', 'ops_proj', 'ops_sq', 'ops_si', 'ops_pq', 'ops_po', 'ops_ri', 'ops_exp', 'ops_expcat', 'ops_docs',
     'ops_srcq', 'ops_srci', // source quotes / invoices the group company collects from its own suppliers
+    'ops_ce', // approximate costs: price research and cost / margin build-up before a sales quotation
 ];
 const SETTING_KEYS = ['off_co', 'off_cnt', 'ops_co', 'ops_cnt', 'ops_pp'];
 const RAW_KEYS = ['gm_logo', 'gm_signature'];
@@ -21,7 +22,7 @@ const RAW_KEYS = ['gm_logo', 'gm_signature'];
 const COUNTER_KEYS = ['off_cnt', 'ops_cnt'];
 // Collections whose `number` must be unique (case-insensitive). A new record whose number is already
 // taken (two users creating a document at the same moment) gets the next free number instead.
-const NUMBERED_KEYS = ['off_i', 'off_q', 'off_p', 'ops_sq', 'ops_si', 'ops_po', 'ops_proj'];
+const NUMBERED_KEYS = ['off_i', 'off_q', 'off_p', 'ops_sq', 'ops_si', 'ops_po', 'ops_proj', 'ops_ce'];
 
 const SCHEMA_VERSION = 3;
 
