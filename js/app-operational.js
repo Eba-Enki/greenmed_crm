@@ -632,16 +632,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 <SelTd bulk={bulk} id={latest.id}/>
                 <td style={{color:'var(--g500)',fontSize:12}}>{latest.date}</td>
                 <td>
-                  <div style={{display:'flex',alignItems:'center',gap:5}}>
+                  {/* The number never breaks; the lock and revision badges move under it when the column is narrow */}
+                  <div style={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:5}}>
                     {hasHistory
                       ?<button onClick={e=>{e.stopPropagation();toggleGroup(base);}} style={{background:'none',border:'none',cursor:'pointer',padding:'2px',color:'var(--g400)',display:'flex',alignItems:'center',flexShrink:0}}>
                           <svg style={{width:12,height:12,transition:'transform .15s',transform:expanded?'rotate(90deg)':'rotate(0deg)',stroke:'currentColor',fill:'none',strokeWidth:2}} viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
                         </button>
                       :<span style={{width:16,flexShrink:0}}/>
                     }
-                    <span style={{fontFamily:'Inter',fontSize:11}}>{latest.number}</span>
+                    <span style={{fontFamily:'Inter',fontSize:11,whiteSpace:'nowrap'}}>{latest.number}</span>
                     {latest.locked&&<span className="locked-badge" title={tr("Locked")}><Ico n="lock" size={10}/></span>}
-                    {hasHistory&&<span style={{fontSize:10,color:'var(--g400)',background:'var(--g100)',padding:'1px 6px',borderRadius:8,flexShrink:0}}>{tr("{0} rev", history.length)}</span>}
+                    {hasHistory&&<span style={{fontSize:10,color:'var(--g400)',background:'var(--g100)',padding:'1px 6px',borderRadius:8,flexShrink:0,whiteSpace:'nowrap'}}>{tr("{0} rev", history.length)}</span>}
                   </div>
                 </td>
                 <td style={{color:'var(--g500)',fontSize:12}}>{latest.project||'—'}</td>
@@ -674,7 +675,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <td>
                     <div style={{display:'flex',alignItems:'center',gap:5,paddingLeft:22}}>
                       <span style={{color:'var(--g300)',fontSize:13,lineHeight:1}}>└</span>
-                      <span style={{fontFamily:'Inter',fontSize:11}}>{q.number}</span>
+                      <span style={{fontFamily:'Inter',fontSize:11,whiteSpace:'nowrap'}}>{q.number}</span>
                     </div>
                   </td>
                   <td style={{fontSize:12}}>{q.project||'—'}</td>
