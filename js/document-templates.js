@@ -339,64 +339,71 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   const headerH=opts.modern?7:5.421;
   const rowH=opts.modern?6.4:4.854;
   
-  // Check which optional columns are used
-  const hasBrand=(doc.items||[]).some(it=>it.brand);
-  const hasModel=(doc.items||[]).some(it=>it.model);
-  const hasCategory=(doc.items||[]).some(it=>it.category);
-  
-  // Calculate max content lengths (rough estimation: 1 char ≈ 1.5mm for Arial 8pt)
-  const maxBrandLen=hasBrand?Math.max(5,...(doc.items||[]).map(it=>(it.brand||'').length)):0;
-  const maxModelLen=hasModel?Math.max(5,...(doc.items||[]).map(it=>(it.model||'').length)):0;
-  const maxCategoryLen=hasCategory?Math.max(6,...(doc.items||[]).map(it=>(it.category||'').length)):0;
-  
-  // Convert lengths to widths (with padding)
-  const brandW=hasBrand?Math.min(Math.max(12,maxBrandLen*1.5+3),25):0;
-  const modelW=hasModel?Math.min(Math.max(12,maxModelLen*1.5+3),25):0;
-  const categoryW=hasCategory?Math.min(Math.max(14,maxCategoryLen*1.5+3),25):0;
-  
-  const extraWidth=brandW+modelW+categoryW;
-  const descWidth=Math.max(35,83.464-extraWidth); // Min 35mm for description
-  
+  // Column widths: every column except Description is as wide as its content (measured in the PDF font), the text
+  // columns up to a maximum after which they wrap, the number columns (Qty, Price, Amount) always in full on one line.
+  // Description takes whatever is left — at least DESC_MIN; if the text columns would leave less, they give up width
+  // in proportion (down to their header's width) and wrap more. Item is left out when no line has an item code.
+  const items=doc.items||[];
+  const PAD=5,DESC_MIN=55,WORD_MAX=28; // PAD: 2 mm before the text, 3 mm after it
+  const tw=(s,bold)=>{pdf.setFont('Arial',bold?'bold':'normal');return pdf.getTextWidth(String(s||''));};
+  pdf.setFontSize(8);
+  const colDefs=[
+    {key:'no',label:'#',align:'center',max:null,get:(it,i)=>String(i+1)},
+    {key:'item',label:'Item',align:'left',wrap:true,max:20,get:it=>fixText(it.item)},
+    {key:'desc',label:'Description',align:'left',wrap:true},
+    {key:'brand',label:'Brand',align:'left',wrap:true,max:22,get:it=>fixText(it.brand)},
+    {key:'model',label:'Model',align:'left',wrap:true,max:22,get:it=>fixText(it.model)},
+    {key:'category',label:'Category',align:'left',wrap:true,max:22,get:it=>fixText(it.category)},
+    {key:'qty',label:'Qty',align:'right',max:null,get:it=>fmt(+(it.qty||0))},
+    {key:'unit',label:'Units',align:'center',wrap:true,max:12,get:it=>fixText(it.unit)},
+    {key:'price',label:'Price',align:'right',max:null,get:it=>fmt(+(it.price||0))},
+    {key:'amount',label:'Amount',align:'right',max:null,get:it=>fmt(lt(it))},
+  ].filter(c=>!['item','brand','model','category'].includes(c.key)||items.some(it=>String(it[c.key]||'').trim()));
+  colDefs.forEach(c=>{
+    if(c.key==='desc')return;
+    c.min=tw(c.label,true)+PAD;
+    const need=Math.max(c.min,...items.map((it,i)=>tw(c.get(it,i))+PAD));
+    c.w=c.max?Math.max(c.min,Math.min(need,c.max)):need;
+    // Width that fits the column's longest single word (words also break after a hyphen)
+    if(c.wrap)c.word=Math.max(0,...items.map((it,i)=>Math.max(0,...c.get(it,i).replace(/-/g,'- ').split(/\s+/).map(w=>tw(w)+PAD))));
+  });
+  const others=()=>colDefs.reduce((s,c)=>s+(c.key==='desc'?0:c.w),0);
+  const flex=colDefs.filter(c=>c.wrap&&c.key!=='desc');
+  if(tableW-others()<DESC_MIN){
+    const room=flex.reduce((s,c)=>s+(c.w-c.min),0);
+    const f=room>0?Math.min(1,(DESC_MIN-(tableW-others()))/room):0;
+    flex.forEach(c=>{c.w-=(c.w-c.min)*f;});
+  }
+  // A column whose longest word does not fit is widened to fit it — smallest widening first, each only in full
+  // and only while Description keeps DESC_MIN; words still too long are broken with a hyphen (see wrapCell)
+  flex.filter(c=>c.word>c.w&&c.word<=WORD_MAX).sort((a,b)=>(a.word-a.w)-(b.word-b.w)).forEach(c=>{
+    if(tableW-others()-(c.word-c.w)>=DESC_MIN)c.w=c.word;
+  });
+  colDefs.find(c=>c.key==='desc').w=tableW-others();
   // Column positions (X coordinates from left of table)
-  const cols=[
-    {x:0,w:9.298,align:'center',label:'#'},
-    {x:9.299,w:18.8,align:'left',label:'Item'},
-    {x:28.098,w:descWidth,align:'left',label:'Description'},
-  ];
-  
-  let currentX=28.098+descWidth;
-  if(hasBrand){cols.push({x:currentX,w:brandW,align:'left',label:'Brand'});currentX+=brandW;}
-  if(hasModel){cols.push({x:currentX,w:modelW,align:'left',label:'Model'});currentX+=modelW;}
-  if(hasCategory){cols.push({x:currentX,w:categoryW,align:'left',label:'Category'});currentX+=categoryW;}
-  
-  cols.push(
-    {x:currentX,w:14.827,align:'right',label:'Qty'},
-    {x:currentX+14.827,w:14.831,align:'center',label:'Units'},
-    {x:currentX+29.658,w:20.387,align:'right',label:'Price'},
-    {x:currentX+50.045,w:24.394,align:'right',label:'Amount'}
-  );
-  
+  let currentX=0;
+  const cols=colDefs.map(c=>{const col={...c,x:currentX};currentX+=c.w;return col;});
+
   // Cell text per row: left-aligned columns (item, description, brand…) wrap onto extra lines instead of
   // being cut off, and each row grows to fit its tallest cell
   const lineH=opts.modern?3.7:3.3;
   pdf.setFont('Arial','normal');
   pdf.setFontSize(8);
-  const rows=(doc.items||[]).map((it,i)=>{
-    const data=[
-      String(i+1),
-      fixText(it.item||''),
-      fixText(it.desc||''),
-    ];
-    if(hasBrand)data.push(fixText(it.brand||''));
-    if(hasModel)data.push(fixText(it.model||''));
-    if(hasCategory)data.push(fixText(it.category||''));
-    data.push(
-      fmt(+(it.qty||0)),
-      fixText(it.unit||''),
-      fmt(+(it.price||0)),
-      fmt(lt(it))
-    );
-    const cells=cols.map((col,j)=>col.align==='left'?pdf.splitTextToSize(data[j],col.w-4):[data[j]]);
+  // Wrapped cell text; a line that ends inside a word (a word too long for the column) gets a hyphen
+  const wrapCell=(text,width)=>{
+    const lines=pdf.splitTextToSize(text,width);
+    let pos=0;
+    for(let k=0;k<lines.length-1;k++){
+      const at=text.indexOf(lines[k],pos);
+      if(at<0)break;
+      pos=at+lines[k].length;
+      if(text[pos]&&!/\s/.test(text[pos])&&!/[-\s]$/.test(lines[k]))lines[k]+='-';
+    }
+    return lines;
+  };
+  const rows=items.map((it,i)=>{
+    const data=cols.map(c=>c.key==='desc'?fixText(it.desc):c.get(it,i));
+    const cells=cols.map((col,j)=>col.wrap?wrapCell(data[j],col.w-4):[data[j]]);
     const n=Math.max(...cells.map(c=>c.length));
     return{cells,h:Math.max(rowH,rowH+(n-1)*lineH)};
   });
