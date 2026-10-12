@@ -58,7 +58,7 @@ const loadHorizontalLogo=async()=>{
 };
 
 const drawModernHeader=async(pdf,ctx)=>{
-  const{doc,co,typeTitle,isInv,isPO,isPQ,isSalesQuote,fixText,borderWidth,billLabel,bill,ship,hasShipTo}=ctx;
+  const{doc,co,typeTitle,isInv,isPO,isPQ,isSalesQuote,fixText,borderWidth,billLabel,bill,ship}=ctx;
   const L=12.025,R=198.025;
   const GREEN=[150,194,112];  // --gm-300, the light brand green
 
@@ -112,7 +112,7 @@ const drawModernHeader=async(pdf,ctx)=>{
   });
   const metaEnd=my-4.8;
 
-  // Bill To / Ship To between green rules
+  // Bill To / Ship To between green rules — both always shown, even when empty
   const top=Math.max(infoEnd,metaEnd)+9;
   const colW=88;
   const block=(x,heading,p)=>{
@@ -121,7 +121,7 @@ const drawModernHeader=async(pdf,ctx)=>{
     pdf.setFontSize(9);
     pdf.text(heading.toUpperCase(),x+1,y);
     y+=7.5;
-    pdf.splitTextToSize(fixText(p.company||'—'),colW-2).forEach((t,k)=>{if(k)y+=4.6;pdf.text(t,x+1,y);});
+    if(String(p.company||'').trim())pdf.splitTextToSize(fixText(p.company),colW-2).forEach((t,k)=>{if(k)y+=4.6;pdf.text(t,x+1,y);});
     pdf.setFont('Arial','normal');
     pdf.setFontSize(8.5);
     [addrCase(p.address),p.contact,p.email].filter(v=>v&&String(v).trim()).forEach(v=>{
@@ -130,12 +130,12 @@ const drawModernHeader=async(pdf,ctx)=>{
     return y;
   };
   const endL=block(L,billLabel,bill);
-  const endR=hasShipTo?block(R-colW,'Ship To',ship):top;
+  const endR=block(R-colW,'Ship To',ship);
   const bottom=Math.max(endL,endR)+5.5;
   pdf.setDrawColor(...GREEN);
   pdf.setLineWidth(0.3);
   pdf.line(L,top,L+colW,top);pdf.line(L,bottom,L+colW,bottom);
-  if(hasShipTo){pdf.line(R-colW,top,R,top);pdf.line(R-colW,bottom,R,bottom);}
+  pdf.line(R-colW,top,R,top);pdf.line(R-colW,bottom,R,bottom);
 
   // The item table follows straight after Bill To / Ship To (no Project No / Terms line on Sales PDFs)
   pdf.setLineWidth(borderWidth);
@@ -199,7 +199,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     modernTableY=await drawModernHeader(pdf,{doc,co,typeTitle,isInv,isPO,isPQ,isSalesQuote,fixText,borderWidth,
       billLabel:isPO?'Vendor':isPQ?'Supplier':'Bill To',
       bill:{company:billCompany,address:billAddr,contact:billContact,email:billEmail},
-      ship:{company:shipCompany,address:shipAddr,contact:shipContact,email:shipEmail},hasShipTo});
+      ship:{company:shipCompany,address:shipAddr,contact:shipContact,email:shipEmail}});
   }else{
     // Frame
     pdf.rect(12.025,17.965,186,261);
