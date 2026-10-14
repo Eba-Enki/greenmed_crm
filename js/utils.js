@@ -10,6 +10,22 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 const lt=i=>+(+(i.qty||0))*(+(i.price||0));
 const dt=items=>(items||[]).reduce((s,i)=>s+lt(i),0);
 const fmt=n=>n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+// Amounts in different currencies are never added together: totals are kept per currency ({GBP:…, USD:…})
+// and shown side by side ("£1,200.00 · $350.00"); a record without a currency counts as GBP, as it is shown.
+const curTotals=pairs=>pairs.reduce((a,[c,v])=>{const k=c||'GBP';a[k]=(a[k]||0)+(+v||0);return a;},{});
+const fmtCurTotals=(t,empty='—')=>{const e=Object.entries(t).filter(([,v])=>v);return e.length?e.map(([c,v])=>(v<0?'-':'')+(CURR[c]||c+' ')+fmt(Math.abs(v))).join(' · '):empty;};
+// Currency code from what people type in a spreadsheet ("$", "usd", "Dolar", "€", "TL"…); '' when not recognised
+const CURRENCY_WORDS={
+  GBP:['gbp','£','pound','pounds','sterling','sterlin','ingiliz sterlini','pound sterling','uk pound'],
+  USD:['usd','$','us$','us dollar','us dollars','dollar','dollars','dolar','amerikan doları','amerikan dolari'],
+  EUR:['eur','€','euro','euros','avro'],
+  TRY:['try','tl','₺','lira','türk lirası','turk lirasi','turkish lira','ytl'],
+};
+const parseCurrency=v=>{
+  const s=String(v??'').toLocaleLowerCase('tr-TR').replace(/\./g,'').replace(/\s+/g,' ').trim();
+  if(!s)return'';
+  return Object.keys(CURRENCY_WORDS).find(c=>CURRENCY_WORDS[c].includes(s))||'';
+};
 const W1=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
 const W2=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
 const toW=(n,currency='GBP')=>{
@@ -457,6 +473,30 @@ const groupCats=cats=>{
   const mains=cats.filter(c=>!c.parentId);
   return mains.map(m=>({main:m,children:cats.filter(c=>c.parentId===m.id)}));
 };
+
+// ── Sales & Procurement expense categories ──
+// {id, code, name, parentId}: main categories and their sub-categories (two levels). The code is typed by the user.
+// An expense links to its category by categoryId and also keeps the name (category) for older readers.
+const EXP_CAT_TR={Travel:'Seyahat',Accommodation:'Konaklama',Meals:'Yemek',Personnel:'Personel','Office Supplies':'Ofis Malzemeleri',
+  Utilities:'Faturalar ve Abonelikler','Professional Services':'Profesyonel Hizmetler',Other:'Diğer'};
+const expCatCmp=(a,b)=>natCmp(a.code||'￿',b.code||'￿')||natCmp(a.name,b.name);
+// Mains in code order, each followed by its subs: [{c, depth}]
+const expCatTree=cats=>{
+  const list=(cats||[]).filter(c=>c&&typeof c==='object');
+  const isMain=c=>!c.parentId||!list.some(x=>x.id===c.parentId);
+  return list.filter(isMain).sort(expCatCmp).flatMap(m=>[{c:m,depth:0},...list.filter(x=>x.parentId===m.id).sort(expCatCmp).map(c=>({c,depth:1}))]);
+};
+const expCatLabel=c=>c?(c.code?c.code+' ':'')+c.name:'';
+const expCatOf=(cats,e)=>{
+  if(!e)return null;
+  return(cats||[]).find(c=>c.id&&c.id===e.categoryId)
+    ||(e.category?(cats||[]).find(c=>(c.name||'').toLowerCase()===String(e.category).toLowerCase()):null)||null;
+};
+const expCatText=(cats,e)=>{const c=expCatOf(cats,e);return c?expCatLabel(c):(e&&e.category)||'';};
+// Fields an expense gets when its category is chosen by id
+const expCatFields=(cats,id)=>{const c=(cats||[]).find(x=>x.id===id);return c?{categoryId:c.id,category:c.name}:{categoryId:'',category:''};};
+// <option>s for a category <select>: subs indented under their main
+const ExpCatOptions=({cats})=>expCatTree(cats).map(({c,depth})=><option key={c.id} value={c.id}>{depth?'    ':''}{expCatLabel(c)}</option>);
 
 // Maps a spreadsheet header cell to a known line-item field, so bulk item import
 // works regardless of column order and tolerates a few common header spellings.

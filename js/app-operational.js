@@ -98,8 +98,27 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       setPurchasePrices(next);
       if(moved)LS.set(ns+'pp',next);
     }
-    const ex=load('exp');if(ex)setExpenses(ex);
-    const ec=load('expcat');if(ec)setExpCats(ec);else setExpCats(EXP_CATS_DEF.map(n=>({id:uid(),name:n})));
+    // Expense categories become {id, code, name, parentId}; the English starter names turn Turkish, and each
+    // expense gets the id of its category (matched by name) so renaming a category no longer cuts it loose
+    const ec=load('expcat');
+    let catChanged=!ec||ec.some(c=>typeof c==='string');
+    const cats=(ec||EXP_CATS_DEF).map(c=>{
+      const o=typeof c==='string'?{id:uid(),name:c}:{...c};
+      const turkish=EXP_CAT_TR[o.name];
+      if(turkish||!('code' in o)||!('parentId' in o))catChanged=true;
+      return{...o,name:turkish||o.name,code:o.code||'',parentId:o.parentId||null};
+    });
+    setExpCats(cats);if(catChanged)LS.set(ns+'expcat',cats);
+    const ex=load('exp');
+    if(ex){
+      const next=ex.map(e=>{
+        if(e.categoryId&&cats.some(c=>c.id===e.categoryId)||!e.category)return e;
+        const nm=(EXP_CAT_TR[e.category]||e.category).toLowerCase();
+        const c=cats.find(x=>x.name.toLowerCase()===nm);
+        return c?{...e,categoryId:c.id,category:c.name}:e;
+      });
+      setExpenses(next);if(next.some((e,i)=>e!==ex[i]))LS.set(ns+'exp',next);
+    }
     const docs=load('docs');if(docs)setDocuments(docs);
     const cn=load('cnt');if(cn)setCnt(cn);
     setView('home');setCur(null);
@@ -581,7 +600,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const deleteRI=id=>deleteProc('ri',new Set([id]));
 
   // ── EXPENSE ──
-  const mkExpense=()=>({id:null,date:td(),category:'',description:'',amount:'',currency:'GBP',reference:'',project:'',employee:'',notes:''});
+  const mkExpense=()=>({id:null,date:td(),categoryId:'',category:'',description:'',amount:'',currency:'GBP',reference:'',project:'',employee:'',notes:''});
   const saveExpense=e=>{const fresh=!e.id;const saved=fresh?{...e,id:uid()}:e;sExp(fresh?[...expenses,saved]:expenses.map(x=>x.id===saved.id?saved:x));};
   const handleSaveExp=e=>{saveExpense(e);showToast(tr('Saved ✓'));go('expenses');};
   const handleSaveExpAndNew=e=>{saveExpense(e);showToast(tr('Saved ✓ — ready for the next one'));};
@@ -708,7 +727,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                     <span style={{width:18,display:'inline-flex',flexShrink:0}}>
                       {latest.status==='approved'&&remaining.length>0&&
                         <span
-                          onMouseEnter={e=>{const r=e.currentTarget.getBoundingClientRect();setRemTip({text:`Remaining to invoice: £${fmt(remAmt)}`,x:r.left+r.width/2,y:r.top});}}
+                          onMouseEnter={e=>{const r=e.currentTarget.getBoundingClientRect();setRemTip({text:`Remaining to invoice: ${CURR[latest.currency]||'£'}${fmt(remAmt)}`,x:r.left+r.width/2,y:r.top});}}
                           onMouseLeave={()=>setRemTip(null)}
                           style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:15,height:15,borderRadius:'50%',background:'var(--amberl)',color:'var(--amber)',fontSize:10,fontWeight:700,fontStyle:'italic',cursor:'default'}}
                         >i</span>
@@ -798,7 +817,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const shorter=t1.length<=t2.length?t1:t2;
         const longer=t1.length>t2.length?t1:t2;
         return shorter.length>0&&shorter.filter(t=>longer.includes(t)).length/shorter.length>=0.6;
-      }).slice(0,3).map(m=>({price:m.price,quoteNum:m.quoteNum,date:m.date,matchedName:m.name}));
+      }).slice(0,3).map(m=>({price:m.price,currency:m.currency,quoteNum:m.quoteNum,date:m.date,matchedName:m.name}));
     };
     const checkPriceHistory=(itemId,description)=>{
       const matches=findPoolMatches(description);
@@ -1070,7 +1089,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 <td className="lt">{CURR[q.currency]||'£'}{fmt(lt(it))}</td>
                 {!isLocked&&<td style={{textAlign:'center'}}>{items.length>1&&<button className="dlb" onClick={()=>rmL(it.id)}>×</button>}</td>}
               </tr>
-              {warnings.length>0&&<tr><td colSpan={columnSettings.brand||columnSettings.model||columnSettings.category?10:7} style={{padding:0,border:'none'}}><div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:6,padding:'8px 12px',margin:'4px 0 8px 0',fontSize:12}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,color:'#d97706',fontWeight:600}}><svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>{tr("This item was previously used:")}</div>{warnings.map((w,i)=>{const showName=w.matchedName&&w.matchedName.toLowerCase().trim()!==(it.desc||'').toLowerCase().trim();return(<div key={i} style={{display:'flex',alignItems:'center',gap:8,marginTop:4,paddingLeft:20}}><span style={{color:'#78716c'}}>•</span><span style={{fontWeight:600,color:'#0f172a'}}>£{fmt(+(w.price||0))}</span><span style={{color:'#78716c'}}>→</span><span style={{fontFamily:'monospace',fontSize:11,color:'#c8902a'}}>{w.quoteNum||'—'}</span><span style={{color:'#78716c',fontSize:11}}>({w.date||'—'})</span>{showName&&<span onMouseEnter={e=>{const r=e.currentTarget.getBoundingClientRect();setPoolTip({text:w.matchedName,x:r.left+r.width/2,y:r.top});}} onMouseLeave={()=>setPoolTip(null)} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:16,height:16,borderRadius:'50%',background:'#e2e8f0',color:'#64748b',fontSize:10,fontWeight:700,cursor:'default',flexShrink:0}}>ⓘ</span>}{!isLocked&&<button onClick={()=>applyPrice(it.id,w.price)} style={{marginLeft:8,background:'#fbbf24',border:'1px solid #f59e0b',color:'#78350f',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer'}}>{tr("Use £{0}", fmt(+(w.price||0)))}</button>}</div>);})}</div></td></tr>}
+              {warnings.length>0&&<tr><td colSpan={columnSettings.brand||columnSettings.model||columnSettings.category?10:7} style={{padding:0,border:'none'}}><div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:6,padding:'8px 12px',margin:'4px 0 8px 0',fontSize:12}}><div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6,color:'#d97706',fontWeight:600}}><svg viewBox="0 0 24 24" style={{width:14,height:14,stroke:'currentColor',fill:'none',strokeWidth:2,strokeLinecap:'round',strokeLinejoin:'round'}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>{tr("This item was previously used:")}</div>{warnings.map((w,i)=>{const showName=w.matchedName&&w.matchedName.toLowerCase().trim()!==(it.desc||'').toLowerCase().trim();return(<div key={i} style={{display:'flex',alignItems:'center',gap:8,marginTop:4,paddingLeft:20}}><span style={{color:'#78716c'}}>•</span><span style={{fontWeight:600,color:'#0f172a'}}>{CURR[w.currency]||'£'}{fmt(+(w.price||0))}</span><span style={{color:'#78716c'}}>→</span><span style={{fontFamily:'monospace',fontSize:11,color:'#c8902a'}}>{w.quoteNum||'—'}</span><span style={{color:'#78716c',fontSize:11}}>({w.date||'—'})</span>{showName&&<span onMouseEnter={e=>{const r=e.currentTarget.getBoundingClientRect();setPoolTip({text:w.matchedName,x:r.left+r.width/2,y:r.top});}} onMouseLeave={()=>setPoolTip(null)} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:16,height:16,borderRadius:'50%',background:'#e2e8f0',color:'#64748b',fontSize:10,fontWeight:700,cursor:'default',flexShrink:0}}>ⓘ</span>}{!isLocked&&<button onClick={()=>applyPrice(it.id,w.price)} style={{marginLeft:8,background:'#fbbf24',border:'1px solid #f59e0b',color:'#78350f',padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,cursor:'pointer'}}>{tr("Use {0}", (CURR[w.currency]||'£')+fmt(+(w.price||0)))}</button>}</div>);})}</div></td></tr>}
               </React.Fragment>);
             })}</tbody>
           </table>
@@ -2196,8 +2215,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             const pInv=salesInvoices.filter(d=>d.project===p.name);
             const pPO=purchaseOrders.filter(d=>d.project===p.name);
             const pExp=expenses.filter(d=>d.project===p.name);
-            const revenue=dt(pInv.flatMap(d=>d.items));
-            const costs=dt(pPO.flatMap(d=>d.items))+pExp.reduce((s,e)=>s+(+(e.amount||0)),0);
+            const revenue=curTotals(pInv.map(d=>[d.currency,dt(d.items)]));
             return(<div key={p.id} className="proj-card">
               <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10}}>
                 <div>
@@ -2208,7 +2226,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   </div>
                   {p.client&&<div style={{fontSize:12.5,color:'var(--g500)',marginBottom:8}}>{tr("Client: {0}", p.client)}</div>}
                   <div style={{display:'flex',gap:16,fontSize:12}}>
-                    <span style={{color:'var(--green)',fontWeight:600}}>{tr("{0} invoices · £{1}", pInv.length, fmt(revenue))}</span>
+                    <span style={{color:'var(--green)',fontWeight:600}}>{tr("{0} invoices · {1}", pInv.length, fmtCurTotals(revenue,(CURR.GBP)+fmt(0)))}</span>
                     <span style={{color:'var(--amber)',fontWeight:600}}>{tr("{0} POs", pPO.length)}</span>
                     <span style={{color:'var(--purple)',fontWeight:600}}>{tr("{0} expenses", pExp.length)}</span>
                   </div>
@@ -2450,9 +2468,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const pPO=purchaseOrders.filter(d=>d.project===project.name);
     const pRI=receivedInvoices.filter(d=>d.project===project.name);
     const pExp=expenses.filter(d=>d.project===project.name);
-    const revenue=dt(pI.flatMap(d=>d.items));
-    const poTotal=dt(pPO.flatMap(d=>d.items));
-    const expTotal=pExp.reduce((s,e)=>s+(+(e.amount||0)),0);
+    // Per currency; Net is revenue − PO costs − expenses within each currency
+    const revenue=curTotals(pI.map(d=>[d.currency,dt(d.items)]));
+    const poTotal=curTotals(pPO.map(d=>[d.currency,dt(d.items)]));
+    const expTotal=curTotals(pExp.map(e=>[e.currency,e.amount]));
+    const net=curTotals([...Object.entries(revenue),...Object.entries(poTotal).map(([c,v])=>[c,-v]),...Object.entries(expTotal).map(([c,v])=>[c,-v])]);
+    const zero=CURR.GBP+fmt(0);
     return(<div className="content">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
         <button onClick={()=>go('projects')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Projects")}</button>
@@ -2464,19 +2485,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {/* Stats */}
       <div className="stats" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
-        {[{lbl:tr('Revenue'),val:`£${fmt(revenue)}`,sub:tr("{0} invoices", pI.length),cls:'sc-green'},{lbl:tr('PO Costs'),val:`£${fmt(poTotal)}`,sub:tr("{0} orders", pPO.length),cls:'sc-blue'},{lbl:tr('Expenses'),val:`£${fmt(expTotal)}`,sub:tr("{0} items", pExp.length),cls:'sc-purple'},{lbl:tr('Net'),val:`£${fmt(revenue-poTotal-expTotal)}`,sub:tr('revenue - costs'),cls:revenue-poTotal-expTotal>=0?'sc-teal':'sc-red'}].map(s=><div key={s.lbl} className={`stat-card ${s.cls}`}><div className="stat-val">{s.val}</div><div className="stat-lbl">{s.lbl}</div><div className="stat-sub">{s.sub}</div></div>)}
+        {[{lbl:tr('Revenue'),val:fmtCurTotals(revenue,zero),sub:tr("{0} invoices", pI.length),cls:'sc-green'},{lbl:tr('PO Costs'),val:fmtCurTotals(poTotal,zero),sub:tr("{0} orders", pPO.length),cls:'sc-blue'},{lbl:tr('Expenses'),val:fmtCurTotals(expTotal,zero),sub:tr("{0} items", pExp.length),cls:'sc-purple'},{lbl:tr('Net'),val:fmtCurTotals(net,zero),sub:tr('revenue - costs'),cls:Object.values(net).every(v=>v>=0)?'sc-teal':'sc-red'}].map(s=><div key={s.lbl} className={`stat-card ${s.cls}`}><div className="stat-val">{s.val}</div><div className="stat-lbl">{s.lbl}</div><div className="stat-sub">{s.sub}</div></div>)}
       </div>
       {/* Sections */}
       {(()=>{
         const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>d.date};
         const noCol=l=>({k:'no',l,get:d=>d.number,show:d=>d.number,strong:true});
-        const totalCol={k:'total',l:tr('Total'),get:d=>dt(d.items||[]),show:d=>`£${fmt(dt(d.items||[]))}`};
+        const totalCol={k:'total',l:tr('Total'),get:d=>dt(d.items||[]),show:d=>`${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))}`};
         const statusCol={k:'status',l:tr('Status'),get:d=>d.status,show:d=><Badge s={d.status}/>};
         return[
           {title:'Sales Quotations',items:pQ,w:[0.8,1,0.9,0.9],cols:[dateCol,noCol(tr('Quote No')),totalCol,statusCol]},
           {title:'Sales Invoices',items:pI,w:[0.8,1,0.9,0.9],cols:[dateCol,noCol(tr('Invoice No')),totalCol,statusCol]},
           {title:'Purchase Orders',items:pPO,w:[0.8,1,2,0.9,0.9],cols:[dateCol,noCol(tr('PO No')),{k:'supplier',l:tr('Supplier'),get:d=>d.supplier,show:d=>d.supplier},totalCol,statusCol]},
-          {title:'Expenses',items:pExp,w:[0.8,1,2,0.9],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>e.category,show:e=>e.category},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
+          {title:'Expenses',items:pExp,w:[0.8,1,2,0.9],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
             {k:'amount',l:tr('Amount'),get:e=>+(e.amount||0),show:e=>`${CURR[e.currency]||'£'}${fmt(+(e.amount||0))}`}]},
         ].map(s=><ProjDocTable key={s.title} {...s}/>);
       })()}
@@ -2626,28 +2647,28 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
     const filtered=expenses.filter(e=>{
       if(fs.q&&![e.description,e.employee].some(x=>(x||'').toLowerCase().includes(fs.q.toLowerCase())))return false;
-      if(fs.cat&&e.category!==fs.cat)return false;
+      // A main category also shows the expenses of its sub-categories
+      if(fs.cat){const c=expCatOf(expCats,e);if(!c||(c.id!==fs.cat&&c.parentId!==fs.cat))return false;}
       if(fs.p&&e.project!==fs.p)return false;
       if(fs.dateFrom&&e.date<fs.dateFrom)return false;
       if(fs.dateTo&&e.date>fs.dateTo)return false;
       return true;
     });
     // Fed newest-first so expenses with the same date and no reference keep their newest-added-first order
-    const sorted=sortRows([...filtered].reverse(),sort,{date:e=>e.date,no:e=>e.reference,employee:e=>e.employee,category:e=>e.category,desc:e=>e.description,project:e=>e.project,amount:e=>+(e.amount||0)});
-    const total=filtered.reduce((s,e)=>s+(+(e.amount||0)),0);
-    const allCats=[...new Set(expenses.map(e=>e.category).filter(Boolean))];
+    const sorted=sortRows([...filtered].reverse(),sort,{date:e=>e.date,no:e=>e.reference,employee:e=>e.employee,category:e=>expCatText(expCats,e),desc:e=>e.description,project:e=>e.project,amount:e=>+(e.amount||0)});
+    const total=curTotals(filtered.map(e=>[e.currency,e.amount])); // per currency
     const bulk=useBulkSelect(sorted.map(e=>e.id));
     const picked=sorted.filter(e=>bulk.has(e.id));
-    const catChoices=[...new Set([...expCats.map(c=>typeof c==='string'?c:c.name),...allCats])].filter(Boolean).sort();
     // Sets one field (category / project) on every selected expense
     const bulkSet=(field,value)=>{
       if(!value)return;
       const ids=new Set(picked.map(e=>e.id));
-      sExp(expenses.map(x=>ids.has(x.id)?{...x,[field]:value}:x));
+      const patch=field==='category'?expCatFields(expCats,value):{[field]:value};
+      sExp(expenses.map(x=>ids.has(x.id)?{...x,...patch}:x));
       showToast(tr('{0} updated',ids.size));
       bulk.clear();
     };
-    const exportRows=rows=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...rows.map(e=>[e.date,e.employee,e.category,e.description,e.reference,e.amount,e.currency,e.project])],'expenses');
+    const exportRows=rows=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...rows.map(e=>[e.date,e.employee,expCatText(expCats,e),e.description,e.reference,e.amount,e.currency,e.project])],'expenses');
     const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected expenses?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
       if(!ok)return;
       const ids=new Set(picked.map(e=>e.id));
@@ -2656,9 +2677,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       bulk.clear();
     });
     return(<div className="content">
-      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.cat,fs.p,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,cat:'',p:'',dateFrom:'',dateTo:''}))} extra={<>{filtered.length>0&&<span className="lt-note">{tr("Total: £{0}", fmt(total))}</span>} <button className="lt-btn" onClick={()=>go('exp_import')}>{tr("Import Excel")}</button></>}>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.cat,fs.p,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,cat:'',p:'',dateFrom:'',dateTo:''}))} extra={<>{filtered.length>0&&<span className="lt-note">{tr("Total: {0}", fmtCurTotals(total))}</span>} <button className="lt-btn" onClick={()=>go('exp_import')}>{tr("Import Excel")}</button></>}>
         <FilterField label={tr("Category")}><select value={fs.cat} onChange={e=>setFs(f=>({...f,cat:e.target.value}))}>
-          <option value="">{tr("All Categories")}</option>{allCats.map(c=><option key={c} value={c}>{c}</option>)}
+          <option value="">{tr("All Categories")}</option><ExpCatOptions cats={expCats}/>
         </select></FilterField>
         <FilterField label={tr("Project")}><select value={fs.p} onChange={e=>setFs(f=>({...f,p:e.target.value}))}>
           <option value="">{tr("All Projects")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
@@ -2668,7 +2689,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </ListTools>
       <BulkBar bulk={bulk}>
         <select className="bulk-select" value="" onChange={e=>bulkSet('category',e.target.value)} aria-label={tr("Set category")}>
-          <option value="">{tr("Set category…")}</option>{catChoices.map(c=><option key={c} value={c}>{c}</option>)}
+          <option value="">{tr("Set category…")}</option><ExpCatOptions cats={expCats}/>
         </select>
         <select className="bulk-select" value="" onChange={e=>bulkSet('project',e.target.value)} aria-label={tr("Assign to project")}>
           <option value="">{tr("Assign to project…")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
@@ -2693,7 +2714,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SelTd bulk={bulk} id={e.id}/>
             <td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td>
             <td style={{color:'var(--g700)'}}>{e.employee||'—'}</td>
-            <td>{e.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{e.category}</span>:'—'}</td>
+            <td>{expCatText(expCats,e)?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{expCatText(expCats,e)}</span>:'—'}</td>
             <td style={{fontWeight:500,color:'var(--g800)'}}>{e.description||'—'}</td>
             <td style={{color:'var(--g500)',fontSize:12}}>{e.project||'—'}</td>
             <td className="tar" style={{fontWeight:700}}>{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td>
@@ -2713,7 +2734,15 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function ExpenseImportView(){
     const[rows,setRows]=useState(null);
     const fileRef=useRef();
-    const allCatNames=expCats.map(c=>typeof c==='string'?c:c.name);
+    // A category cell may hold the code ("01.02"), the name, "code name", or one of the old English starter names
+    const matchCat=v=>{
+      const raw=String(v||'').trim(),t=raw.toLowerCase();if(!t)return null;
+      const by=f=>expCats.find(c=>f(c).toLowerCase()===t);
+      // Spreadsheets turn a code like 01.02 into the number 1.02, so numeric codes also match by value
+      const num=raw!==''&&isFinite(+raw)?+raw:null;
+      const byNum=num==null?null:expCats.find(c=>c.code&&isFinite(+c.code)&&+c.code===num);
+      return by(c=>c.code||'')||byNum||by(c=>c.name)||by(c=>expCatLabel(c))||(EXP_CAT_TR[raw]?expCats.find(c=>c.name===EXP_CAT_TR[raw]):null)||null;
+    };
     const allEmployeeNames=(LS.get('gm_users')||[]).map(u=>`${u.firstName||''} ${u.lastName||''}`.trim()||u.username).filter(Boolean);
     dirtyCheckRef.current=()=>!!(rows&&rows.length>0);
 
@@ -2740,20 +2769,21 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             const obj={};
             headerMap.forEach((key,idx)=>{if(key)obj[key]=String(row[idx]??'').trim();});
             if(!obj.amount&&!obj.desc)continue;
-            const catMatch=allCatNames.find(c=>c.toLowerCase()===(obj.category||'').toLowerCase());
+            const catMatch=matchCat(obj.category);
             const projMatch=projects.find(p=>p.name.toLowerCase()===(obj.project||'').toLowerCase());
             const empMatch=allEmployeeNames.find(n=>n.toLowerCase()===(obj.employee||'').toLowerCase());
-            const curOk=Object.keys(CURR).includes((obj.currency||'').toUpperCase());
+            // "$", "Dolar", "€", "TL"… are recognised; anything else stays empty and must be chosen (never silently GBP)
+            const cur=parseCurrency(obj.currency);
             const isDup=expenses.some(x=>x.date===obj.date&&String(+x.amount||0)===String(+obj.amount||0)&&(x.description||'').toLowerCase().trim()===(obj.desc||'').toLowerCase().trim());
             parsed.push({
               _rid:uid(),
               date:obj.date||td(),
               employee:empMatch||'',
-              category:catMatch||'',
+              categoryId:catMatch?catMatch.id:'',
               description:obj.desc||'',
               reference:obj.reference||'',
               amount:obj.amount||'',
-              currency:curOk?obj.currency.toUpperCase():'GBP',
+              currency:cur,
               project:projMatch?projMatch.name:'',
               notes:obj.notes||'',
               _include:!isDup,
@@ -2783,7 +2813,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const toImport=rows.filter(r=>r._include);
       const invalid=toImport.filter(r=>!r.amount||isNaN(+r.amount)||+r.amount<=0);
       if(invalid.length>0){uiAlert(tr("{0} selected row(s) have a missing/invalid amount. Fix or uncheck them first.", invalid.length));return;}
-      const newExpenses=toImport.map(r=>({id:uid(),date:r.date||td(),employee:r.employee,category:r.category,description:r.description,reference:r.reference,amount:r.amount,currency:r.currency,project:r.project,notes:r.notes}));
+      const noCur=toImport.filter(r=>!r.currency);
+      if(noCur.length>0){uiAlert(tr("{0} selected row(s) have no currency. Choose it or uncheck them first.", noCur.length));return;}
+      const newExpenses=toImport.map(r=>({id:uid(),date:r.date||td(),employee:r.employee,...expCatFields(expCats,r.categoryId),description:r.description,reference:r.reference,amount:r.amount,currency:r.currency,project:r.project,notes:r.notes}));
       sExp([...expenses,...newExpenses]);
       showToast(tr("✓ {0} expenses imported", newExpenses.length));
       go('expenses');
@@ -2840,16 +2872,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   </select>
                 </td>
                 <td>
-                  <select value={r.category} onChange={x=>updateRow(r._rid,'category',x.target.value)} style={{width:'100%',...(r._catUnmatched?{border:'1.5px solid var(--amber)'}:{})}}>
+                  <select value={r.categoryId} onChange={x=>updateRow(r._rid,'categoryId',x.target.value)} style={{width:'100%',...(r._catUnmatched?{border:'1.5px solid var(--amber)'}:{})}}>
                     <option value="">{tr("— Select —")}</option>
-                    {allCatNames.map(c=><option key={c} value={c}>{c}</option>)}
+                    <ExpCatOptions cats={expCats}/>
                   </select>
                 </td>
                 <td><input value={r.description} onChange={x=>updateRow(r._rid,'description',x.target.value)} style={{width:'100%'}}/></td>
                 <td><input value={r.reference} onChange={x=>updateRow(r._rid,'reference',x.target.value)} style={{width:'100%'}}/></td>
                 <td><input type="number" value={r.amount} onChange={x=>updateRow(r._rid,'amount',x.target.value)} style={{width:'100%',textAlign:'right',...(invalidAmount?{border:'1.5px solid var(--red)'}:{})}}/></td>
                 <td>
-                  <select value={r.currency} onChange={x=>updateRow(r._rid,'currency',x.target.value)} style={{width:'100%'}}>
+                  <select value={r.currency} onChange={x=>updateRow(r._rid,'currency',x.target.value)} style={{width:'100%',...(!r.currency?{border:'1.5px solid var(--amber)'}:{})}} title={!r.currency?tr("Currency not recognised — choose it"):undefined}>
+                    {!r.currency&&<option value="">—</option>}
                     {Object.keys(CURR).map(c=><option key={c} value={c}>{c}</option>)}
                   </select>
                 </td>
@@ -2871,23 +2904,83 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     </div>);
   }
 
+  // Expense categories: a coded list of main categories and their sub-categories. Codes are typed by the user and
+  // must be unique; each change is saved straight away.
   function ExpCatsView(){
-    const[cats,setCats]=useState(expCats.map(c=>typeof c==='string'?{id:uid(),name:c}:{...c}));
-    const[nm,setNm]=useState('');
-    const add=async()=>{
-      const v=toTitleCase(nm);
-      if(!v)return;
-      const dup=findCaseInsensitiveDup(cats,'name',v,null);
-      if(dup&&!(await askDuplicateOk('category',v)))return;
-      setCats(x=>[...x,{id:uid(),name:v}]);setNm('');
+    const[dlg,setDlg]=useState(null); // {id?, code, name, parentId}
+    useEscape(()=>setDlg(null),!!dlg);
+    const tree=expCatTree(expCats);
+    const mains=tree.filter(r=>r.depth===0).map(r=>r.c);
+    const used=id=>expenses.filter(e=>e.categoryId===id).length;
+    const subsOf=id=>expCats.filter(c=>c.parentId===id);
+    const save=()=>{
+      const code=(dlg.code||'').trim(),name=toTitleCase(dlg.name||'');
+      if(!code){uiAlert(tr('Enter the category code'));return;}
+      if(!name){uiAlert(tr('Enter the category name'));return;}
+      if(expCats.some(c=>c.id!==dlg.id&&(c.code||'').toLowerCase()===code.toLowerCase())){uiAlert(tr('Code {0} is already used',code));return;}
+      if(expCats.some(c=>c.id!==dlg.id&&(c.parentId||null)===(dlg.parentId||null)&&c.name.toLowerCase()===name.toLowerCase())){uiAlert(tr('A category named "{0}" already exists here',name));return;}
+      const rec={id:dlg.id||uid(),code,name,parentId:dlg.parentId||null};
+      sExpCats(dlg.id?expCats.map(c=>c.id===rec.id?{...c,...rec}:c):[...expCats,rec]);
+      // Expenses keep the category name too, so a rename is copied to them
+      if(dlg.id&&expenses.some(e=>e.categoryId===rec.id&&e.category!==name))sExp(expenses.map(e=>e.categoryId===rec.id?{...e,category:name}:e));
+      setDlg(null);showToast(tr('Saved ✓'));
     };
-    return(<div className="content"><div className="fw" style={{maxWidth:520}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("Expense Categories")}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={()=>{sExpCats(cats);showToast(tr('Saved ✓'));go('expenses');}}>{tr("Save")}</Btn></div>
-      <div className="fc"><div className="fct">{tr("Categories")}</div>
-        <div style={{display:'flex',gap:8,marginBottom:12}}><input value={nm} onChange={e=>setNm(e.target.value)} className="fi" style={{flex:1}} placeholder={tr("New category...")} onKeyDown={e=>e.key==='Enter'&&add()}/><Btn v="bp bsm" onClick={add}><Ico n="plus"/>{tr("Add")}</Btn></div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:7}}>{cats.map(c=><span key={c.id} style={{background:'var(--purplel)',color:'var(--purple)',padding:'4px 11px',borderRadius:12,fontSize:12.5,fontWeight:600,display:'flex',alignItems:'center',gap:6}}>{c.name}<button onClick={(ev)=>{const tid=c.id;setCats(prev=>prev.filter(x=>x.id!==tid));ev.stopPropagation();}} style={{background:'none',border:'none',cursor:'pointer',color:'var(--purple)',fontSize:16,lineHeight:1}}>×</button></span>)}
-        </div>
+    const del=c=>{
+      if(subsOf(c.id).length){uiAlert(tr('Delete or move its sub-categories first'));return;}
+      if(used(c.id)){uiAlert(tr('Used by {0} expense(s) — change their category first',used(c.id)));return;}
+      askConfirm(tr('Delete "{0}"?',expCatLabel(c)),()=>{sExpCats(expCats.filter(x=>x.id!==c.id));showToast(tr('Deleted'));});
+    };
+    const exportList=()=>exportExcel([['Code','Category','Main Category Code','Main Category','Expenses'],
+      ...tree.map(({c})=>{const m=c.parentId&&expCats.find(x=>x.id===c.parentId);return[c.code||'',c.name,m?m.code||'':'',m?m.name:'',used(c.id)];})],'expense-categories');
+    // A main category with sub-categories cannot itself become a sub-category (two levels only)
+    const parentChoices=dlg?mains.filter(m=>m.id!==dlg.id):[];
+    const canMove=dlg&&!(dlg.id&&subsOf(dlg.id).length);
+    return(<div className="content"><div className="fw" style={{maxWidth:820}}>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
+        <button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("Expense Categories")}</h2>
+        <div style={{flex:1}}/>
+        {expCats.length>0&&<Btn v="bgh bsm" onClick={exportList}>{tr("Export to Excel")}</Btn>}
+        <Btn v="bp bsm" onClick={()=>setDlg({code:'',name:'',parentId:null})}><Ico n="plus"/>{tr("New Main Category")}</Btn>
       </div>
+      {tree.length===0?<div className="tcard"><div className="empty"><Ico n="tag" size={38}/><div className="empty-t">{tr("No categories yet")}</div></div></div>:
+      <div className="tcard"><table className="dt">
+        <Cg w={[1,3,1,1.6]}/>
+        <thead><tr><th>{tr("Code")}</th><th>{tr("Category")}</th><th className="tar">{tr("Expenses")}</th><th className="tar">{tr("Actions")}</th></tr></thead>
+        <tbody>{tree.map(({c,depth})=><tr key={c.id}>
+          <td>{c.code?<span className="dn">{c.code}</span>:<span className="mt-none">{tr("No code")}</span>}</td>
+          <td style={depth?{paddingLeft:30,color:'var(--g700)'}:{fontWeight:600,color:'var(--g900)'}}>{depth?<span style={{color:'var(--g300)',marginRight:6}}>└</span>:null}{c.name}</td>
+          <td className="tar">{used(c.id)||'—'}</td>
+          <td className="tar"><div style={{display:'inline-flex',gap:6}}>
+            {!depth&&<button className="ab" onClick={()=>setDlg({code:'',name:'',parentId:c.id})}><Ico n="plus"/>{tr("Sub-category")}</button>}
+            <button className="ab" onClick={()=>setDlg({id:c.id,code:c.code||'',name:c.name,parentId:c.parentId||null})} aria-label={tr("Edit")} title={tr("Edit")}><Ico n="edit"/></button>
+            <button className="ab danger" onClick={()=>del(c)} aria-label={tr("Delete")} title={tr("Delete")}><Ico n="trash"/></button>
+          </div></td>
+        </tr>)}</tbody>
+      </table></div>}
+      {dlg&&<div className="mt-overlay" onClick={()=>setDlg(null)}>
+        <div className="mt-dialog" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()} style={{width:480}}>
+          <div className="mt-dialog-h">
+            <div><div className="mt-dialog-k">{tr("Expense Categories")}</div><div className="mt-dialog-t">{dlg.id?tr("Edit Category"):dlg.parentId?tr("New Sub-category"):tr("New Main Category")}</div></div>
+            <button className="ab" onClick={()=>setDlg(null)} aria-label={tr("Close")}><Ico n="x"/></button>
+          </div>
+          <div className="mt-dialog-b">
+            <div className="fg" style={{gridTemplateColumns:'140px 1fr',gap:10}}>
+              <Fld label={tr("Code *")}><input className="fi" value={dlg.code} autoFocus onChange={e=>{const v=e.target.value;setDlg(d=>({...d,code:v}));}} onKeyDown={e=>{if(e.key==='Enter')save();}}/></Fld>
+              <Fld label={tr("Category Name *")}><input className="fi" value={dlg.name} onChange={e=>{const v=e.target.value;setDlg(d=>({...d,name:v}));}} onKeyDown={e=>{if(e.key==='Enter')save();}}/></Fld>
+            </div>
+            <Fld label={tr("Main Category")}><select className="fi" value={dlg.parentId||''} disabled={!canMove} onChange={e=>{const v=e.target.value||null;setDlg(d=>({...d,parentId:v}));}}>
+              <option value="">{tr("— None (main category) —")}</option>
+              {parentChoices.map(m=><option key={m.id} value={m.id}>{expCatLabel(m)}</option>)}
+            </select></Fld>
+            {!canMove&&<div style={{fontSize:12,color:'var(--g500)'}}>{tr("It has sub-categories, so it stays a main category.")}</div>}
+          </div>
+          <div className="mt-dialog-f">
+            <Btn v="bgh bsm" onClick={()=>setDlg(null)}>{tr("Cancel")}</Btn>
+            <Btn v="bp bsm" onClick={save}>{tr("Save")}</Btn>
+          </div>
+        </div>
+      </div>}
     </div></div>);
   }
 
@@ -3341,7 +3434,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const cards=[
       {k:'sales_quotes',ico:'sq',lbl:tr('Sales Quotes'),val:salesQuotes.filter(d=>d.status!=='passive').length,sub:tr("{0} approved", salesQuotes.filter(d=>d.status==='approved').length)},
       {k:'sales_invoices',ico:'si',lbl:tr('Sales Invoices'),val:salesInvoices.length,sub:tr("{0} draft", salesInvoices.filter(d=>d.status==='draft').length)},
-      {k:'purchase_quotes',ico:'rq',lbl:tr('Purchase Quotes'),val:purchaseQuotes.length,sub:tr('{0} not ordered yet',countWhere(purchaseQuotes,d=>!d.linkedPO))}, // quotes and orders have no status field since the PQ → PO → RI links replaced it
+      {k:'purchase_quotes',ico:'rq',lbl:tr('Received Quotes'),val:purchaseQuotes.length,sub:tr('{0} not ordered yet',countWhere(purchaseQuotes,d=>!d.linkedPO))}, // quotes and orders have no status field since the PQ → PO → RI links replaced it
       {k:'purchase_orders',ico:'po',lbl:tr('Purchase Orders'),val:purchaseOrders.length,sub:tr('{0} awaiting invoice',countWhere(purchaseOrders,d=>!d.linkedRI))},
       {k:'received_invoices',ico:'ri',lbl:tr('Received Invoices'),val:receivedInvoices.length,sub:tr('{0} unpaid',countWhere(receivedInvoices,d=>d.status!=='paid'))},
       {k:'projects',ico:'project',lbl:tr('Projects'),val:projects.length,sub:tr("{0} active", projects.filter(d=>d.status==='active').length)},
@@ -3526,7 +3619,6 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
     _initStr.current=JSON.stringify(fresh);
     dateRef.current&&dateRef.current.focus();
   };
-  const allCats=expCats.map(c=>typeof c==='string'?{id:c,name:c}:c);
   const userNames=(LS.get('gm_users')||[]).map(u=>`${u.firstName||''} ${u.lastName||''}`.trim()||u.username).filter(Boolean);
   const employeeOptions=Array.from(new Set([...userNames,...(e.employee?[e.employee]:[])]));
   return(<div className="content"><div className="fw">
@@ -3534,7 +3626,7 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
     <div className="fc"><div className="fct">{tr("Expense Details")}</div>
       <div className="fg g3"><Fld label={tr("Date")}><input ref={dateRef} type="date" value={e.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label={tr("Amount")}><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label={tr("Currency")}><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
       <div className="fg g3" style={{marginTop:12,gridTemplateColumns:'1fr 2fr 1fr'}}>
-        <Fld label={tr("Category")}><select value={e.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">{tr("— Select —")}</option>{allCats.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select></Fld>
+        <Fld label={tr("Category")}><select value={(expCatOf(expCats,e)||{}).id||''} onChange={x=>{const v=x.target.value;setE(d=>({...d,...expCatFields(expCats,v)}));}} className="fi"><option value="">{tr("— Select —")}</option><ExpCatOptions cats={expCats}/></select></Fld>
         <Fld label={tr("Description")}><input value={e.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder={tr("What was this for?")}/></Fld>
         <Fld label={tr("Employee")}><select value={e.employee||''} onChange={x=>s('employee',x.target.value)} className="fi"><option value="">{tr("— Select —")}</option>{employeeOptions.map(n=><option key={n} value={n}>{n}</option>)}</select></Fld>
       </div>

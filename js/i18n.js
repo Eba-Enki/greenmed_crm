@@ -95,7 +95,7 @@ const I18N_TR={
 
   // Projects
   'No projects yet':'Henüz proje yok','Edit Project':'Projeyi Düzenle','Project Details':'Proje Bilgileri','Project name':'Proje adı',
-  'Start Date':'Başlangıç Tarihi','Client: {0}':'Müşteri: {0}','{0} invoices · £{1}':'{0} fatura · £{1}','{0} POs':'{0} sipariş',
+  'Start Date':'Başlangıç Tarihi','Client: {0}':'Müşteri: {0}','{0} invoices · £{1}':'{0} fatura · £{1}','{0} invoices · {1}':'{0} fatura · {1}','{0} POs':'{0} sipariş',
   '{0} expenses':'{0} gider','Revenue':'Gelir','{0} invoices':'{0} fatura','PO Costs':'Sipariş Maliyetleri','{0} orders':'{0} sipariş',
   '{0} items':'{0} kalem','Net':'Net','revenue - costs':'gelir - maliyet','Project No':'Proje No','Project Name':'Proje Adı',
   '— Select customer —':'— Müşteri seçin —','Budget':'Bütçe','Budget Currency':'Bütçe Para Birimi',
@@ -176,7 +176,7 @@ const I18N_TR={
   'No valid items found':'Geçerli kalem bulunamadı','Import error: ':'İçe aktarma hatası: ','Failed to read file':'Dosya okunamadı',
   'Edit Quotation':'Teklifi Düzenle','Revision {0}':'Revizyon {0}','Save Quotation':'Teklifi Kaydet','Quotation Details':'Teklif Bilgileri',
   'Duplicate item (same description)':'Tekrarlanan kalem (aynı açıklama)','Previously quoted — see price history below':'Daha önce teklif edildi — aşağıdaki fiyat geçmişine bakın',
-  'This item was previously used:':'Bu kalem daha önce kullanıldı:','Use £{0}':'£{0} kullan',
+  'This item was previously used:':'Bu kalem daha önce kullanıldı:','Use £{0}':'£{0} kullan','Use {0}':'{0} kullan',
   'This quotation is locked. To make changes, click "New Revision" from the list.':'Bu teklif kilitli. Değişiklik yapmak için listeden "Revize Et"e tıklayın.',
   '{0} Sales Invoice —':'{0} Satış Faturası —','Save Invoice':'Faturayı Kaydet','From Quotation:':'Kaynak Teklif:','Invoice Details':'Fatura Bilgileri',
   'Invoice No':'Fatura No','Invoice Date':'Fatura Tarihi','Line Items (from Quotation)':'Kalemler (tekliften)','Available Qty':'Kalan Miktar',
@@ -200,7 +200,16 @@ const I18N_TR={
   'Purchase Price (£)':'Alış Fiyatı (£)','Save Price':'Fiyatı Kaydet',
 
   // Expenses
-  'All Categories':'Tüm Kategoriler','All Projects':'Tüm Projeler','Total: £{0}':'Toplam: £{0}','No expenses yet':'Henüz gider yok','Employee':'Çalışan',
+  'All Categories':'Tüm Kategoriler','All Projects':'Tüm Projeler','Total: £{0}':'Toplam: £{0}','Total: {0}':'Toplam: {0}',
+  '{0} selected row(s) have no currency. Choose it or uncheck them first.':'Seçili {0} satırda para birimi yok. Önce para birimini seçin ya da satırın işaretini kaldırın.',
+  'Currency not recognised — choose it':'Para birimi tanınmadı — seçin',
+  // Expense categories
+  'New Main Category':'Yeni Ana Kategori','New Sub-category':'Yeni Alt Kategori','Edit Category':'Kategoriyi Düzenle','Sub-category':'Alt Kategori',
+  'No categories yet':'Henüz kategori yok','No code':'Kod girilmemiş','Code *':'Kod *','Category Name *':'Kategori Adı *',
+  '— None (main category) —':'— Yok (ana kategori) —','It has sub-categories, so it stays a main category.':'Alt kategorileri olduğu için ana kategori olarak kalır.',
+  'Enter the category code':'Kategori kodunu girin','Enter the category name':'Kategori adını girin','Code {0} is already used':'{0} kodu zaten kullanılıyor',
+  'A category named "{0}" already exists here':'Burada "{0}" adında bir kategori zaten var','Delete or move its sub-categories first':'Önce alt kategorilerini silin ya da taşıyın',
+  'Used by {0} expense(s) — change their category first':'{0} giderde kullanılıyor — önce o giderlerin kategorisini değiştirin','No expenses yet':'Henüz gider yok','Employee':'Çalışan',
   'Delete this expense?':'Bu gider silinsin mi?',
   'Could not find Amount/Description columns in the first row. Use "Download Template" to get the expected headers.':'İlk satırda Amount/Description sütunları bulunamadı. Beklenen başlıklar için "Şablonu İndir"i kullanın.',
   'No valid rows found':'Geçerli satır bulunamadı',
