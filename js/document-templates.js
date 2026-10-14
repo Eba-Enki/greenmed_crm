@@ -949,7 +949,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
   const isPO=docType==='po';
   const isPQ=docType==='quote';
 
-  const typeLabel=isSrc?(docType==='src_quote'?'Source Quote':'Source Invoice'):isInv?'Commercial Invoice':docType==='sales_quote'?'Sales Quotation':isPO?'Purchase Order':isPQ?'Received Quote':'Document';
+  const typeLabel=isSrc?(docType==='src_quote'?'Sub-supplier Quote':'Sub-supplier Invoice'):isInv?'Commercial Invoice':docType==='sales_quote'?'Sales Quotation':isPO?'Purchase Order':isPQ?'Received Quote':'Document';
 
   const partyLabel=(isPO||isPQ||isSrc)?'Supplier':'Bill To';
   const partyCompany=(isPO||isPQ||isSrc)?(doc.supplierCompany||'—'):((doc.client&&doc.client.company)||'—');

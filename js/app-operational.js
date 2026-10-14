@@ -260,7 +260,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const q=doc.sqBase&&it.sqKey&&latestSQ(doc.sqBase);
     const i=q?(q.items||[]).findIndex(x=>sqItemKey(x)===it.sqKey):-1;
     const parts=[i>=0?`↳ ${sqLineText(q.items[i])} (${q.number} #${i+1})`:null,
-      it.srcSupplier?`${tr('Source')}: ${it.srcSupplier}${it.srcDocNo?' · '+it.srcDocNo:''}${+it.srcPrice?' · '+(CURR[srcCur(doc)]||srcCur(doc))+fmt(+it.srcPrice):''}`:null].filter(Boolean);
+      it.srcSupplier?`${tr('Sub-supplier')}: ${it.srcSupplier}${it.srcDocNo?' · '+it.srcDocNo:''}${+it.srcPrice?' · '+(CURR[srcCur(doc)]||srcCur(doc))+fmt(+it.srcPrice):''}`:null].filter(Boolean);
     return parts.length?parts.join('   '):null;
   };
   // A converted document's lines remember the line they came from (srcId); older ones pair up by position
@@ -1353,7 +1353,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function ProcurementForm({doc:init,docType,onSave,onCancel}){
     const[doc,setDoc]=useState(init);
     const[items,setItems]=useState(init.items||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
-    const[xfer,setXfer]=useState(null); // "Transfer from source quotes" dialog: {cur,rate,markup,sel:{customer key: source line id}}
+    const[xfer,setXfer]=useState(null); // "Transfer from sub-supplier quotes" dialog: {cur,rate,markup,sel:{customer key: source line id}}
     useEscape(()=>setXfer(null),!!xfer);
     const set=(p,v)=>setDoc(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
@@ -1460,10 +1460,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:10}}>{tr("Line Items")}<div style={{flex:1}}/>
           {isPQ&&isGroupDoc(doc)&&doc.sqBase&&<Btn v="bgh bsm" onClick={()=>{
             const sel={};items.forEach(i=>{if(i.srcq&&i.sqKey)sel[i.sqKey]=i.srcq.lineId;});
-            setXfer({cur:doc.srcCurrency||'TRY',rate:doc.fxRate||'',markup:doc.markup||'',sel});}}><Ico n="convert"/>{tr("Transfer from source quotes")}</Btn>}
+            setXfer({cur:doc.srcCurrency||'TRY',rate:doc.fxRate||'',markup:doc.markup||'',sel});}}><Ico n="convert"/>{tr("Transfer from sub-supplier quotes")}</Btn>}
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
-        {isPQ&&isGroupDoc(doc)&&!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the project and sales quotation to transfer the collected source quotes.")}</div>}
+        {isPQ&&isGroupDoc(doc)&&!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the project and sales quotation to transfer the collected sub-supplier quotes.")}</div>}
         {xfer&&(()=>{
           const q=latestSQ(doc.sqBase);const dc=doc.currency||'GBP';
           // Offers still open for this quote: pending lines, plus the ones this quote already uses or set aside
@@ -1486,19 +1486,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           return(<div className="mt-overlay" onClick={()=>setXfer(null)}>
             <div className="mt-dialog mt-dialog-lg" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
               <div className="mt-dialog-h">
-                <div><div className="mt-dialog-k">{tr("Transfer from source quotes")}</div><div className="mt-dialog-t">{q?q.number:''} · {doc.supplierCompany}</div></div>
+                <div><div className="mt-dialog-k">{tr("Transfer from sub-supplier quotes")}</div><div className="mt-dialog-t">{q?q.number:''} · {doc.supplierCompany}</div></div>
                 <button className="ab" onClick={()=>setXfer(null)} aria-label={tr("Close")}><Ico n="x"/></button>
               </div>
               <div className="mt-dialog-b">
                 <div className="fg g3">
-                  <Fld label={tr("Source Currency")}><select className="fi" value={xfer.cur} onChange={e=>setXfer(x=>({...x,cur:e.target.value}))}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+                  <Fld label={tr("Sub-supplier Currency")}><select className="fi" value={xfer.cur} onChange={e=>setXfer(x=>({...x,cur:e.target.value}))}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
                   {xfer.cur!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,xfer.cur)}><input className="fi" type="number" min="0" step="0.0001" value={xfer.rate} onChange={e=>setXfer(x=>({...x,rate:e.target.value}))} placeholder="0.0000"/></Fld>:<div/>}
                   <Fld label={tr("Markup %")}><input className="fi" type="number" step="0.01" value={xfer.markup} onChange={e=>setXfer(x=>({...x,markup:e.target.value}))} placeholder="0"/></Fld>
                 </div>
                 <div style={{fontSize:12,color:'var(--g500)',margin:'4px 0 2px'}}>{tr('Pick one offer per customer item; the others become "Not used". Items left empty stay open for a later quote.')}</div>
                 {rows.length===0?<div className="empty"><div className="empty-t">{tr("The sales quotation has no items")}</div></div>:rows.map(r=><div key={r.key} className="xf-row">
                   <div className="xf-cust"><span style={{color:'var(--g400)'}}>#{r.i+1}</span> {sqLineText(r.ci)} <span style={{color:'var(--g400)',fontWeight:400}}>· {r.ci.qty} {r.ci.unit||''}</span></div>
-                  {r.offers.length===0?<div className="xf-none">{tr("No open source quote for this item")}</div>:<>
+                  {r.offers.length===0?<div className="xf-none">{tr("No open sub-supplier quote for this item")}</div>:<>
                     <label className={'mt-cand'+(!xfer.sel[r.key]?' on':'')}><input type="radio" name={'xf-'+r.key} checked={!xfer.sel[r.key]} onChange={()=>pick(r.key,'')}/><div style={{color:'var(--g500)'}}>{tr("Don't transfer now")}</div></label>
                     {r.offers.map(({s,it})=>{const other=s.currency!==xfer.cur;const v=conv(it.price);return(
                       <label key={it.id} className={'mt-cand'+(xfer.sel[r.key]===it.id?' on':'')+(other?' dis':'')}>
@@ -1506,7 +1506,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{color:'var(--g900)'}}><b>{s.supplierCompany||'—'}</b> · {it.desc||it.item||'—'}</div>
                           <div style={{fontSize:11,color:'var(--g500)',marginTop:2}}>{s.number||'—'} · {it.qty} {it.unit||''} × {CURR[s.currency]||s.currency}{fmt(+(it.price||0))}
-                            {other?<span className="mt-tag" style={{marginLeft:6}}>{tr("in {0} — change the source currency to use it",s.currency)}</span>:v!=null&&<b style={{color:'var(--gm-600)',marginLeft:6}}>→ {CURR[dc]||''}{fmt(v)}</b>}</div>
+                            {other?<span className="mt-tag" style={{marginLeft:6}}>{tr("in {0} — change the sub-supplier currency to use it",s.currency)}</span>:v!=null&&<b style={{color:'var(--gm-600)',marginLeft:6}}>→ {CURR[dc]||''}{fmt(v)}</b>}</div>
                         </div>
                       </label>);})}
                   </>}
@@ -1527,30 +1527,30 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const setLine=(id,f,v)=>setItems(its=>its.map(i=>i.id===id?{...i,[f]:v}:i));
         const srcNames=customers.filter(c=>c.type==='source').map(c=>c.company||c.contact).filter(Boolean);
         const anyXfer=items.some(i=>i.srcq);
-        return(<div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Source Supplier")}<span className="mt-internal">{tr("internal — not printed")}</span></div>
+        return(<div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Sub-supplier")}<span className="mt-internal">{tr("internal — not printed")}</span></div>
           {/* Lines transferred from source quotes take their source data from there (read-only here); typed lines stay editable */}
           <div style={{fontSize:12,color:'var(--g500)',marginBottom:12}}>{anyXfer
-            ?tr("Transferred lines come from the source quotes — edit the source quote to change them. The rate is used for the margins.")
+            ?tr("Transferred lines come from the sub-supplier quotes — edit the sub-supplier quote to change them. The rate is used for the margins.")
             :tr("Who sold each item to {0}, at what price.",doc.supplierCompany||tr('the group company'))}</div>
           <div className="fg g3">
-            <Fld label={tr("Source Currency")}>{anyXfer?<input className="fi" value={`${sc} (${CURR[sc]||''})`} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/>
+            <Fld label={tr("Sub-supplier Currency")}>{anyXfer?<input className="fi" value={`${sc} (${CURR[sc]||''})`} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/>
               :<select value={sc} onChange={e=>set('srcCurrency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select>}</Fld>
             {sc!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,sc)}><input type="number" min="0" step="0.0001" value={doc.fxRate||''} onChange={e=>set('fxRate',e.target.value)} className="fi" placeholder="0.0000"/></Fld>:<div/>}
             {anyXfer&&doc.markup?<Fld label={tr("Markup % (at transfer)")}><input className="fi" value={doc.markup} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/></Fld>:<div/>}
           </div>
           <datalist id="src-suppliers">{srcNames.map(n=><option key={n} value={n}/>)}</datalist>
           <div className="iw" style={{marginTop:12}}><table className="ie">
-            <thead><tr><th style={{width:'4%'}}>#</th><th style={{width:'26%'}}>{tr("Line")}</th><th style={{width:'22%'}}>{tr("Source Supplier")}</th><th style={{width:'14%'}}>{tr("Source Doc No")}</th><th style={{width:'12%'}}>{tr("Date")}</th><th style={{width:'11%',textAlign:'right'}}>{tr("Unit Price")} ({sc})</th><th style={{width:'11%',textAlign:'right'}}>= {dc}</th></tr></thead>
+            <thead><tr><th style={{width:'4%'}}>#</th><th style={{width:'26%'}}>{tr("Line")}</th><th style={{width:'22%'}}>{tr("Sub-supplier")}</th><th style={{width:'14%'}}>{tr("Sub-supplier Doc No")}</th><th style={{width:'12%'}}>{tr("Date")}</th><th style={{width:'11%',textAlign:'right'}}>{tr("Unit Price")} ({sc})</th><th style={{width:'11%',textAlign:'right'}}>= {dc}</th></tr></thead>
             <tbody>{items.map((it,i)=>{const conv=srcInDocCur({...doc,srcCurrency:sc},it);return(<tr key={it.id}>
               <td style={{color:'var(--g500)',paddingLeft:8}}>{i+1}</td>
               <td style={{color:'var(--g700)',fontSize:12,padding:'0 8px'}}>{it.desc||it.item||'—'}</td>
               {it.srcq?<>
                 <td className="src-ro">{it.srcSupplier||'—'}</td>
-                <td className="src-ro">{it.srcDocNo||'—'} <span className="mt-tag ok">{tr("from source quote")}</span></td>
+                <td className="src-ro">{it.srcDocNo||'—'} <span className="mt-tag ok">{tr("from sub-supplier quote")}</span></td>
                 <td className="src-ro">{it.srcDocDate||'—'}</td>
                 <td className="src-ro" style={{textAlign:'right'}}>{fmt(+(it.srcPrice||0))}</td>
               </>:<>
-              <td><input list="src-suppliers" value={it.srcSupplier||''} onChange={e=>setLine(it.id,'srcSupplier',e.target.value)} placeholder={tr("Source supplier...")}/></td>
+              <td><input list="src-suppliers" value={it.srcSupplier||''} onChange={e=>setLine(it.id,'srcSupplier',e.target.value)} placeholder={tr("Sub-supplier...")}/></td>
               <td><input value={it.srcDocNo||''} onChange={e=>setLine(it.id,'srcDocNo',e.target.value)} placeholder={tr("Quote / invoice no")}/></td>
               <td><input type="date" value={it.srcDocDate||''} onChange={e=>setLine(it.id,'srcDocDate',e.target.value)}/></td>
               <td><input type="number" min="0" step=".01" value={it.srcPrice||''} onChange={e=>setLine(it.id,'srcPrice',e.target.value)} placeholder="0.00" style={{textAlign:'right'}}/></td>
@@ -1608,7 +1608,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     });
     const sqNum=d=>{const q=latestSQ(d.sqBase);return q?q.number:'';};
     const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,supplier:d=>d.supplierCompany,project:d=>d.project,sq:sqNum,src:d=>d.srcqNumber,total:d=>dt(d.items||[]),state:srcQuoteState});
-    const lbl=isQ?tr('Source Quote'):tr('Source Invoice');
+    const lbl=isQ?tr('Sub-supplier Quote'):tr('Sub-supplier Invoice');
     const projNames=[...new Set(docs.map(d=>d.project).filter(Boolean))];
     const del=d=>{
       if(isQ&&(d.items||[]).some(i=>srcLineState(i)==='quoted')){showToast(tr('Used in a group company quote — remove it from that quote first'));return;}
@@ -1625,7 +1625,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return(<div className="content">
       <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={isQ?tr("Search quote no, supplier or item..."):tr("Search invoice no, supplier or item...")}
         active={[fs.s,fs.p].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',p:''}))}
-        onExport={()=>exportExcel([isQ?['Date','Quote No','Source Supplier','Project','Sales Quotation','Currency','Total','Status']:['Date','Invoice No','Source Supplier','Source Quote','Project','Currency','Total'],
+        onExport={()=>exportExcel([isQ?['Date','Quote No','Sub-supplier','Project','Sales Quotation','Currency','Total','Status']:['Date','Invoice No','Sub-supplier','Sub-supplier Quote','Project','Currency','Total'],
           ...sorted.map(d=>isQ?[d.date,d.number,d.supplierCompany,d.project,sqNum(d),d.currency,dt(d.items||[]),SRC_STATE[srcQuoteState(d)][0]]:[d.date,d.number,d.supplierCompany,d.srcqNumber||'',d.project,d.currency,dt(d.items||[])])],isQ?'source-quotes':'source-invoices')}>
         {isQ&&<FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
           <option value="">{tr("All")}</option>{Object.entries(SRC_STATE).map(([k,[l]])=><option key={k} value={k}>{tr(l)}</option>)}
@@ -1635,15 +1635,15 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </select></FilterField>
       </ListTools>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isQ?'rq':'ri'} size={38}/>
-        <div className="empty-t">{docs.length?tr("No items match the filter"):isQ?tr("No source quotes yet"):tr("No source invoices yet")}</div>
-        {!docs.length&&<div className="empty-s">{isQ?tr("Enter each quote the group company collects from its suppliers, linked to the project and the customer's items."):tr("Create a source invoice from a source quote, or add one with + New.")}</div>}</div></div>:(
+        <div className="empty-t">{docs.length?tr("No items match the filter"):isQ?tr("No sub-supplier quotes yet"):tr("No sub-supplier invoices yet")}</div>
+        {!docs.length&&<div className="empty-s">{isQ?tr("Enter each quote the group company collects from its suppliers, linked to the project and the customer's items."):tr("Create a sub-supplier invoice from a sub-supplier quote, or add one with + New.")}</div>}</div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={isQ?[0.8,1,1.6,1.2,1,0.9,1]:[0.8,1,1.6,1,1.2,0.9]}/>
           <thead><tr>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{isQ?tr("Quote No"):tr("Invoice No")}</SortTh>
-            <SortTh k="supplier" sort={sort} onSort={onSort}>{tr("Source Supplier")}</SortTh>
-            {!isQ&&<SortTh k="src" sort={sort} onSort={onSort}>{tr("Source Quote")}</SortTh>}
+            <SortTh k="supplier" sort={sort} onSort={onSort}>{tr("Sub-supplier")}</SortTh>
+            {!isQ&&<SortTh k="src" sort={sort} onSort={onSort}>{tr("Sub-supplier Quote")}</SortTh>}
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
             {isQ&&<SortTh k="sq" sort={sort} onSort={onSort}>{tr("Sales Quotation")}</SortTh>}
             <SortTh k="total" sort={sort} onSort={onSort} className="tar">{tr("Total")}</SortTh>
@@ -1666,7 +1666,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {quickView&&<DocQuickModal doc={quickView} co={co} docType={isQ?'src_quote':'src_invoice'} noPdf itemNote={lineNote(quickView)} onClose={()=>setQuickView(null)}
         onEdit={()=>{setQuickView(null);setCur(quickView);go(isQ?'source_quotes_form':'source_invoices_form');}}
         onDelete={()=>del(quickView)}
-        extraActions={isQ?[{label:tr('Create Source Invoice'),onClick:()=>{setQuickView(null);setCur(mkSrcInvoice(quickView));go('source_invoices_form');}}]:[]}/>}
+        extraActions={isQ?[{label:tr('Create Sub-supplier Invoice'),onClick:()=>{setQuickView(null);setCur(mkSrcInvoice(quickView));go('source_invoices_form');}}]:[]}/>}
     </div>);
   }
 
@@ -1679,7 +1679,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _isDirty=()=>JSON.stringify({...doc,items})!==_initStr.current;
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
-    const lbl=isQ?tr('Source Quote'):tr('Source Invoice');
+    const lbl=isQ?tr('Sub-supplier Quote'):tr('Sub-supplier Invoice');
     const srcPick=customers.filter(c=>c.type==='source');
     const sqChoices=[...new Set(salesQuotes.filter(q=>!doc.project||q.project===doc.project).map(sqBaseOf))].concat(doc.sqBase?[doc.sqBase]:[])
       .filter((b,i,a)=>a.indexOf(b)===i).map(latestSQ).filter(Boolean);
@@ -1698,7 +1698,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <Btn v="bp bsm" onClick={save}>{tr("Save {0}",lbl)}</Btn>
       </div>
       {used&&used.length>0&&<div className="mt-banner">{tr("Lines of this quote are used in {0}. Changes here are not copied there.",used.join(', '))}</div>}
-      {!isQ&&doc.srcqNumber&&<div className="mt-banner">{tr("From source quote {0}",doc.srcqNumber)}</div>}
+      {!isQ&&doc.srcqNumber&&<div className="mt-banner">{tr("From sub-supplier quote {0}",doc.srcqNumber)}</div>}
       <div className="fc"><div className="fct">{tr("Document Details")}</div>
         <div className="fg g4">
           <Fld label={isQ?tr("Their Quote No *"):tr("Invoice No *")}><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" placeholder={isQ?tr("as on the filed quote"):tr("as on the invoice")}/></Fld>
@@ -1707,11 +1707,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div/>
         </div>
         <div className="fg g2" style={{marginTop:12}}>
-          <Fld label={tr("Source Supplier")}><select value={doc.supplierId||''} onChange={e=>{const c=srcPick.find(x=>x.id===e.target.value);setDoc(d=>({...d,supplierId:c?c.id:'',supplierCompany:c?(c.company||c.contact||''):d.supplierCompany}));}} className="fi">
+          <Fld label={tr("Sub-supplier")}><select value={doc.supplierId||''} onChange={e=>{const c=srcPick.find(x=>x.id===e.target.value);setDoc(d=>({...d,supplierId:c?c.id:'',supplierCompany:c?(c.company||c.contact||''):d.supplierCompany}));}} className="fi">
             <option value="">{tr("— Select —")}</option>{srcPick.map(c=><option key={c.id} value={c.id}>{c.company||c.contact}</option>)}</select></Fld>
           <Fld label={tr("Company Name")}><input value={doc.supplierCompany||''} onChange={e=>setDoc(d=>({...d,supplierCompany:e.target.value,supplierId:''}))} className="fi"/></Fld>
         </div>
-        {srcPick.length===0&&<div style={{fontSize:12,color:'var(--g500)',marginTop:6}}>{tr('Tip: add the supplier under Customers with the relationship "Source Supplier" to pick it here.')}</div>}
+        {srcPick.length===0&&<div style={{fontSize:12,color:'var(--g500)',marginTop:6}}>{tr('Tip: add the supplier under Customers with the relationship "Sub-supplier" to pick it here.')}</div>}
         <div className="fg g2" style={{marginTop:12}}>
           <Fld label={tr("Project")}><select value={doc.project||''} onChange={e=>pickProject(e.target.value)} className="fi"><option value="">{tr("— None —")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
           <Fld label={tr("Sales Quotation")}><select value={doc.sqBase||''} onChange={e=>pickSQ(e.target.value)} className="fi"><option value="">{tr("— None —")}</option>
@@ -2238,7 +2238,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const slug=(project.number||project.name||'project').toLowerCase().replace(/[^a-z0-9]+/g,'-');
       const num=v=>v==null?'':Math.round(v*100)/100;
       if(tab==='chain'){
-        const head=['Quotation','#','Customer Item','Qty','Unit','Sale Currency','Sale','Bought From','Green Med Cost','Source Supplier','Source Doc No','Source Invoice No','Source Currency','Source Cost','Source Cost (sale currency)','Green Med Margin','Group Co. Margin','Group Margin','Ship Date','Incoterm','Carrier','AWB / BL No','Customs Declaration (GÇB) No'];
+        const head=['Quotation','#','Customer Item','Qty','Unit','Sale Currency','Sale','Bought From','Green Med Cost','Sub-supplier','Sub-supplier Doc No','Sub-supplier Invoice No','Sub-supplier Currency','Sub-supplier Cost','Sub-supplier Cost (sale currency)','Green Med Margin','Group Co. Margin','Group Margin','Ship Date','Incoterm','Carrier','AWB / BL No','Customs Declaration (GÇB) No'];
         const rows=groups.flatMap(({q,rows})=>rows.filter(visible).map(r=>{
           const e=lineEconomics(q,r);const L=r.lines;const join=fn=>L.map(fn).filter(Boolean).join('; ');
           const grp=L.filter(({c})=>isGroupDoc(c.lead));
@@ -2251,7 +2251,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         }));
         exportExcel([head,...rows],`supply-chain-${slug}`);return;
       }
-      const head=['Quotation','#','Supplier','Customer Item','Source Supplier','Supplier Item','Qty','Unit','Sale Price','Sale Currency','Purchase Price','Purchase Currency','Documents'];
+      const head=['Quotation','#','Supplier','Customer Item','Sub-supplier','Supplier Item','Qty','Unit','Sale Price','Sale Currency','Purchase Price','Purchase Currency','Documents'];
       const rows=groups.flatMap(({q,rows})=>rows.filter(visible).flatMap(r=>{
         const base=[q.number,r.i+1];const sale=[+(r.it.qty||0),r.it.unit||'',+(r.it.price||0),q.currency||'GBP'];
         if(!r.lines.length)return[[...base,'Not matched',sqLineText(r.it),'','',...sale,'','','']];
@@ -2271,7 +2271,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           {/* Every figure covers the same lines (those with a complete chain); the project's full sales value is noted under Sales */}
           {[[tr('Sales'),t.saleDone,0,t.open?tr('of {0} in total',(CURR[cur]||'')+fmt(t.sale)):''],[tr('Green Med Cost'),t.buy],[tr('Group Cost'),t.groupCost],[tr('Green Med Margin'),t.gm,1],[tr('Group Co. Margin'),t.co,1],[tr('Group Margin'),t.group,1]].map(([l,v,m,sub])=>
             <div key={l} className="mt-sum-c"><div className="mt-sum-l">{l}</div><div className="mt-sum-v" style={{color:m&&v<0?'var(--red)':m?'var(--gm-600)':undefined}}>{v<0?'-':''}{CURR[cur]||''}{fmt(Math.abs(v))}</div>{m?(t.saleDone>0&&<div className="mt-pct">{(v/t.saleDone*100).toFixed(1)}%</div>):(sub&&<div className="mt-pct">{sub}</div>)}</div>)}
-          {t.open>0&&<div className="mt-sum-note">{tr("{0} line(s) left out: not matched, missing source price/rate or invoiced in another currency",t.open)}</div>}
+          {t.open>0&&<div className="mt-sum-note">{tr("{0} line(s) left out: not matched, missing sub-supplier price/rate or invoiced in another currency",t.open)}</div>}
         </div>)}
         {groups.map(({q,base,rows})=>{const qc=q.currency||'GBP';const shown=rows.filter(visible);return(<div key={base} style={{marginBottom:16}}>
           <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}>
@@ -2279,7 +2279,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
           <div className="tcard"><table className="dt mt-tbl mt-wrap">
             <Cg w={[0.35,1.9,1.05,1.55,2.2,1.05,1.05,1.05,2]}/>
-            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Sale")}</th><th>{tr("Bought From")}</th><th>{tr("Source")}</th><th className="tar">{tr("Green Med Margin")}</th><th className="tar">{tr("Group Co. Margin")}</th><th className="tar">{tr("Group Margin")}</th><th>{tr("Shipment")}</th></tr></thead>
+            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Sale")}</th><th>{tr("Bought From")}</th><th>{tr("Sub-supplier")}</th><th className="tar">{tr("Green Med Margin")}</th><th className="tar">{tr("Group Co. Margin")}</th><th className="tar">{tr("Group Margin")}</th><th>{tr("Shipment")}</th></tr></thead>
             <tbody>{shown.length===0?<tr><td colSpan={9}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
             shown.map(r=>{const e=lineEconomics(q,r);return(<tr key={r.key}>
               <td style={{color:'var(--g500)'}}>{r.i+1}</td>
@@ -2290,7 +2290,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <div>{CURR[c.lead.currency]||''}{fmt(+(s.qty||0)*+(s.price||0))}</div></div>):<span className="mt-none">{tr("Not matched")}</span>}</td>
               <td>{r.lines.map(({c,it:s})=>{if(!isGroupDoc(c.lead))return <div key={c.lead.id+s.id} className="mt-cell" style={{color:'var(--g400)'}}>{tr("direct purchase")}</div>;
                 const u=srcInDocCur(c.lead,s);return(<div key={c.lead.id+s.id} className="mt-cell">
-                  {s.srcSupplier?<b>{s.srcSupplier}</b>:<span className="mt-none">{tr("Source missing")}</span>}{s.srcDocNo&&<span style={{color:'var(--g500)'}}> · {s.srcDocNo}</span>}{(()=>{const inv=s.srcq&&srcInvoiceOf(s.srcq.lineId);return inv&&<span style={{color:'var(--g500)'}}> · {tr('Invoice {0}',inv.number)}</span>;})()}
+                  {s.srcSupplier?<b>{s.srcSupplier}</b>:<span className="mt-none">{tr("Sub-supplier missing")}</span>}{s.srcDocNo&&<span style={{color:'var(--g500)'}}> · {s.srcDocNo}</span>}{(()=>{const inv=s.srcq&&srcInvoiceOf(s.srcq.lineId);return inv&&<span style={{color:'var(--g500)'}}> · {tr('Invoice {0}',inv.number)}</span>;})()}
                   <div>{+s.srcPrice?<>{CURR[srcCur(c.lead)]||''}{fmt(+(s.qty||0)*+s.srcPrice)}{u!=null&&srcCur(c.lead)!==(c.lead.currency||'GBP')&&<span style={{color:'var(--g500)'}}> ≈ {CURR[c.lead.currency]||''}{fmt(+(s.qty||0)*u)}</span>}{u==null&&<span className="mt-none"> · {tr("rate missing")}</span>}</>:<span style={{color:'var(--g300)'}}>—</span>}</div></div>);})}</td>
               <td className="tar" title={e.otherCur?tr('Invoiced in another currency'):''}>{marginCell(qc,e.gm,e.sale)}</td>
               <td className="tar">{e.hasGroup?marginCell(qc,e.co,e.sale):money(qc,null)}</td>
@@ -2332,7 +2332,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
           <div className="tcard"><table className="dt mt-tbl mt-wrap">
             <Cg w={[0.45,1.6,2.1,1.5,2.1,0.8,1,1.05,1.75,0.75]}/>
-            <thead><tr><th>#</th><th>{tr("Supplier")}</th><th>{tr("Customer Item")}</th><th>{tr("Source Supplier")}</th><th>{tr("Supplier Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Sale Price")}</th><th className="tar">{tr("Purchase Price")}</th><th>{tr("Documents")}</th><th/></tr></thead>
+            <thead><tr><th>#</th><th>{tr("Supplier")}</th><th>{tr("Customer Item")}</th><th>{tr("Sub-supplier")}</th><th>{tr("Supplier Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Sale Price")}</th><th className="tar">{tr("Purchase Price")}</th><th>{tr("Documents")}</th><th/></tr></thead>
             <tbody>{shown.length===0?<tr><td colSpan={10}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
             shown.flatMap(({it,i,key,lines})=>{
               // One row per matched supplier line; the customer's columns (#, item, qty, sale price) span them
@@ -2822,7 +2822,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[q,setQ]=useState('');
     const{sort,onSort}=useSort('company','asc');
     const {pg,ps,setPg,setPs}=usePagination(q+JSON.stringify(sort));
-    const typeLabel=c=>c.type==='supplier'?tr('Supplier'):c.type==='both'?tr('Customer & Supplier'):c.type==='source'?tr('Source Supplier'):tr('Customer');
+    const typeLabel=c=>c.type==='supplier'?tr('Supplier'):c.type==='both'?tr('Customer & Supplier'):c.type==='source'?tr('Sub-supplier'):tr('Customer');
     const f=sortRows(customers.filter(c=>[c.contact,c.company,c.email].some(x=>(x||'').toLowerCase().includes(q.toLowerCase()))),sort,
       {company:c=>c.company||c.contact,contact:c=>c.contact,email:c=>c.email,phone:c=>c.phone,type:typeLabel});
     const bulk=useBulkSelect(f.map(c=>c.id));
@@ -2897,8 +2897,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return(<div className="content"><div className="fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Customer'):tr('New Customer')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
       <div className="fc"><div className="fct">{tr("Customer Info")}</div>
-        <div className="fg g-2-1"><Fld label={tr("Company Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Relationship")}><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">{tr("Customer")}</option><option value="supplier">{tr("Supplier")}</option><option value="both">{tr("Both")}</option><option value="source">{tr("Source Supplier")}</option></select></Fld></div>
-        {(c.type==='supplier'||c.type==='both')&&<label className="mt-check"><input type="checkbox" checked={!!c.groupCompany} onChange={e=>s('groupCompany',e.target.checked)}/><span><b>{tr("Group company")}</b> — {tr("our own company (e.g. Egefe): its purchase documents also record the source supplier, source price and shipment")}</span></label>}
+        <div className="fg g-2-1"><Fld label={tr("Company Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Relationship")}><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">{tr("Customer")}</option><option value="supplier">{tr("Supplier")}</option><option value="both">{tr("Both")}</option><option value="source">{tr("Sub-supplier")}</option></select></Fld></div>
+        {(c.type==='supplier'||c.type==='both')&&<label className="mt-check"><input type="checkbox" checked={!!c.groupCompany} onChange={e=>s('groupCompany',e.target.checked)}/><span><b>{tr("Group company")}</b> — {tr("our own company (e.g. Egefe): its purchase documents also record the sub-supplier, sub-supplier price and shipment")}</span></label>}
         <div className="fg g3" style={{marginTop:12}}><Fld label={tr("Contact Person")}><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder={tr("John Smith")}/></Fld><Fld label={tr("Email")}><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
         <div className="fg g2" style={{marginTop:12}}><Fld label={tr("Address")}><textarea value={c.address||''} onChange={e=>s('address',e.target.value)} rows={4} className="fi"/></Fld><Fld label={tr("Notes")}><textarea value={c.notes||''} onChange={e=>s('notes',e.target.value)} rows={4} className="fi"/></Fld></div>
       </div>
@@ -3301,8 +3301,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     {k:'purchase_quotes',ico:'rq',lbl:tr('Received Quotes'),cnt:purchaseQuotes.length,col:'ops_pq'},
     {k:'purchase_orders',ico:'po',lbl:tr('Purchase Orders'),cnt:purchaseOrders.length,col:'ops_po'},
     {k:'received_invoices',ico:'ri',lbl:tr('Received Invoices'),cnt:receivedInvoices.length,col:'ops_ri'},
-    {k:'source_quotes',ico:'rq',lbl:tr('Source Quotes'),cnt:srcQuotes.length,col:'ops_srcq'},
-    {k:'source_invoices',ico:'ri',lbl:tr('Source Invoices'),cnt:srcInvoices.length,col:'ops_srci'},
+    {div:true},
+    // The group company's (e.g. Egefe) own purchases from its suppliers, kept apart from Green Med's
+    {group:tr('Group Company')},
+    {k:'source_quotes',ico:'rq',lbl:tr('Sub-supplier Quotes'),cnt:srcQuotes.length,col:'ops_srcq'},
+    {k:'source_invoices',ico:'ri',lbl:tr('Sub-supplier Invoices'),cnt:srcInvoices.length,col:'ops_srci'},
     {div:true},
     {group:tr('Project Management')},
     {k:'projects',ico:'project',lbl:tr('Projects'),cnt:projects.length,col:'ops_proj'},
@@ -3319,7 +3322,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const NAV=[{k:'home',ico:'home',lbl:tr('Dashboard')},...SB];
   const isNav=k=>view===k||view===k+'_form'||view===k+'_preview';
 
-  const titles={home:tr('Dashboard'),cost_estimates:tr('Approximate Cost'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),source_quotes:tr('Source Quotes'),source_invoices:tr('Source Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
+  const titles={home:tr('Dashboard'),cost_estimates:tr('Approximate Cost'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),source_quotes:tr('Sub-supplier Quotes'),source_invoices:tr('Sub-supplier Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
@@ -3335,8 +3338,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
             {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si');setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>{tr("New Invoice")}</Btn>}
             {view==='purchase_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>{tr("New Received Quote")}</Btn>}
-            {view==='source_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkSrcQuote());go('source_quotes_form');}}><Ico n="plus"/>{tr("New Source Quote")}</Btn>}
-            {view==='source_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkSrcInvoice(null));go('source_invoices_form');}}><Ico n="plus"/>{tr("New Source Invoice")}</Btn>}
+            {view==='source_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkSrcQuote());go('source_quotes_form');}}><Ico n="plus"/>{tr("New Sub-supplier Quote")}</Btn>}
+            {view==='source_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkSrcInvoice(null));go('source_invoices_form');}}><Ico n="plus"/>{tr("New Sub-supplier Invoice")}</Btn>}
             {view==='purchase_orders'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>{tr("New Purchase Order")}</Btn>}
             {view==='received_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>{tr("New Received Invoice")}</Btn>}
             {view==='projects'&&<Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>{tr("New Project")}</Btn>}
