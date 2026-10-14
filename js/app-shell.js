@@ -260,7 +260,7 @@ const sbSetClasses=(hidden,wide)=>{const c=document.documentElement.classList;c.
 sbSetClasses(sbHiddenSaved(),sbHiddenSaved());
 let sbAnim=null;
 
-function SidebarToggle(){
+function SidebarToggle({className=''}){
   const[hidden,setHidden]=useState(sbHiddenSaved);
   const flip=()=>{
     const h=!hidden;setHidden(h);
@@ -282,7 +282,7 @@ function SidebarToggle(){
     }
   };
   const lbl=hidden?tr('Show sidebar'):tr('Hide sidebar');
-  return <button type="button" className="sb-toggle" onClick={flip} aria-pressed={hidden} aria-label={lbl} title={lbl}><Ico n="sidebar" size={16}/></button>;
+  return <button type="button" className={'sb-toggle'+(className?' '+className:'')} onClick={flip} aria-pressed={hidden} aria-label={lbl} title={lbl}><Ico n="sidebar" size={16}/></button>;
 }
 
 // ==========================

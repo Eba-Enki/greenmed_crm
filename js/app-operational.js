@@ -928,7 +928,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     
     return(<div className="content"><div className="fw doc-fw">
       <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
         <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
         <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)',letterSpacing:'-.3px'}}>
           {q.id?tr('Edit Quotation'):tr('New Quotation')} — <span style={{fontFamily:'Inter',fontWeight:700,color:'var(--gm-500)'}}>{q.number}</span>
@@ -1143,7 +1143,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     dirtyCheckRef.current=_isDirty;
     return(<div className="content"><div className="fw doc-fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("{0} Sales Invoice —", inv.id?tr('Edit'):tr('New'))} <span style={{fontFamily:'Inter',fontWeight:600,color:'var(--gm-500)'}}>{inv.number}</span></h2>
         <div style={{flex:1}}/>
         <Btn v="bgh bsm" onClick={()=>savePDF(savedInv,co,'invoice',FULL_BANK)}><Ico n="dl"/>{tr("PDF")}</Btn>
@@ -1463,7 +1463,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     </select></Fld>;
     return(<div className="content"><div className="fw doc-fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}", lbl):tr("New {0}", lbl)}</h2>
         <div style={{flex:1}}/>
         <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,isPO?'po':isRI?'invoice':'quote',SALES_PDF)}><Ico n="dl"/>{tr("PDF")}</Btn>
@@ -1789,7 +1789,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const save=()=>{if(!(doc.number||'').trim()){showToast(isQ?tr('Enter the quote number'):tr('Enter the invoice number'));return;}onSave({...doc,number:doc.number.trim(),items});};
     return(<div className="content"><div className="fw doc-fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}</h2>
         <div style={{flex:1}}/>
         <Btn v="bp bsm" onClick={save}>{tr("Save {0}",lbl)}</Btn>
@@ -2025,7 +2025,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const pickProject=name=>{const p=projects.find(x=>x.name===name);setDoc(d=>({...d,project:name,projectNumber:p?p.number||'':''}));};
     const addLine=()=>setItems(its=>[...its,ceLine(doc.rates)]);
     const rmLine=id=>setItems(its=>{const n=its.filter(i=>i.id!==id);return n.length?n:[ceLine(doc.rates)];});
-    const delSel=()=>{const ids=new Set(bulk.chosen);setItems(its=>{const n=its.filter(i=>!ids.has(i.id));return n.length?n:[ceLine(doc.rates)];});bulk.clear();};
+    const delSel=()=>askGlobalConfirm(tr('Delete {0} selected lines?',bulk.chosen.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;
+      const ids=new Set(bulk.chosen);setItems(its=>{const n=its.filter(i=>!ids.has(i.id));return n.length?n:[ceLine(doc.rates)];});bulk.clear();
+    });
     const applyRates=()=>{
       const ids=new Set(bulk.chosen);
       const patch=Object.fromEntries(CE_RATES.filter(([k])=>!ceBlank(rateDlg[k])).map(([k])=>[k,String(rateDlg[k]).trim()]));
@@ -2070,7 +2073,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const pin=locked?[0,34]:[34,68]; // left offsets of the pinned # and product name columns
     return(<div className="content"><div className="fw ce-fw">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}{doc.number&&<> — <span style={{color:'var(--gm-500)'}}>{doc.number}</span></>}</h2>
         <CeBadge s={state}/>
         <div style={{flex:1}}/>
@@ -2420,7 +2423,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       &&(!ql||[sqLineText(r.it),...r.lines.flatMap(({c,it})=>[c.lead.supplierCompany,it.desc,it.item,it.srcSupplier])].some(x=>(x||'').toLowerCase().includes(ql)));
     return(<div className="content">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={()=>go('proj_detail')} className="mt-back"><Ico n="back"/>{project.number||tr("Project")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={()=>go('proj_detail')} className="mt-back"><Ico n="back"/>{project.number||tr("Project")}</button>
         <h2 style={{fontSize:17,fontWeight:700,color:'var(--g900)'}}>{tr("Item Matching")} — {project.name}</h2>
         {total>0&&<span className={done===total?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",done,total)}</span>}
       </div>
@@ -2514,7 +2517,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const zero=CURR.GBP+fmt(0);
     return(<div className="content">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
-        <button onClick={()=>go('projects')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Projects")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={()=>go('projects')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Projects")}</button>
         <h2 style={{fontSize:17,fontWeight:700,color:'var(--g900)'}}>{project.number?`${project.number} — `:''}  {project.name}</h2>
         <Badge s={project.status||'active'}/>
         {(()=>{const m=projMatching(project.name);return <button className="mt-open" onClick={()=>{setCur(project);go('proj_matching');}}><Ico n="link"/>{tr("Item Matching")}{m.total>0&&<span className={m.done===m.total?'mt-count ok':'mt-count'}>{m.done}/{m.total}</span>}</button>;})()}
@@ -2557,7 +2560,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     };
     const custPick=customers.filter(c=>{const t=c.type||'customer';return t==='customer'||t==='both';});
     return(<div className="content"><div className="fw">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?tr('Edit Project'):tr('New Project')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?tr('Edit Project'):tr('New Project')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
       <div className="fc"><div className="fct">{tr("Project Details")}</div>
         <div className="fg g-no-name"><Fld label={tr("Project No")}><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label={tr("Project Name")}><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
         <div className="fg g-2-1-1" style={{marginTop:12}}>
@@ -2874,7 +2877,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
     return(<div className="content">
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Back")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("Import Expenses")}</h2>
         <div style={{flex:1}}/>
         <Btn v="bgh bsm" onClick={downloadTemplate}><Ico n="dl"/>{tr("Download Template")}</Btn>
@@ -2983,7 +2986,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const canMove=dlg&&!(dlg.id&&subsOf(dlg.id).length);
     return(<div className="content"><div className="fw" style={{maxWidth:820}}>
       <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
         <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("Expense Categories")}</h2>
         <div style={{flex:1}}/>
         {expCats.length>0&&<Btn v="bgh bsm" onClick={exportList}>{tr("Export to Excel")}</Btn>}
@@ -3106,7 +3109,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       onSave(norm);
     };
     return(<div className="content"><div className="fw">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Customer'):tr('New Customer')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Customer'):tr('New Customer')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
       <div className="fc"><div className="fct">{tr("Customer Info")}</div>
         <div className="fg g-2-1"><Fld label={tr("Company Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Relationship")}><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">{tr("Customer")}</option><option value="supplier">{tr("Supplier")}</option><option value="both">{tr("Both")}</option><option value="source">{tr("Sub-supplier")}</option></select></Fld></div>
         {(c.type==='supplier'||c.type==='both')&&<label className="mt-check"><input type="checkbox" checked={!!c.groupCompany} onChange={e=>s('groupCompany',e.target.checked)}/><span><b>{tr("Group company")}</b> — {tr("our own company (e.g. Egefe): its purchase documents also record the sub-supplier, sub-supplier price and shipment")}</span></label>}
@@ -3667,7 +3670,7 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
   const userNames=(LS.get('gm_users')||[]).map(u=>`${u.firstName||''} ${u.lastName||''}`.trim()||u.username).filter(Boolean);
   const employeeOptions=Array.from(new Set([...userNames,...(e.employee?[e.employee]:[])]));
   return(<div className="content"><div className="fw">
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?tr('Edit Expense'):tr('New Expense')}</h2><div style={{flex:1}}/>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>{tr('Save & New')}</Btn>}<Btn v="bp bsm" onClick={()=>onSave(normExp(e))}>{tr("Save")}</Btn></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?tr('Edit Expense'):tr('New Expense')}</h2><div style={{flex:1}}/>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>{tr('Save & New')}</Btn>}<Btn v="bp bsm" onClick={()=>onSave(normExp(e))}>{tr("Save")}</Btn></div>
     <div className="fc"><div className="fct">{tr("Expense Details")}</div>
       <div className="fg g3"><Fld label={tr("Date")}><input ref={dateRef} type="date" value={e.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label={tr("Amount")}><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label={tr("Currency")}><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
       <div className="fg g3" style={{marginTop:12,gridTemplateColumns:'1fr 2fr 1fr'}}>

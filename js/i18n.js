@@ -314,7 +314,7 @@ const I18N_TR={
   'This quotation is passive — a newer revision replaced it. Edit it anyway?':'Bu teklif pasif — yerini yeni bir revizyon aldı. Yine de düzenlensin mi?',
   'This quotation is closed — it has been fully invoiced. Edit it anyway?':'Bu teklif kapalı — tamamı faturalandı. Yine de düzenlensin mi?',
   'Edit anyway':'Yine de düzenle',
-  'Export selected':'Seçilenleri aktar','Delete {0} selected documents?':'Seçili {0} belge silinsin mi?','Delete {0} selected expenses?':'Seçili {0} gider silinsin mi?',
+  'Export selected':'Seçilenleri aktar','Delete {0} selected documents?':'Seçili {0} belge silinsin mi?','Delete {0} selected expenses?':'Seçili {0} gider silinsin mi?','Delete {0} selected projects?':'Seçili {0} proje silinsin mi?','Delete {0} selected lines?':'Seçili {0} kalem silinsin mi?',
   'Delete {0} contacts?':'{0} kişi silinsin mi?','{0} selected contacts appear on documents and will be kept.':'Seçilenlerden {0} kişi belgelerde geçtiği için silinmeyecek.','{0} selected quotes are used in a group company quote and will be kept.':'Seçilenlerden {0} teklif grup şirketi teklifinde kullanıldığı için silinmeyecek.',
   '{0} updated':'{0} kayıt güncellendi','Set category':'Kategori ata','Set category…':'Kategori ata…','Assign to project':'Projeye ata','Assign to project…':'Projeye ata…',
   '{0} files downloaded':'{0} dosya indirildi','Search name or category...':'Ad veya kategori ara...',

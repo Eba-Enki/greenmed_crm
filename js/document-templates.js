@@ -1053,7 +1053,7 @@ function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
   return(
     <div>
       <div className="pvbar no-print">
-        <button className="pvbtn" onClick={onBack}><Ico n="back"/>{tr("Back")}</button>
+        <SidebarToggle className="sb-toggle-form"/><button className="pvbtn" onClick={onBack}><Ico n="back"/>{tr("Back")}</button>
         {onEdit&&<button className="pvbtn" onClick={onEdit}><Ico n="edit"/>{tr("Edit")}</button>}
         <div style={{flex:1}}/>
         <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>{tr("Save PDF")}</button>

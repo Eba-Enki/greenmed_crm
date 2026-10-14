@@ -802,6 +802,10 @@ body{background:var(--bz-canvas);background-attachment:fixed;color:var(--bz-ink)
 html.sb-hidden .sidebar{transform:translateX(-56px);opacity:0;visibility:hidden;pointer-events:none;transition:transform .76s cubic-bezier(.45,.05,.2,1),opacity .45s cubic-bezier(.45,.05,.2,1),visibility 0s linear .76s}
 html.sb-wide .main{left:8px}
 .crumbs-row{display:flex;align-items:center;gap:8px}
+/* The same toggle sits before "← Back" on form, detail and preview screens, which have no page header.
+   Some of those screens are also shown under a header; there the header's toggle is the one that stays. */
+.sb-toggle-form{margin:0 2px 0 -4px;vertical-align:middle}
+.main:has(.topbar) .sb-toggle-form{display:none}
 .sb-toggle{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:-5px;border-radius:7px;color:var(--bz-ink-2);cursor:pointer;flex-shrink:0;transition:background .14s var(--bz-ease),color .14s var(--bz-ease),transform .14s var(--bz-spring)}
 .sb-toggle svg{stroke:currentColor;fill:none;stroke-width:1.75}
 .sb-toggle:hover{background:var(--bz-hover);color:var(--bz-ink)}

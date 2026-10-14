@@ -259,6 +259,14 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     showToast(tr('Deleted'));
     return true;
   };
+  // Several documents of one type at once: same as handleDel, bank links to them are removed too
+  const deleteDocs=(type,ids)=>{
+    if(type==='invoice')si(inv.filter(d=>!ids.has(d.id)));
+    else if(type==='quote')sq(quo.filter(d=>!ids.has(d.id)));
+    else if(type==='po')sp(pos.filter(d=>!ids.has(d.id)));
+    else sr(rec.filter(d=>!ids.has(d.id)));
+    if(type==='invoice'||type==='received')sBankTx(bankTx.map(t=>{const al=txAllocs(t);if(!al.some(x=>x.type===type&&ids.has(x.id)))return t;return{...t,linkedDoc:null,allocations:al.filter(x=>!(x.type===type&&ids.has(x.id)))};}));
+  };
   const handleSavePrj=p=>{const fresh=!p.id;const saved=fresh?{...p,id:uid()}:p;spr(fresh?[...projects,saved]:projects.map(d=>d.id===saved.id?saved:d));showToast(tr('Saved ✓'));go('off_projects');};
   const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));showToast(tr('Saved ✓'));go('off_customers');};
 
@@ -279,7 +287,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     return(
       <div className="content"><div className="fw">
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-          <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Back")}</button>
+          <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Back")}</button>
           <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}", typeLabel):tr("New {0}", typeLabel)}</h2>
           <div style={{flex:1}}/>
           {onPreview&&<Btn v="bgh bsm" onClick={()=>onPreview(savedDoc)}><Ico n="eye"/>{tr("Preview")}</Btn>}
@@ -347,25 +355,45 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     });
     const partyName=d=>(isRec?d.supplier:(d&&d.client&&d.client.name))||'';
     const sorted=sortRows([...filtered].reverse(),sort,{date:d=>d.date,no:d=>d.number,party:partyName,project:d=>d.project,amount:d=>dt(d.items||[]),status:d=>d.status});
+    const exportRows=list=>exportExcel([['Date','Number',isRec?'Supplier':'Customer','Amount','Status'],...list.map(d=>[d.date,d.number,partyName(d),fmt(dt(d.items||[])),d.status])],type);
+    const bulk=useBulkSelect(sorted.map(d=>d.id));
+    const picked=sorted.filter(d=>bulk.has(d.id));
+    const[zipBusy,setZipBusy]=useState(false);
+    const bulkPDF=async()=>{
+      setZipBusy(true);
+      const done=await downloadPDFZip(picked,co,type,undefined,type==='invoice'?'invoices':type==='po'?'purchase-orders':isRec?'received-invoices':'quotations',(i,n)=>showToast(tr('Preparing PDFs… {0}/{1}',i,n)));
+      setZipBusy(false);
+      if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
+    };
+    const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected documents?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;
+      deleteDocs(type,new Set(picked.map(d=>d.id)));
+      showToast(tr('{0} deleted',picked.length));
+      bulk.clear();
+    });
     return(
       <div className="content">
-        <div className="fbar">
-          <div className="fbar-s"><Ico n="search"/><input value={fs.q} onChange={e=>setFs(f=>({...f,q:e.target.value}))} placeholder={tr("Search {0} or ref...", isRec?tr('supplier'):tr('customer'))}/></div>
-          <select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
+        <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search {0} or ref...", isRec?tr('supplier'):tr('customer'))}
+          active={[fs.s,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',dateFrom:'',dateTo:''}))} onExport={()=>exportRows(sorted)}>
+          <FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
             <option value="">{tr("All Statuses")}</option>{sts.map(s=><option key={s} value={s}>{(SM[s]&&SM[s].l)||s}</option>)}
-          </select>
-          <input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))} placeholder={tr("From")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-          <input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))} placeholder={tr("To")} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-          <div style={{flex:1}}/>
-          <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Number',isRec?'Supplier':'Customer','Amount','Status'],...sorted.map(d=>[d.date,d.number,partyName(d),fmt(dt(d.items||[])),d.status])],type)}><Ico n="export"/>{tr("Export")}</Btn>
-        </div>
+          </select></FilterField>
+          <FilterField label={tr("From")}><input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))}/></FilterField>
+          <FilterField label={tr("To")}><input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))}/></FilterField>
+        </ListTools>
+        <BulkBar bulk={bulk}>
+          <BulkBtn onClick={()=>exportRows(picked)}>{tr("Export selected")}</BulkBtn>
+          <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDF')}</BulkBtn>
+          <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+        </BulkBar>
         {filtered.length===0?(
           <div className="tcard"><div className="empty"><Ico n={type==='invoice'?'invoice':isRec?'received':type==='po'?'po':'quote'} size={40}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div></div></div>
         ):(
           <div className="tcard">
             <table className="dt">
-              <Cg w={type==='po'?[0.8,1,2,1,0.9,0.9]:[0.8,1,2,0.9,0.9]}/>
+              <Cg w={type==='po'?[0.32,0.8,1,1.68,1,0.9,0.9]:[0.32,0.8,1,1.68,0.9,0.9]}/>
               <thead><tr>
+                <SelTh bulk={bulk}/>
                 <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
                 <SortTh k="no" sort={sort} onSort={onSort}>{tr("No")}</SortTh>
                 <SortTh k="party" sort={sort} onSort={onSort}>{isRec?tr('Supplier'):tr('Customer')}</SortTh>
@@ -374,7 +402,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
                 <SortTh k="status" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>
               </tr></thead>
               <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
-                <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+                <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+                  <SelTd bulk={bulk} id={d.id}/>
                   <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
                   <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number||'—'}</span></td>
                   <td>{isRec?d.supplier:(d&&d.client&&d.client.name)||'—'}</td>
@@ -448,8 +477,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_pos'&&<S.OffListView type="po" items={pos}/>}
         {view==='off_received'&&<S.OffListView type="received" items={rec}/>}
         {view==='off_contact'&&customers.find(c=>c.id===selectedContactId)&&<OffContactStatement contact={customers.find(c=>c.id===selectedContactId)} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go('off_customers')} onEdit={c=>{setCur(c);go('off_custform');}}/>}
-        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>askGlobalConfirm(tr("Delete \"{0}\"?", c.company||c.contact),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));})}/>}
-        {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>askGlobalConfirm(tr("Delete \"{0}\"?", p.name),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;spr(projects.filter(d=>d.id!==p.id));showToast(tr('Deleted'));})}/>}
+        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>askGlobalConfirm(tr("Delete \"{0}\"?", c.company||c.contact),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));})} onDeleteMany={ids=>{sCust(customers.filter(x=>!ids.has(x.id)));showToast(tr('{0} deleted',ids.size));}}/>}
+        {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>askGlobalConfirm(tr("Delete \"{0}\"?", p.name),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;spr(projects.filter(d=>d.id!==p.id));showToast(tr('Deleted'));})} onDeleteMany={ids=>{spr(projects.filter(x=>!ids.has(x.id)));showToast(tr('{0} deleted',ids.size));}}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
         {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{const{account,...raw}=t;editTx(raw);}} onDelete={handleDeleteBankTx}/>}
@@ -575,7 +604,7 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
 
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap'}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
+      <SidebarToggle className="sb-toggle-form"/><button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
       <div style={{width:1,height:24,background:'var(--g200)'}}/>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{name}</h2>
       <span className="ct-type">{contactTypeLabel(c.type)}</span>
@@ -639,7 +668,7 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
   </div>);
 }
 
-function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete}){
+function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete,onDeleteMany}){
   const[q,setQ]=useState('');
   const[typeF,setTypeF]=useState('');
   const{sort,onSort}=useSort('company','asc');
@@ -653,17 +682,34 @@ function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete}){
     return{a:curList(Object.fromEntries(Object.entries(byCur).map(([k,s])=>[k,s.received]))),b:curList(Object.fromEntries(Object.entries(byCur).map(([k,s])=>[k,s.paid]))),plain:true};
   };
   const cell=(list,cls,prefix)=>list.length?list.map(([cur,v])=><div key={cur} className={cls}>{prefix}{curFmt(cur,v)}</div>):<span style={{color:'var(--g300)'}}>—</span>;
-  const exportList=()=>exportExcel([['Company','Contact','Relationship','Email','Phone','Receivable / Received','Payable / Paid'],...f.map(c=>{const p=pos(c);const txt=l=>l.map(([cur,v])=>curFmt(cur,v)).join(' · ');return[c.company||'',c.contact||'',contactTypeLabel(c.type,true),c.email||'',c.phone||'',txt(p.a),txt(p.b)];})],'contacts');
+  const exportList=list=>exportExcel([['Company','Contact','Relationship','Email','Phone','Receivable / Received','Payable / Paid'],...list.map(c=>{const p=pos(c);const txt=l=>l.map(([cur,v])=>curFmt(cur,v)).join(' · ');return[c.company||'',c.contact||'',contactTypeLabel(c.type,true),c.email||'',c.phone||'',txt(p.a),txt(p.b)];})],'contacts');
+  const bulk=useBulkSelect(f.map(c=>c.id));
+  const picked=f.filter(c=>bulk.has(c.id));
+  // A contact named on any invoice / received invoice (drafts too) or tied to a bank movement stays,
+  // so no document or statement loses its counterparty
+  const inUse=c=>{const n=contactName(c);return inv.some(d=>(d.client&&d.client.name)===n)||rec.some(d=>d.supplier===n)||bankTx.some(t=>t.contactId===c.id);};
+  const pickedFree=picked.filter(c=>!inUse(c));
+  const bulkDelete=()=>{
+    const kept=picked.length-pickedFree.length;
+    askGlobalConfirm(tr('Delete {0} contacts?',pickedFree.length)+(kept?' '+tr('{0} selected contacts appear on documents and will be kept.',kept):''),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;
+      onDeleteMany(new Set(pickedFree.map(c=>c.id)));
+      bulk.clear();
+    });
+  };
   return(<div className="content">
-    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search...")}/></div>
-      <select value={typeF} onChange={e=>setTypeF(e.target.value)}><option value="">{tr("All relationships")}</option>{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{tr(l)}</option>)}</select>
-      <div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={exportList}><Ico n="export"/>{tr("Export")}</Btn>
-    </div>
+    <ListTools q={q} onQ={setQ} placeholder={tr("Search...")} active={typeF?1:0} onClear={()=>setTypeF('')} onExport={()=>exportList(f)}>
+      <FilterField label={tr("Relationship")}><select value={typeF} onChange={e=>setTypeF(e.target.value)}><option value="">{tr("All relationships")}</option>{CONTACT_TYPES.map(([k,l])=><option key={k} value={k}>{tr(l)}</option>)}</select></FilterField>
+    </ListTools>
+    <BulkBar bulk={bulk}>
+      <BulkBtn onClick={()=>exportList(picked)}>{tr("Export selected")}</BulkBtn>
+      <BulkBtn icon="trash" danger badge={pickedFree.length} disabled={!pickedFree.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+    </BulkBar>
     {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{customers.length?tr('No contacts match'):tr('No contacts yet')}</div></div></div>:(
     <div className="tcard"><table className="dt">
-      <Cg w={[2,1.3,1.7,1,0.9,1.2,1.2,0.8]}/>
+      <Cg w={[0.32,1.68,1.3,1.7,1,0.9,1.2,1.2,0.8]}/>
       <thead><tr>
+        <SelTh bulk={bulk}/>
         <SortTh k="company" sort={sort} onSort={onSort}>{tr("Company")}</SortTh>
         <SortTh k="contact" sort={sort} onSort={onSort}>{tr("Contact")}</SortTh>
         <SortTh k="email" sort={sort} onSort={onSort}>{tr("Email")}</SortTh>
@@ -671,7 +717,8 @@ function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete}){
         <SortTh k="type" sort={sort} onSort={onSort}>{tr("Type")}</SortTh>
         <th className="tar">{tr("Receivable")}</th><th className="tar">{tr("Payable")}</th><th>{tr("Actions")}</th>
       </tr></thead>
-      <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=>{const p=pos(c);return(<tr key={c.id} className="ct-row" onClick={()=>onOpen(c)}>
+      <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=>{const p=pos(c);return(<tr key={c.id} className={'ct-row'+(bulk.has(c.id)?' is-sel':'')} onClick={()=>onOpen(c)}>
+        <SelTd bulk={bulk} id={c.id}/>
         <td style={{fontWeight:500}}>{c.company||'—'}</td>
         <td>{c.contact||'—'}</td>
         <td onClick={e=>e.stopPropagation()}>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
@@ -700,7 +747,7 @@ function OffCustForm({cust:init,customers,onSave,onCancel,dirtyRef}){
     onSave(norm);
   };
   return(<div className="content"><div className="fw" style={{maxWidth:640}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Contact'):tr('New Contact')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Contact'):tr('New Contact')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
     <div className="fc"><div className="fct">{tr("Contact Info")}</div>
       <div className="fg g2"><Fld label={tr("Company / Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Contact Person")}><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder={tr("John Smith")}/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label={tr("Email")}><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
@@ -711,26 +758,39 @@ function OffCustForm({cust:init,customers,onSave,onCancel,dirtyRef}){
     <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
   </div></div>);
 }
-function OffProjects({projects,onNew,onEdit,onDelete}){
+function OffProjects({projects,onNew,onEdit,onDelete,onDeleteMany}){
+  const[q,setQ]=useState('');
   const{sort,onSort}=useSort();
-  const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(sort));
-  const rows=sortRows(projects,sort,{date:p=>p.startDate,name:p=>p.name,client:p=>p.client,status:p=>p.status||'active'});
+  const {pg,ps,setPg,setPs}=usePagination(q+JSON.stringify(sort));
+  const ql=q.trim().toLowerCase();
+  const rows=sortRows(projects.filter(p=>!ql||[p.name,p.client].some(x=>(x||'').toLowerCase().includes(ql))),sort,{date:p=>p.startDate,name:p=>p.name,client:p=>p.client,status:p=>p.status||'active'});
+  const exportRows=list=>exportExcel([['Start Date','Name','Client','Status'],...list.map(p=>[p.startDate||'',p.name||'',p.client||'',p.status||''])],'projects');
+  const bulk=useBulkSelect(rows.map(p=>p.id));
+  const picked=rows.filter(p=>bulk.has(p.id));
+  const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected projects?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+    if(!ok)return;
+    onDeleteMany(new Set(picked.map(p=>p.id)));
+    bulk.clear();
+  });
   return(<div className="content">
-    <div className="fbar"><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Start Date','Name','Client','Status'],...rows.map(p=>[p.startDate||'',p.name||'',p.client||'',p.status||''])],'projects')}><Ico n="export"/>{tr("Export")}</Btn>
-    </div>
+    <ListTools q={q} onQ={setQ} placeholder={tr("Search...")} onExport={()=>exportRows(rows)}/>
+    <BulkBar bulk={bulk}>
+      <BulkBtn onClick={()=>exportRows(picked)}>{tr("Export selected")}</BulkBtn>
+      <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+    </BulkBar>
     <div className="tcard"><table className="dt">
-      <Cg w={[0.8,1.8,1.8,0.9,0.6]}/>
+      <Cg w={[0.32,0.8,1.64,1.64,0.9,0.6]}/>
       <thead><tr>
+        <SelTh bulk={bulk}/>
         <SortTh k="date" sort={sort} onSort={onSort}>{tr("Start")}</SortTh>
         <SortTh k="name" sort={sort} onSort={onSort}>{tr("Name")}</SortTh>
         <SortTh k="client" sort={sort} onSort={onSort}>{tr("Client")}</SortTh>
         <SortTh k="status" sort={sort} onSort={onSort}>{tr("Status")}</SortTh>
         <th>{tr("Actions")}</th>
       </tr></thead>
-      <tbody>{projects.length===0?<tr><td colSpan={5}><div className="empty"><div className="empty-t">{tr("No projects yet")}</div></div></td></tr>:rows.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id}><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
+      <tbody>{rows.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">{projects.length?tr("No items match the filter"):tr("No projects yet")}</div></div></td></tr>:rows.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id} className={bulk.has(p.id)?'is-sel':''}><SelTd bulk={bulk} id={p.id}/><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
       </tbody>
-    </table><Pagination total={projects.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
+    </table><Pagination total={rows.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
 }
 function OffProjForm({proj:init,projects,onSave,onCancel,dirtyRef}){
@@ -746,7 +806,7 @@ function OffProjForm({proj:init,projects,onSave,onCancel,dirtyRef}){
     onSave(norm);
   };
   return(<div className="content"><div className="fw" style={{maxWidth:580}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?tr('Edit Project'):tr('New Project')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?tr('Edit Project'):tr('New Project')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
     <div className="fc"><div className="fct">{tr("Project Details")}</div>
       <div className="fg g2"><Fld label={tr("Name")}><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder={tr("Project name")}/></Fld><Fld label={tr("Client")}><input value={p.client||''} onChange={e=>s('client',e.target.value)} className="fi" placeholder={tr("Client")}/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label={tr("Start Date")}><input type="date" value={p.startDate||''} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld><Fld label={tr("Status")}><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">{tr("Active")}</option><option value="completed">{tr("Completed")}</option><option value="on-hold">{tr("On Hold")}</option><option value="cancelled">{tr("Cancelled")}</option></select></Fld></div>
@@ -771,9 +831,7 @@ function CategoryList({cats,direction,bankTx,banks,onOpen,onEdit,onDelete}){
   const groups=groupCats(cats).map(({main,children})=>({main,children:children.filter(ch=>matches(main.name)||matches(ch.name))})).filter(({main,children})=>matches(main.name)||children.length>0);
   const label=direction==='out'?tr('Expense'):tr('Income');
   return(<div className="content">
-    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search...")}/></div><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Code','Name','Total'],...groups.flatMap(({main,children})=>[[main.code||'',main.name,fmtTotal(catTotal([main.name,...children.map(c=>c.name)]))],...children.map(ch=>[ch.code||'',ch.name,fmtTotal(catTotal([ch.name]))])])],direction==='out'?'expense-categories':'income-categories')}><Ico n="export"/>{tr("Export")}</Btn>
-    </div>
+    <ListTools q={q} onQ={setQ} placeholder={tr("Search...")} onExport={()=>exportExcel([['Code','Name','Total'],...groups.flatMap(({main,children})=>[[main.code||'',main.name,fmtTotal(catTotal([main.name,...children.map(c=>c.name)]))],...children.map(ch=>[ch.code||'',ch.name,fmtTotal(catTotal([ch.name]))])])],direction==='out'?'expense-categories':'income-categories')}/>
     {groups.length===0?(
       <div className="tcard"><div className="empty"><Ico n={direction==='out'?'expense':'income'} size={36}/><div className="empty-t">{tr("No {0} categories yet", label.toLowerCase())}</div></div></div>
     ):(
@@ -864,14 +922,12 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
   const totalsByCurrency=filtered.reduce((acc,t)=>{const c=(t.account&&t.account.currency)||'GBP';acc[c]=(acc[c]||0)+(+t.amount||0);return acc;},{});
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
+      <SidebarToggle className="sb-toggle-form"/><button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
       <div style={{width:1,height:24,background:'var(--g200)'}}/>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{mainName}</h2>
       {filtered.length>0&&<span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{Object.entries(totalsByCurrency).map(([c,amt])=>`${CURR[c]||c}${fmt(amt)}`).join(' · ')}</span>}
     </div>
-    <div className="fbar"><div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search description, reference, account...")}/></div><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Account','Description','Linked','Amount'],...filtered.map(t=>[t.date||'',(t.account&&t.account.accountName)||'',t.description||'',linkLabel(t)||'',+t.amount])],`${mainName.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-transactions`)}><Ico n="export"/>{tr("Export")}</Btn>
-    </div>
+    <ListTools q={q} onQ={setQ} placeholder={tr("Search description, reference, account...")} onExport={()=>exportExcel([['Date','Account','Description','Linked','Amount'],...filtered.map(t=>[t.date||'',(t.account&&t.account.accountName)||'',t.description||'',linkLabel(t)||'',+t.amount])],`${mainName.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-transactions`)}/>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.6,2.2,1,0.9,0.6]}/>
       <thead><tr>
@@ -1096,9 +1152,7 @@ function BankAccountModal({bank,onSave,onCancel}){
 
 function OffBankAccounts({banks,accountBalance,onOpen,onEdit,onDelete,onSetDefault}){
   return(<div className="content">
-    <div className="fbar"><div style={{flex:1}}/>
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Account Name','Account Number','IBAN','BIC','Currency','Balance','Default'],...banks.map(b=>[b.accountName||'',b.accountNumber||'',b.iban||'',b.bic||'',b.currency||'',accountBalance(b),b.isDefault?'Yes':'No'])],'bank-accounts')}><Ico n="export"/>{tr("Export")}</Btn>
-    </div>
+    <ListTools onExport={()=>exportExcel([['Account Name','Account Number','IBAN','BIC','Currency','Balance','Default'],...banks.map(b=>[b.accountName||'',b.accountNumber||'',b.iban||'',b.bic||'',b.currency||'',accountBalance(b),b.isDefault?'Yes':'No'])],'bank-accounts')}/>
     {banks.length===0?(
       <div className="tcard"><div className="empty"><Ico n="bank" size={40}/><div className="empty-t">{tr("No bank accounts yet")}</div><div className="empty-s">{tr("Add a bank account to start tracking transactions")}</div></div></div>
     ):(
@@ -1184,7 +1238,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
 
   return(<div className="content">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
+      <SidebarToggle className="sb-toggle-form"/><button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
       <div style={{width:1,height:24,background:'var(--g200)'}}/>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{account.accountName||tr('Bank Account')}</h2>
       <span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{tr("Current: {0}{1}", curSym, fmt(running))}</span>
@@ -1192,14 +1246,12 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
       {(banks||[]).length>1&&<Btn v="bgh bsm" onClick={onExchange}><Ico n="convert"/>{tr("Exchange")}</Btn>}
       <Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>{tr("New Transaction")}</Btn>
     </div>
-    <div className="fbar">
-      <div className="fbar-s"><Ico n="search"/><input value={q} onChange={e=>setQ(e.target.value)} placeholder={tr("Search description, reference...")}/></div>
-      <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-      <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{padding:'6px 10px',border:'1px solid var(--g200)',borderRadius:6,fontSize:12}}/>
-      <div style={{flex:1}}/>
-      {filtered.length>0&&<span style={{fontSize:12,fontWeight:600,color:'var(--g600)'}}>{tr("In: {0}{1} · Out: {2}{3}", curSym, fmt(totalIn), curSym, fmt(totalOut))}</span>}
-      <Btn v="bex bsm" onClick={()=>exportExcel([['Date','Contact','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.contactName||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:isXpay(t)?`${t.description||''} (${xpayAmt(t)}; ${xpayDetail(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}><Ico n="export"/>{tr("Export")}</Btn>
-    </div>
+    <ListTools q={q} onQ={setQ} placeholder={tr("Search description, reference...")} active={[dateFrom,dateTo].filter(Boolean).length} onClear={()=>{setDateFrom('');setDateTo('');}}
+      extra={filtered.length>0&&<span className="lt-note">{tr("In: {0}{1} · Out: {2}{3}", curSym, fmt(totalIn), curSym, fmt(totalOut))}</span>}
+      onExport={()=>exportExcel([['Date','Contact','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.contactName||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:isXpay(t)?`${t.description||''} (${xpayAmt(t)}; ${xpayDetail(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}>
+      <FilterField label={tr("From")}><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></FilterField>
+      <FilterField label={tr("To")}><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></FilterField>
+    </ListTools>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.2,2,1,1,0.9,0.9,0.9,0.6]}/>
       <thead><tr>
@@ -1346,7 +1398,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
 
   return(<div className="content"><div className="fw">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+      <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{t.id?tr('Edit Transaction'):tr('New Transaction')}</h2>
       <span style={{fontSize:13,color:'var(--g500)'}}>{account.accountName||tr('Account')} · {curSym}</span>
       <div style={{flex:1}}/>
@@ -1463,7 +1515,7 @@ function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,dirtyRef})
 
   return(<div className="content"><div className="fw">
     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
+      <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
       <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{init.id?tr('Edit Currency Exchange'):tr('Currency Exchange')}</h2>
       <div style={{flex:1}}/>
       <Btn v="bp bsm" onClick={trySave}>{tr("Save")}</Btn>
