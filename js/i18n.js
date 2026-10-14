@@ -287,7 +287,7 @@ const I18N_TR={
   'direct purchase':'doğrudan alım','Sub-supplier missing':'Alt tedarikçi eksik','rate missing':'kur eksik','Invoiced in another currency':'Başka para biriminde faturalanmış',
   'Direct':'Doğrudan','not shipped yet':'henüz sevk edilmedi',
   // Source quotes / invoices and the transfer into a group company quote
-  'Export to Excel':"Excel'e Aktar",'Sub-supplier Quotes':'Alt Tedarikçi Teklifleri','Sub-supplier Invoices':'Alt Tedarikçi Faturaları','Sub-supplier Quote':'Alt Tedarikçi Teklifi','Sub-supplier Invoice':'Alt Tedarikçi Faturası',
+  'Export to Excel':"Excel'e Aktar",'Sub-supplier Quotes':'Alt Tedarikçi Teklifleri','Sub-supplier Invoices':'Alt Tedarikçi Faturaları','Sub-supplier Quote':'Alt Tedarikçi Teklifi','Commercial Invoice':'Ticari Fatura','From {0}':'Kaynak: {0}','Valid until':'Geçerlilik:','Sub-supplier Invoice':'Alt Tedarikçi Faturası',
   'New Sub-supplier Quote':'Yeni Alt Tedarikçi Teklifi','New Sub-supplier Invoice':'Yeni Alt Tedarikçi Faturası','Create Sub-supplier Invoice':'Alt Tedarikçi Faturası Oluştur',
   'To be quoted':'Tekliflendirilecek','Partly quoted':'Kısmen tekliflendirildi','Quoted':'Tekliflendirildi','Not used':'Kullanılmadı',
   'Quoted in {0}':'{0} ile tekliflendirildi','Not used ({0})':'Kullanılmadı ({0})','Invoice {0}':'Fatura {0}',

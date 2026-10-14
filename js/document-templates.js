@@ -949,9 +949,10 @@ function DocSummaryBody({doc,co,docType,itemNote}){
   const isPO=docType==='po';
   const isPQ=docType==='quote';
 
-  const typeLabel=isSrc?(docType==='src_quote'?'Sub-supplier Quote':'Sub-supplier Invoice'):isInv?'Commercial Invoice':docType==='sales_quote'?'Sales Quotation':isPO?'Purchase Order':isPQ?'Received Quote':'Document';
+  // On-screen summary only, so it follows the interface language; the PDF is built by buildStandardPDF and stays English
+  const typeLabel=tr(isSrc?(docType==='src_quote'?'Sub-supplier Quote':'Sub-supplier Invoice'):isInv?'Commercial Invoice':docType==='sales_quote'?'Sales Quotation':isPO?'Purchase Order':isPQ?'Received Quote':'Document');
 
-  const partyLabel=(isPO||isPQ||isSrc)?'Supplier':'Bill To';
+  const partyLabel=(isPO||isPQ||isSrc)?tr('Supplier'):tr('Bill To');
   const partyCompany=(isPO||isPQ||isSrc)?(doc.supplierCompany||'—'):((doc.client&&doc.client.company)||'—');
   const partyContact=(isPO||isPQ||isSrc)?(doc.supplierContact||''):((doc.client&&doc.client.contact)||'');
   const partyEmail=(isPO||isPQ||isSrc)?(doc.supplierEmail||''):((doc.client&&doc.client.email)||'');
@@ -962,10 +963,10 @@ function DocSummaryBody({doc,co,docType,itemNote}){
 
   const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
   const statusClass=statusMap[doc.status]||'b-draft';
-  const statusLabel=doc.status?(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' ')):'Draft';
+  const statusLabel=doc.status?((SM[doc.status]&&SM[doc.status].l)||(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' '))):tr('Draft');
 
   return(
-        <div className="pv2-wrap" lang="en">
+        <div className="pv2-wrap" lang={LANG}>
 
           <div className="pv2-hdr">
             <div className="pv2-hdr-left">
@@ -974,14 +975,14 @@ function DocSummaryBody({doc,co,docType,itemNote}){
             </div>
             <div className="pv2-hdr-right">
               <div className="pv2-hdr-badges">
-                {isInv&&doc.quoteNum&&<span className="pv2-linked">From {doc.quoteNum}</span>}
+                {isInv&&doc.quoteNum&&<span className="pv2-linked">{tr('From {0}',doc.quoteNum)}</span>}
                 {doc.status&&<span className={`bdg ${statusClass}`}>{statusLabel}</span>}
               </div>
               <div className="pv2-hdr-meta">
                 <span><b>{doc.date||td()}</b></span>
                 <span className="pv2-hdr-sep">·</span>
                 <span>{doc.currency||'GBP'} ({sym})</span>
-                {doc.validity&&<><span className="pv2-hdr-sep">·</span><span>Valid until <b>{doc.validity}</b></span></>}
+                {doc.validity&&<><span className="pv2-hdr-sep">·</span><span>{tr('Valid until')} <b>{doc.validity}</b></span></>}
                 {doc.project&&<><span className="pv2-hdr-sep">·</span><span>{doc.project}</span></>}
               </div>
             </div>
@@ -997,7 +998,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
             </div>
             {hasShipTo&&(shipTo.company||shipTo.contact)&&(
               <div className="pv2-meta-card">
-                <div className="pv2-meta-label">Ship To</div>
+                <div className="pv2-meta-label">{tr('Ship To')}</div>
                 {shipTo.company&&<div className="pv2-meta-value lg">{shipTo.company}</div>}
                 {shipTo.contact&&<div className="pv2-meta-sub">{shipTo.contact}</div>}
                 {shipTo.email&&<div className="pv2-meta-sub">{shipTo.email}</div>}
@@ -1007,16 +1008,16 @@ function DocSummaryBody({doc,co,docType,itemNote}){
           </div>
 
           <div className="pv2-section">
-            <div className="pv2-sec-title">Line Items</div>
+            <div className="pv2-sec-title">{tr('Line Items')}</div>
             <div style={{borderRadius:8,overflow:'hidden',border:'1px solid var(--g200)'}}>
               <table className="pv2-tbl">
                 <thead><tr>
-                  <th style={{width:'13%'}}>Item</th>
-                  <th style={{width:'37%'}}>Description</th>
-                  <th style={{width:'9%',textAlign:'right'}}>Qty</th>
-                  <th style={{width:'8%'}}>Unit</th>
-                  <th style={{width:'14%',textAlign:'right'}}>Unit Price</th>
-                  <th style={{width:'14%',textAlign:'right',paddingRight:16}}>Total</th>
+                  <th style={{width:'13%'}}>{tr('Item')}</th>
+                  <th style={{width:'37%'}}>{tr('Description')}</th>
+                  <th style={{width:'9%',textAlign:'right'}}>{tr('Qty')}</th>
+                  <th style={{width:'8%'}}>{tr('Unit')}</th>
+                  <th style={{width:'14%',textAlign:'right'}}>{tr('Unit Price')}</th>
+                  <th style={{width:'14%',textAlign:'right',paddingRight:16}}>{tr('Total')}</th>
                 </tr></thead>
                 <tbody>{(doc.items||[]).map((it,i)=>(
                   <tr key={it.id||i}>
@@ -1032,7 +1033,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
             </div>
             <div className="pv2-totals">
               <div className="pv2-totbox">
-                <span className="pv2-totlbl">Total</span>
+                <span className="pv2-totlbl">{tr('Total')}</span>
                 <span className="pv2-totamt">{sym}{fmt(total)}</span>
               </div>
             </div>
@@ -1040,7 +1041,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
 
           {doc.notes&&(
             <div className="pv2-section">
-              <div className="pv2-sec-title">Notes</div>
+              <div className="pv2-sec-title">{tr('Notes')}</div>
               <div className="pv2-notes">{doc.notes}</div>
             </div>
           )}
@@ -1053,10 +1054,10 @@ function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
   return(
     <div>
       <div className="pvbar no-print">
-        <SidebarToggle className="sb-toggle-form"/><button className="pvbtn" onClick={onBack}><Ico n="back"/>{tr("Back")}</button>
-        {onEdit&&<button className="pvbtn" onClick={onEdit}><Ico n="edit"/>{tr("Edit")}</button>}
+        <SidebarToggle className="sb-toggle-form"/><Btn v="bgh bsm" onClick={onBack}><Ico n="back"/>{tr("Back")}</Btn>
+        {onEdit&&<Btn v="bgh bsm" onClick={onEdit}><Ico n="edit"/>{tr("Edit")}</Btn>}
         <div style={{flex:1}}/>
-        <button className="pvbtn primary" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>{tr("Save PDF")}</button>
+        <Btn v="bp bsm" onClick={()=>savePDF(doc,co,docType,pdfOpts)}><Ico n="dl"/>{tr("Save PDF")}</Btn>
       </div>
       <div className="pv2-outer">
         <DocSummaryBody doc={doc} co={co} docType={docType}/>

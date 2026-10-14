@@ -1090,9 +1090,9 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
    confirm dialogs, with glass fields and buttons inside */
 .mt-overlay{background:rgba(31,32,35,.22);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);animation:bzFade .18s var(--bz-ease)}
 .mt-dialog{position:relative;isolation:isolate;border-radius:22px;background:rgba(255,255,255,.74);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-glow),0 2px 6px rgba(26,42,10,.08),0 24px 60px rgba(26,42,10,.22);animation:bzPop .22s var(--bz-spring)}
-.mt-dialog-h{padding:18px 22px 14px;border-bottom:1px solid rgba(31,32,35,.07)}
+.mt-dialog-h{padding:20px 22px 6px;border-bottom:none}
 .mt-dialog-b{padding:16px 22px}
-.mt-dialog-f{padding:14px 22px 18px;border-top:1px solid rgba(31,32,35,.07)}
+.mt-dialog-f{padding:6px 22px 20px;border-top:none}
 .mt-dialog-t{font-size:16px;color:var(--bz-ink)}
 .mt-dialog .fi{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 2px rgba(26,42,10,.05)}
 .mt-dialog .fi:hover{background:rgba(255,255,255,.62);border-color:#fff}
@@ -1118,6 +1118,8 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .gmodal .fi:focus,.st-modal .fi:focus{background:rgba(255,255,255,.85);border-color:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.18)}
 .gmodal .bgh,.st-modal .bgh{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 1px rgba(255,255,255,.8)}
 .gmodal .bgh:hover,.st-modal .bgh:hover{background:rgba(255,255,255,.85);border-color:#fff}
+/* Full-page preview: a light row with the standard buttons (was a dark bar with small ghost buttons) */
+.pvbar{background:transparent;padding:16px 22px 0;gap:8px}
 /* Quick view: header and footer stay put, the body scrolls */
 .gmodal.gq{width:900px;max-width:100%;max-height:90vh;padding:0;display:flex;flex-direction:column;overflow:hidden}
 .gq-b{overflow-y:auto;padding:24px 24px 8px;flex:1}

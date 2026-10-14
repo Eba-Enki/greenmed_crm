@@ -2620,7 +2620,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{tr("All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.")}</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">{tr("Pool is empty")}</div><div className="empty-s">{tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.32,0.8,1,1,1.84,0.6,0.9,0.9,1,1.84,0.6]}/>
+          <Cg w={[0.32,0.8,1,0.8,1.66,0.78,1.08,1.08,0.9,1.56,0.86]}/>
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
