@@ -2657,9 +2657,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
 
-      {editingItem&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick={closeModal}>
-        <div style={{background:'var(--white)',borderRadius:12,padding:24,width:'90%',maxWidth:420,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={e=>e.stopPropagation()}>
-          <h3 style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{editingItem.purchaseSrc==="rq"?tr("Purchase price details"):tr("Set Purchase Price")}</h3>
+      {editingItem&&<div className="gdlg-bg" style={{zIndex:9999}} onClick={closeModal}>
+        <div className="glass gmodal" role="dialog" aria-modal="true" style={{width:'90%',maxWidth:420}} onClick={e=>e.stopPropagation()}>
+          <h3 className="gmodal-t">{editingItem.purchaseSrc==="rq"?tr("Purchase price details"):tr("Set Purchase Price")}</h3>
           <div style={{marginBottom:16}}>
             <div style={{fontSize:13,fontWeight:600,color:'var(--g700)',marginBottom:2}}>{editingItem.name}</div>
             <div style={{fontSize:12,color:'var(--g500)'}}>{tr("{0} · {1} · Sale: {2}", editingItem.customer||'—', editingItem.quoteNum||'—', money(editingItem.price,editingItem.currency))}</div>
@@ -3203,9 +3203,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       )}
 
       {/* Upload Form Modal */}
-      {showDocForm&&docToEdit&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setShowDocForm(false)}>
-        <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:500,maxWidth:'90vw'}}>
-          <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{docToEdit.id?tr('Edit Document'):tr('Upload Document')}</div>
+      {showDocForm&&docToEdit&&<div className="gdlg-bg" style={{zIndex:1000}} onClick={()=>setShowDocForm(false)}>
+        <div className="glass gmodal" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()} style={{width:500,maxWidth:'90vw'}}>
+          <div className="gmodal-t">{docToEdit.id?tr('Edit Document'):tr('Upload Document')}</div>
           <S.DocumentForm doc={docToEdit} onSave={(d)=>{
             const doc={...d,id:d.id||uid(),uploadDate:d.uploadDate||td()};
             sDocs(doc.id&&documents.find(x=>x.id===doc.id)?documents.map(x=>x.id===doc.id?doc:x):[...documents,doc]);
@@ -3447,7 +3447,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>)}
 
       {editingBank&&(<div className="st-modal-bg" onClick={()=>setEditingBank(null)}>
-        <div className="st-modal" onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true">
+        <div className="glass st-modal" onClick={e=>e.stopPropagation()} role="dialog" aria-modal="true">
           <div className="st-modal-t">{isNewBank?tr('New Bank Account'):tr('Edit Bank Account')}</div>
           <div className="fg">
             <div className="fg g2">

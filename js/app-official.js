@@ -817,9 +817,9 @@ function CategoryModal({cat,cats,onSave,onCancel}){
   };
   const canSave=name.trim()&&(mode==='main'||(mode==='sub'&&parentId));
   useEscape(onCancel);
-  return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={onCancel}>
-    <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:440,maxWidth:'90vw'}}>
-      <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{isNew?tr("New {0}", label):(isEditingMain?tr('Edit Main Category'):tr('Edit Sub-Category'))}</div>
+  return(<div className="gdlg-bg" style={{zIndex:1000}} onClick={onCancel}>
+    <div className="glass gmodal" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()} style={{width:440,maxWidth:'90vw'}}>
+      <div className="gmodal-t">{isNew?tr("New {0}", label):(isEditingMain?tr('Edit Main Category'):tr('Edit Sub-Category'))}</div>
       {!isEditingMain&&(
         <div style={{marginBottom:16}}><Fld label={tr("Main Category")}>
           <select value={mode==='main'?'__new__':parentId} onChange={e=>handleMainSelect(e.target.value)} className="fi">
@@ -1064,9 +1064,9 @@ function BankAccountModal({bank,onSave,onCancel}){
   const[b,setB]=useState(bank);
   useEscape(onCancel);
   const s=(k,v)=>setB(d=>({...d,[k]:v}));
-  return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={onCancel}>
-    <div onClick={e=>e.stopPropagation()} style={{background:'var(--white)',borderRadius:12,padding:24,width:500,maxWidth:'90vw'}}>
-      <div style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{b.id?tr('Edit Bank Account'):tr('New Bank Account')}</div>
+  return(<div className="gdlg-bg" style={{zIndex:1000}} onClick={onCancel}>
+    <div className="glass gmodal" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()} style={{width:500,maxWidth:'90vw'}}>
+      <div className="gmodal-t">{b.id?tr('Edit Bank Account'):tr('New Bank Account')}</div>
       <div style={{marginBottom:12}}><Fld label={tr("Account Name")}><input value={b.accountName||''} onChange={e=>s('accountName',e.target.value)} className="fi"/></Fld></div>
       <div className="fg g2" style={{marginBottom:12}}>
         <Fld label={tr("Account Number")}><input value={b.accountNumber||''} onChange={e=>s('accountNumber',e.target.value)} className="fi"/></Fld>

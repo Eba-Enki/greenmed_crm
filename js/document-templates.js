@@ -1072,18 +1072,18 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
   const statusClass=statusMap[doc.status]||'b-draft';
   const statusLabel=doc.status?((SM[doc.status]&&SM[doc.status].l)||(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' '))):tr('Draft');
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:14,width:900,maxWidth:'100%',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,.25)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10,padding:'16px 24px',borderBottom:'1px solid var(--g200)',flexShrink:0}}>
+    <div className="gdlg-bg" style={{zIndex:2000,padding:20}} onClick={onClose}>
+      <div className="glass gmodal gq" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+        <div className="gq-h">
           <span style={{fontSize:11,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'.5px'}}>{doc.number||'—'}</span>
           {doc.status&&<span className={`bdg ${statusClass}`}>{statusLabel}</span>}
           <div style={{flex:1}}/>
-          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'var(--g400)',lineHeight:1}}>×</button>
+          <button className="pf-close" onClick={onClose} aria-label={tr("Close")}><Ico n="x" size={16}/></button>
         </div>
-        <div style={{overflowY:'auto',padding:'20px 24px',flex:1}}>
+        <div className="gq-b">
           <DocSummaryBody doc={doc} co={co} docType={docType} itemNote={itemNote}/>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:8,padding:'14px 24px',borderTop:'1px solid var(--g200)',flexShrink:0}}>
+        <div className="gq-f">
           {onDelete&&<button className="ab danger" onClick={onDelete}><Ico n="trash"/></button>}
           <div style={{flex:1}}/>
           <Btn v="bgh bsm" onClick={onClose}>{tr("Close")}</Btn>

@@ -497,15 +497,15 @@ function App(){
           ?<button onClick={()=>Sync.retryAll()} style={{border:'none',background:'transparent',color:'var(--g600)',cursor:'pointer',fontSize:13,fontWeight:600}}>{tr("Retry now")}</button>
           :<button onClick={()=>setLoadError('')} style={{border:'none',background:'transparent',color:'var(--g600)',cursor:'pointer',fontSize:13,fontWeight:600}}>{tr("Dismiss")}</button>}
       </div>}
-      {conflicts.length>0&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:99998,display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <div role="alertdialog" aria-labelledby="sync-conflict-title" style={{background:'#fff',borderRadius:12,padding:'28px 32px',minWidth:320,maxWidth:520,boxShadow:'0 8px 40px rgba(0,0,0,.18)',display:'flex',flexDirection:'column',gap:16}}>
-          <h3 id="sync-conflict-title" style={{margin:0,fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("Updated by another user")}</h3>
+      {conflicts.length>0&&<div className="gdlg-bg" style={{zIndex:99998}}>
+        <div className="glass gdlg" role="alertdialog" aria-modal="true" aria-labelledby="sync-conflict-title" style={{maxWidth:520,gap:16}}>
+          <h3 id="sync-conflict-title" className="gmodal-t" style={{margin:0}}>{tr("Updated by another user")}</h3>
           <ul style={{margin:0,paddingLeft:18,fontSize:13.5,lineHeight:1.6,color:'var(--g700)',maxHeight:280,overflowY:'auto'}}>
             {conflicts.map((m,i)=><li key={i}>{m}</li>)}
           </ul>
           <p style={{margin:0,fontSize:12.5,color:'var(--g500)'}}>{tr("The latest data has been loaded.")}</p>
           <div style={{display:'flex',justifyContent:'flex-end'}}>
-            <button autoFocus onClick={()=>setConflicts([])} style={{padding:'7px 20px',borderRadius:7,border:'none',background:'var(--gm-600)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}}>{tr("OK")}</button>
+            <button autoFocus className="gdlg-ok" onClick={()=>setConflicts([])}>{tr("OK")}</button>
           </div>
         </div>
       </div>}

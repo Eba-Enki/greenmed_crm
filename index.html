@@ -1085,11 +1085,28 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 @media (prefers-reduced-motion:reduce){.mt-overlay,.mt-dialog{animation:none}}
 /* Dialogs open over busy pages (tables, item lists), so they get a heavier frost than the other glass: the page behind
    is blurred more, and the card blurs harder with a lighter tint so text behind it turns into soft colour, not words. */
-.gdlg-bg,.mt-overlay{background:rgba(31,32,35,.16);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2)}
-.gdlg,.pf-modal,.mt-dialog{
+.gdlg-bg,.mt-overlay,.st-modal-bg{background:rgba(31,32,35,.16);-webkit-backdrop-filter:blur(10px) saturate(1.2);backdrop-filter:blur(10px) saturate(1.2)}
+.gdlg,.pf-modal,.mt-dialog,.gmodal,.st-modal{
   background:linear-gradient(160deg,rgba(255,255,255,.8) 0%,rgba(255,255,255,.62) 55%,rgba(255,255,255,.72) 100%);
   -webkit-backdrop-filter:blur(40px) saturate(1.9);backdrop-filter:blur(40px) saturate(1.9);
   box-shadow:inset 0 1px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.3),inset 0 0 32px rgba(255,255,255,.38),0 2px 6px rgba(26,42,10,.08),0 24px 60px rgba(26,42,10,.22)}
+/* Form dialogs (category, bank account, purchase price, document upload) and the document quick view:
+   the same frosted card as the confirm dialogs, with glass fields and buttons */
+.gmodal{padding:26px 28px 24px;border-radius:22px;max-height:calc(100vh - 32px);overflow-y:auto;animation:bzPop .22s var(--bz-spring)}
+.gmodal-t{font-size:18px;font-weight:600;letter-spacing:-.02em;color:var(--bz-ink);margin:0 0 18px}
+.st-modal{border-radius:22px;animation:bzPop .22s var(--bz-spring)}
+.st-modal-t{font-weight:600;letter-spacing:-.02em;color:var(--bz-ink)}
+.gmodal .fi,.st-modal .fi{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 2px rgba(26,42,10,.05)}
+.gmodal .fi:hover,.st-modal .fi:hover{background:rgba(255,255,255,.62);border-color:#fff}
+.gmodal .fi:focus,.st-modal .fi:focus{background:rgba(255,255,255,.85);border-color:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.18)}
+.gmodal .bgh,.st-modal .bgh{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 1px rgba(255,255,255,.8)}
+.gmodal .bgh:hover,.st-modal .bgh:hover{background:rgba(255,255,255,.85);border-color:#fff}
+/* Quick view: header and footer stay put, the body scrolls */
+.gmodal.gq{width:900px;max-width:100%;max-height:90vh;padding:0;display:flex;flex-direction:column;overflow:hidden}
+.gq-h{display:flex;align-items:center;gap:10px;padding:16px 24px;border-bottom:1px solid rgba(31,32,35,.07);flex-shrink:0}
+.gq-b{overflow-y:auto;padding:20px 24px;flex:1}
+.gq-f{display:flex;align-items:center;gap:8px;padding:14px 24px;border-top:1px solid rgba(31,32,35,.07);flex-shrink:0}
+@media (prefers-reduced-motion:reduce){.gmodal,.st-modal{animation:none}}
 /* Toasts: a glass pill floating over the page. They mostly land on the white panel, where a clear glass would
    read as plain white, so the fill carries a faint tint of the canvas gradient and the rim is brighter. */
 .toast{isolation:isolate;color:var(--bz-ink);border-radius:16px;padding:12px 18px;font-weight:600;
