@@ -60,11 +60,11 @@ function LoginScreen({onLogin}){
         </div>
         <div className="glass login-card">
           <div style={{marginBottom:16}}>
-            <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--g600)',marginBottom:8,textTransform:'uppercase',letterSpacing:'.5px'}}>{tr("Username")}</label>
+            <label className="login-lbl">{tr("Username")}</label>
             <input type="text" value={username} onChange={e=>{setUsername(e.target.value);setError('');}} onKeyDown={e=>e.key==='Enter'&&handleLogin()} placeholder={tr("Your username")} autoFocus className="login-in"/>
           </div>
           <div style={{marginBottom:20}}>
-            <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--g600)',marginBottom:8,textTransform:'uppercase',letterSpacing:'.5px'}}>{tr("Password")}</label>
+            <label className="login-lbl">{tr("Password")}</label>
             <input type="password" value={password} onChange={e=>{setPassword(e.target.value);setError('');}} onKeyDown={e=>e.key==='Enter'&&handleLogin()} placeholder={tr("Your password")} autoComplete="current-password" className="login-in"/>
           </div>
           {error&&<div style={{background:'rgba(192,57,43,.08)',border:'1.5px solid rgba(192,57,43,.3)',borderRadius:8,padding:'10px 14px',marginBottom:16,color:'var(--red)',fontSize:13,fontWeight:500}}>{error}</div>}
