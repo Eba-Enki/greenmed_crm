@@ -929,7 +929,7 @@ table.dt td .ab-act+.ab-act{margin-left:6px}
 .topbar-title{flex:1;font-size:20px;font-weight:600;letter-spacing:-.015em;color:var(--bz-ink)}
 .topbar-actions{display:flex;align-items:center;gap:8px}
 .pills{display:flex;align-items:center;gap:4px;margin-top:16px;padding-bottom:12px;border-bottom:1px solid var(--bz-line-2);overflow-x:auto}
-.pill{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:999px;font-size:14px;font-weight:500;color:var(--bz-ink-2);white-space:nowrap;cursor:pointer;transition:background .16s var(--bz-ease),color .16s var(--bz-ease),transform .16s var(--bz-spring)}
+.pill{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 12px;border-radius:var(--bz-ctl-r);font-size:14px;font-weight:500;color:var(--bz-ink-2);white-space:nowrap;cursor:pointer;transition:background .16s var(--bz-ease),color .16s var(--bz-ease),transform .16s var(--bz-spring)}
 .pill:hover{background:var(--bz-hover);color:var(--bz-ink)}
 .pill:active{transform:scale(.97)}
 .pill:focus-visible{outline:2px solid var(--gm-400);outline-offset:1px}
@@ -1028,7 +1028,7 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .gdlg{display:flex;flex-direction:column;gap:20px;min-width:300px;max-width:440px;width:100%;padding:26px 28px 22px;border-radius:22px;background:rgba(255,255,255,.74);box-shadow:var(--glass-glow),0 2px 6px rgba(26,42,10,.08),0 24px 60px rgba(26,42,10,.22);animation:bzPop .22s var(--bz-spring)}
 .gdlg-msg{margin:0;font-size:14.5px;line-height:1.6;font-weight:500;color:var(--bz-ink);white-space:pre-line}
 .gdlg-btns{display:flex;gap:10px;justify-content:flex-end}
-.gdlg-cancel,.gdlg-ok{height:36px;padding:0 18px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s var(--bz-ease),border-color .15s var(--bz-ease),box-shadow .15s var(--bz-ease),transform .15s var(--bz-spring)}
+.gdlg-cancel,.gdlg-ok{height:36px;padding:0 18px;border-radius:var(--bz-ctl-r);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s var(--bz-ease),border-color .15s var(--bz-ease),box-shadow .15s var(--bz-ease),transform .15s var(--bz-spring)}
 .gdlg-cancel{border:1px solid var(--glass-field-line);background:var(--glass-field);color:var(--bz-ink-2);box-shadow:inset 0 1px 1px rgba(255,255,255,.8)}
 .gdlg-cancel:hover{background:rgba(255,255,255,.8);color:var(--bz-ink)}
 .gdlg-ok{border:none;background:var(--btn);color:#fff;box-shadow:0 1px 2px rgba(61,105,22,.25),inset 0 1px 0 rgba(255,255,255,.14)}
@@ -1042,17 +1042,16 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .pf-modal{width:90%;max-width:480px;max-height:calc(100vh - 32px);overflow-y:auto;padding:30px 32px 26px;border-radius:24px;background:rgba(255,255,255,.72);box-shadow:var(--glass-glow),0 2px 6px rgba(26,42,10,.08),0 24px 60px rgba(26,42,10,.22);animation:bzPop .22s var(--bz-spring)}
 .pf-head{display:flex;align-items:center;margin-bottom:22px}
 .pf-title{flex:1;font-size:20px;font-weight:600;letter-spacing:-.02em;color:var(--bz-ink)}
-.pf-close{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;border:1px solid var(--glass-field-line);background:var(--glass-field);color:var(--bz-ink-2);cursor:pointer;box-shadow:inset 0 1px 1px rgba(255,255,255,.8);transition:background .15s var(--bz-ease),color .15s var(--bz-ease),transform .15s var(--bz-spring)}
+.pf-close{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:var(--bz-ctl-r);border:1px solid var(--glass-field-line);background:var(--glass-field);color:var(--bz-ink-2);cursor:pointer;box-shadow:inset 0 1px 1px rgba(255,255,255,.8);transition:background .15s var(--bz-ease),color .15s var(--bz-ease),transform .15s var(--bz-spring)}
 .pf-close svg{stroke:currentColor}
 .pf-close:hover{background:rgba(255,255,255,.85);color:var(--bz-ink)}
 .pf-close:active{transform:scale(.92)}
 .pf-close:focus-visible{outline:2px solid var(--gm-400);outline-offset:2px}
-.pf-modal .fi{background:var(--glass-field);border-color:var(--glass-field-line);border-radius:10px;box-shadow:inset 0 1px 2px rgba(26,42,10,.05)}
+.pf-modal .fi{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 2px rgba(26,42,10,.05)}
 .pf-modal .fi:hover{background:rgba(255,255,255,.62);border-color:#fff}
 .pf-modal .fi:focus{background:rgba(255,255,255,.8);border-color:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.18)}
-.pf-modal .bgh{background:var(--glass-field);border-color:var(--glass-field-line);border-radius:999px;box-shadow:inset 0 1px 1px rgba(255,255,255,.8)}
+.pf-modal .bgh{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 1px rgba(255,255,255,.8)}
 .pf-modal .bgh:hover{background:rgba(255,255,255,.8);border-color:#fff}
-.pf-modal .bp{border-radius:999px}
 .pf-modal .pf-photo-hint{color:var(--bz-mute)}
 .pf-avatar{box-shadow:0 0 0 3px rgba(255,255,255,.7),0 6px 18px rgba(26,42,10,.14)}
 .pf-error{margin-top:14px;padding:10px 14px;border-radius:12px;background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.25);color:var(--red);font-size:13px}
@@ -1063,11 +1062,11 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
   background:linear-gradient(135deg,rgba(226,232,196,.42) 0%,rgba(214,222,214,.32) 50%,rgba(200,211,226,.42) 100%);
   -webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);
   box-shadow:inset 0 1px 1px rgba(255,255,255,.9),inset 0 0 18px rgba(255,255,255,.3),0 1px 2px rgba(26,42,10,.05),0 6px 18px rgba(26,42,10,.06)}
-.fp-f select,.fp-f input{border-radius:10px;border-color:rgba(255,255,255,.85);background-color:rgba(255,255,255,.62);box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 1px 2px rgba(26,42,10,.05);transition:background-color .15s var(--bz-ease),border-color .15s var(--bz-ease),box-shadow .15s var(--bz-ease)}
+.fp-f select,.fp-f input{border-color:rgba(255,255,255,.85);background-color:rgba(255,255,255,.62);box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 1px 2px rgba(26,42,10,.05);transition:background-color .15s var(--bz-ease),border-color .15s var(--bz-ease),box-shadow .15s var(--bz-ease)}
 .fp-f select:hover,.fp-f input:hover{background-color:rgba(255,255,255,.8);border-color:#fff}
 .fp-f select:focus,.fp-f input:focus{background-color:rgba(255,255,255,.9);border-color:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.18)}
 .fp-f select:focus-visible,.fp-f input:focus-visible{outline:none}
-.fp-clear{border-radius:999px;padding:0 14px}
+.fp-clear{padding:0 14px}
 .fp-clear:hover{background:rgba(255,255,255,.6);box-shadow:inset 0 1px 1px rgba(255,255,255,.9)}
 .fp-clear:active{background:rgba(255,255,255,.8)}
 /* Toasts: a glass pill floating over the page. They mostly land on the white panel, where a clear glass would
@@ -1098,7 +1097,7 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .ps-card:hover .ps-go{transform:translateX(3px);stroke:var(--bz-ink)}
 .ps-name{font-size:14px;font-weight:600;color:var(--bz-ink)}
 .ps-desc{font-size:12.5px;line-height:1.5;color:var(--bz-mute);min-height:0}
-.ps-sys{margin-top:22px;height:34px;padding:0 14px;gap:7px;border-radius:999px;background:rgba(255,255,255,.3);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);border:1px solid rgba(255,255,255,.6);color:var(--bz-ink-2);font-size:13px;font-weight:500;box-shadow:0 1px 1px rgba(31,32,35,.03);transition:background .15s var(--bz-ease),border-color .15s var(--bz-ease),color .15s var(--bz-ease),transform .15s var(--bz-spring)}
+.ps-sys{margin-top:22px;height:34px;padding:0 14px;gap:7px;border-radius:var(--bz-ctl-r);background:rgba(255,255,255,.3);-webkit-backdrop-filter:blur(18px) saturate(1.6);backdrop-filter:blur(18px) saturate(1.6);border:1px solid rgba(255,255,255,.6);color:var(--bz-ink-2);font-size:13px;font-weight:500;box-shadow:0 1px 1px rgba(31,32,35,.03);transition:background .15s var(--bz-ease),border-color .15s var(--bz-ease),color .15s var(--bz-ease),transform .15s var(--bz-spring)}
 .ps-sys svg{stroke:currentColor}
 .ps-sys:hover{background:rgba(255,255,255,.5);border-color:rgba(255,255,255,.85);color:var(--bz-ink)}
 .ps-sys:active{background:var(--bz-press);transform:scale(.97)}
@@ -1118,7 +1117,7 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 /* Sign-in card */
 .login-card{border-radius:22px;padding:28px}
 .login-lbl{display:block;margin-bottom:8px;font-size:13px;font-weight:600;color:var(--bz-ink-2)}/* same as the other form labels: no all-caps */
-.login-in{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid var(--glass-field-line);background:var(--glass-field);color:var(--bz-ink);font-size:14px;outline:none;box-shadow:inset 0 1px 2px rgba(26,42,10,.05);transition:background .15s var(--bz-ease),border-color .15s var(--bz-ease),box-shadow .15s var(--bz-ease)}
+.login-in{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:var(--bz-ctl-r);border:1px solid var(--glass-field-line);background:var(--glass-field);color:var(--bz-ink);font-size:14px;outline:none;box-shadow:inset 0 1px 2px rgba(26,42,10,.05);transition:background .15s var(--bz-ease),border-color .15s var(--bz-ease),box-shadow .15s var(--bz-ease)}
 .login-in:hover{background:rgba(255,255,255,.62)}
 .login-in:focus{background:rgba(255,255,255,.78);border-color:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.18)}
 /* Chrome paints autofilled fields light blue; keep them glass (the fill is held off for good) */
