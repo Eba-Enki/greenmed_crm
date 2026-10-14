@@ -3065,11 +3065,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <BulkBtn icon="trash" danger badge={pickedFree.length} disabled={!pickedFree.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
       </BulkBar>
       {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={38}/><div className="empty-t">{tr("No customers yet")}</div></div></div>:(
-        <div className="tcard"><table className="dt">
-          <Cg w={[0.3,2,1.4,1.8,1,0.7,0.6]}/>
+        <div className="tcard"><table className="dt dt-fit">
           <thead><tr>
             <SelTh bulk={bulk}/>
-            <SortTh k="company" sort={sort} onSort={onSort}>{tr("Company")}</SortTh>
+            <SortTh k="company" sort={sort} onSort={onSort} className="fit-grow">{tr("Company")}</SortTh>
             <SortTh k="contact" sort={sort} onSort={onSort}>{tr("Contact")}</SortTh>
             <SortTh k="email" sort={sort} onSort={onSort}>{tr("Email")}</SortTh>
             <SortTh k="phone" sort={sort} onSort={onSort}>{tr("Phone")}</SortTh>
@@ -3078,10 +3077,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </tr></thead>
           <tbody>{f.slice((pg-1)*ps,pg*ps).map(c=><tr key={c.id} className={bulk.has(c.id)?'is-sel':''}>
             <SelTd bulk={bulk} id={c.id}/>
-            <td style={{fontWeight:500}}>{c.company||'—'}</td>
-            <td>{c.contact||'—'}</td>
-            <td>{c.email?<a href={`mailto:${c.email}`} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
-            <td style={{color:'var(--g600)'}}>{c.phone||'—'}</td>
+            <td className="fit-grow" style={{fontWeight:500}}>{c.company||'—'}</td>
+            <td><span className="fit-cut fc-name" title={c.contact||undefined}>{c.contact||'—'}</span></td>
+            <td>{c.email?<a href={`mailto:${c.email}`} className="fit-cut fc-mail" title={c.email} style={{color:'var(--blue)',textDecoration:'none'}}>{c.email}</a>:'—'}</td>
+            <td style={{color:'var(--g600)'}}><span className="fit-cut fc-tel" title={c.phone||undefined}>{c.phone||'—'}</span></td>
             <td style={{color:'var(--g600)',fontSize:12}}>{typeLabel(c)}{c.groupCompany&&(c.type==='supplier'||c.type==='both')&&<span className="mt-tag ok" style={{marginLeft:6}}>{tr("Group")}</span>}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(c);go('cust_form');}}><Ico n="edit"/></button>
