@@ -200,7 +200,7 @@ const I18N_TR={
   'Click a row to see all its sale and purchase prices.':'Tüm satış ve alış fiyatlarını görmek için satıra tıklayın.',
   'Last sale':'Son satış','Last purchase':'Son alış','Lowest purchase':'En düşük alış','Purchase prices':'Alış fiyatları','Sale prices':'Satış fiyatları',
   'Similar products':'Benzer ürünler','No purchase price yet':'Henüz alış fiyatı yok','No sale price yet':'Henüz satış fiyatı yok','No product code':'Ürün kodu yok',
-  'Product':'Ürün','Purchase':'Alış','Customer / Supplier':'Müşteri / Tedarikçi','lowest':'en düşük',
+  'Product':'Ürün','Purchase':'Alış','Customer / Supplier':'Müşteri / Tedarikçi','lowest':'en düşük','previous: {0}':'önceki: {0}',
   "Similar descriptions — they may not be the same product, so they never set the pool's purchase price.":'Benzer açıklamalar — aynı ürün olmayabilir, bu yüzden havuzdaki alış fiyatını hiçbir zaman belirlemez.',
   'Purchase Price (£)':'Alış Fiyatı (£)','Save Price':'Fiyatı Kaydet',
 

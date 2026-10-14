@@ -307,9 +307,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   };
 
   // ── PRICE RECORDS ──
-  // Every priced sale and purchase line, for a product's price history: sent quotation revisions (a revision only
-  // when the line's price changed), issued sales invoices, received quotes, purchase orders and received invoices.
-  const BUY_RANK={ri:4,po:3,pq:2,manual:1}; // on the same date the firmest price wins
+  // Every priced quotation line, for a product's price history: sent quotations, once each with their current
+  // revision (the prices of the revisions it replaced ride along in prev), and received quotes. Orders and invoices
+  // repeat a quote's price, so they stay out.
+  const BUY_RANK={pq:2,manual:1}; // on the same date a supplier's quote wins over a price entered by hand
   const priceRecords=(()=>{
     const out=[];
     const add=(side,kind,doc,it,extra)=>{
@@ -322,26 +323,31 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const groups={};
     salesQuotes.filter(q=>q.status!=='draft').forEach(q=>{const b=sqBaseOf(q);(groups[b]=groups[b]||[]).push(q);});
     Object.values(groups).forEach(revs=>{
-      const last={};
-      [...revs].sort((a,b)=>(a.rev||0)-(b.rev||0)).forEach(q=>(q.items||[]).forEach(it=>{
-        const k=sqItemKey(it),sig=(q.currency||'GBP')+' '+(+it.price);
-        if(last[k]===sig)return;
-        last[k]=sig;
-        add('sale','sq',q,it,{party:client(q)});
-      }));
+      const sorted=[...revs].sort((a,b)=>(a.rev||0)-(b.rev||0)),q=sorted[sorted.length-1];
+      (q.items||[]).forEach(it=>{
+        const k=sqItemKey(it),prev=[];
+        sorted.slice(0,-1).forEach(o=>{
+          const x=(o.items||[]).find(i=>sqItemKey(i)===k),cur=o.currency||'GBP';
+          const last=prev[prev.length-1];
+          if(x&&+x.price>0&&!(last&&last.price===+x.price&&last.currency===cur))prev.push({price:+x.price,currency:cur});
+        });
+        const now=prev[prev.length-1];
+        if(now&&now.price===+it.price&&now.currency===(q.currency||'GBP'))prev.pop(); // the same price as now
+        add('sale','sq',q,it,{party:client(q),prev});
+      });
     });
-    salesInvoices.filter(d=>d.status!=='draft').forEach(d=>(d.items||[]).forEach(it=>add('sale','si',d,it,{party:client(d)})));
-    [['pq',purchaseQuotes],['po',purchaseOrders],['ri',receivedInvoices]].forEach(([kind,list])=>list.forEach(d=>(d.items||[])
-      .forEach(it=>add('buy',kind,d,it,{party:d.supplierCompany||d.supplier||'',sqBase:d.sqBase||'',sqKey:it.sqKey||''}))));
+    purchaseQuotes.forEach(d=>(d.items||[])
+      .forEach(it=>add('buy','pq',d,it,{party:d.supplierCompany||d.supplier||'',sqBase:d.sqBase||'',sqKey:it.sqKey||''})));
     return out;
   })();
-  const newestFirst=(a,b)=>(b.date||'').localeCompare(a.date||'')||(BUY_RANK[b.kind]||0)-(BUY_RANK[a.kind]||0);
+  const newestFirst=(a,b)=>(b.date||'').localeCompare(a.date||'')||(BUY_RANK[b.kind]||0)-(BUY_RANK[a.kind]||0)
+    ||(b.number||'').localeCompare(a.number||'');
 
   // ── PRODUCT POOL ──
   // Price memory for later quotations: one row per quotation line across its revisions (quote group + line key), always
   // showing the latest revision; a quotation enters the pool once any revision has been sent, so a revision never adds
-  // a second row. A row's records are the price records of the same product plus the supplier lines matched to it by
-  // hand; its purchase price is the newest of those purchases or of the prices entered by hand (ops_pp, keyed like the
+  // a second row. A row's records are the price records of the same product plus the received quote lines matched to it
+  // by hand; its purchase price is the newest of those quotes or of the prices entered by hand (ops_pp, keyed like the
   // row so it survives revisions, dated when entered). Approximate costs are preliminary work and never a price source.
   const poolKey=(base,it)=>base+'|'+sqItemKey(it);
   const manualPP=v=>{
@@ -2605,7 +2611,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   }
 
   // Product Pool
-  const PRICE_KIND={sq:'Sales Quotation',si:'Sales Invoice',pq:'Received Quote',po:'Purchase Order',ri:'Received Invoice',manual:'Entered by hand'};
+  const PRICE_KIND={sq:'Sales Quotation',pq:'Received Quote',manual:'Entered by hand'};
   const money=(v,c)=>(CURR[c]||(c?c+' ':''))+fmt(+(v||0));
 
   // One product's prices from every document, newest first; similar products are listed apart and never set a price
@@ -2618,7 +2624,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const curs=[...new Set(row.records.map(r=>r.currency))];
     const lowest={};
     buys.forEach(r=>{if(!lowest[r.currency]||r.price<lowest[r.currency].price)lowest[r.currency]=r;});
-    const DOCS={sq:[salesQuotes,'sales_quote',FULL_BANK],si:[salesInvoices,'invoice',FULL_BANK],pq:[purchaseQuotes,'quote',SALES_PDF],po:[purchaseOrders,'po',SALES_PDF],ri:[receivedInvoices,'invoice',SALES_PDF]};
+    const DOCS={sq:[salesQuotes,'sales_quote',FULL_BANK],pq:[purchaseQuotes,'quote',SALES_PDF]};
     const openDoc=r=>{const[list,docType,pdfOpts]=DOCS[r.kind];const doc=list.find(d=>d.id===r.docId);if(doc)setDocView({doc,docType,pdfOpts,buy:r.side==='buy'});};
     const list=tab==='sale'?sales:tab==='buy'?buys:similar;
     const stat=(label,r)=><div><div className="ph-stat-l">{label}</div>
@@ -2668,6 +2674,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <td className="tar" style={{fontWeight:600}}>
                     {tab==='buy'&&lowest[r.currency]===r&&buys.filter(x=>x.currency===r.currency).length>1&&<span className="mt-tag ok" style={{marginRight:6}}>{tr("lowest")}</span>}
                     {money(r.price,r.currency)}
+                    {r.prev&&r.prev.length>0&&<div className="ph-prev">{tr("previous: {0}",r.prev.map(x=>money(x.price,x.currency)).join(' · '))}</div>}
                   </td>
                 </tr>)}</tbody>
               </table></div>
