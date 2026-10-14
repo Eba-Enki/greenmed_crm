@@ -610,7 +610,7 @@ const savePDF=async(doc,co,type='invoice',opts)=>{
     const filename=`${type}_${doc.number||'draft'}_${td()}.pdf`;
     pdf.save(filename);
   }catch(e){
-    alert('PDF could not be generated: '+e.message);
+    uiAlert('PDF could not be generated: '+e.message);
     console.error('PDF generation failed:',e);
   }
 };
@@ -635,7 +635,7 @@ const downloadPDFZip=async(docs,co,type,opts,zipName,onProgress)=>{
     setTimeout(()=>URL.revokeObjectURL(a.href),10000);
     return true;
   }catch(e){
-    alert('PDF could not be generated: '+e.message);
+    uiAlert('PDF could not be generated: '+e.message);
     console.error('PDF ZIP failed:',e);
     return false;
   }
@@ -661,7 +661,7 @@ const downloadFilesZip=async(files,zipName)=>{
     setTimeout(()=>URL.revokeObjectURL(a.href),10000);
     return true;
   }catch(e){
-    alert('ZIP could not be created: '+e.message);
+    uiAlert('ZIP could not be created: '+e.message);
     console.error('ZIP failed:',e);
     return false;
   }

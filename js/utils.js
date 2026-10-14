@@ -399,7 +399,7 @@ const ensurePDF=()=>Promise.all([
   typeof ARIAL_REGULAR_BASE64!=='undefined'?null:loadScript(LAZY_SRC.fonts),
 ]);
 const ensureZIP=()=>window.JSZip?Promise.resolve():loadScript(LAZY_SRC.jszip);
-const libLoadFailed=()=>alert(tr('A required component could not be loaded. Check your internet connection and try again.'));
+const libLoadFailed=()=>uiAlert(tr('A required component could not be loaded. Check your internet connection and try again.'));
 
 // Logo stored separately (raw, no JSON) to avoid quota issues with large base64
 const LOGO_KEY='gm_logo';
@@ -727,7 +727,7 @@ function GlobalConfirmDialog(){
   useEffect(()=>{
     window.__askGlobalConfirm=(msg,opts={})=>new Promise(resolve=>{
       window.__globalConfirmResolve=resolve;
-      setState({msg,confirmLabel:opts.confirmLabel||tr('Leave without saving'),cancelLabel:opts.cancelLabel||tr('Cancel')});
+      setState({msg,alert:!!opts.alert,confirmLabel:opts.confirmLabel||(opts.alert?tr('OK'):tr('Leave without saving')),cancelLabel:opts.cancelLabel||tr('Cancel')});
     });
   },[]);
   useEscape(()=>{setState(null);const r=window.__globalConfirmResolve;window.__globalConfirmResolve=null;r&&r(false);},!!state);
@@ -739,12 +739,12 @@ function GlobalConfirmDialog(){
     resolve&&resolve(result);
   };
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:99999,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>close(false)}>
-      <div style={{background:'#fff',borderRadius:12,padding:'28px 32px',minWidth:320,maxWidth:440,boxShadow:'0 8px 40px rgba(0,0,0,.18)',display:'flex',flexDirection:'column',gap:20}} onClick={e=>e.stopPropagation()}>
-        <p style={{margin:0,fontSize:14.5,lineHeight:1.6,color:'var(--g700)',fontWeight:500}}>{state.msg}</p>
-        <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-          <button style={{padding:'7px 20px',borderRadius:7,border:'1.5px solid var(--g200)',background:'#fff',color:'var(--g600)',fontSize:13,fontWeight:500,cursor:'pointer'}} onClick={()=>close(false)}>{state.cancelLabel}</button>
-          <button style={{padding:'7px 20px',borderRadius:7,border:'none',background:'var(--gm-600)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={()=>close(true)}>{state.confirmLabel}</button>
+    <div className="gdlg-bg" style={{zIndex:99999}} onClick={()=>close(false)}>
+      <div className="glass gdlg" role="alertdialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+        <p className="gdlg-msg">{state.msg}</p>
+        <div className="gdlg-btns">
+          {!state.alert&&<button className="gdlg-cancel" onClick={()=>close(false)}>{state.cancelLabel}</button>}
+          <button className="gdlg-ok" onClick={()=>close(true)} autoFocus={state.alert}>{state.confirmLabel}</button>
         </div>
       </div>
     </div>
@@ -758,6 +758,9 @@ function GlobalConfirmDialog(){
 })();
 const askGlobalConfirm=(msg,opts)=>window.__askGlobalConfirm(msg,opts);
 const askUnsaved=()=>askGlobalConfirm(tr('You have unsaved changes. Leave without saving?'));
+// In-app replacement for the browser's alert(): same glass dialog with a single OK button. Falls back to the
+// native one if the dialog has not mounted (e.g. the page failed to start).
+const uiAlert=msg=>window.__askGlobalConfirm?askGlobalConfirm(String(msg),{alert:true}):(alert(msg),Promise.resolve(true));
 // Case-insensitive "does this name already exist" check — "Acme Ltd" and "ACME LTD" read as
 // the same record to a person, so callers use this to warn before quietly creating a near-duplicate.
 const findCaseInsensitiveDup=(list,field,value,excludeId)=>{

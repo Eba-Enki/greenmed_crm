@@ -84,8 +84,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     const idx=list.findIndex(c=>c.id===rest.id);
     setter(idx>=0?list.map((c,i)=>i===idx?rest:c):[...list,{...rest,id:rest.id||uid()}]);
   };
-  const deleteCategory=(direction,id,hasChildren)=>{
-    if(hasChildren&&!confirm(tr('Delete this category and its sub-categories?')))return;
+  const deleteCategory=async(direction,id,hasChildren)=>{
+    if(hasChildren&&!(await askGlobalConfirm(tr('Delete this category and its sub-categories?'),{confirmLabel:tr('Delete')})))return;
     const list=direction==='in'?incomeCats:expCats;
     const setter=direction==='in'?sIncomeCats:sExpCats;
     setter(list.filter(c=>c.id!==id&&c.parentId!==id));
@@ -101,8 +101,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     const newCo={...co,banks:next};
     setCo(newCo);LS.set(ns+'co',newCo);
   };
-  const deleteBank=(id)=>{
-    if(!confirm(tr('Delete this bank account? Its transactions will also be deleted.')))return;
+  const deleteBank=async(id)=>{
+    if(!(await askGlobalConfirm(tr('Delete this bank account? Its transactions will also be deleted.'),{confirmLabel:tr('Delete')})))return;
     const newCo={...co,banks:(co.banks||[]).filter(b=>b.id!==id)};
     setCo(newCo);LS.set(ns+'co',newCo);
     sBankTx(bankTx.filter(t=>t.accountId!==id));
@@ -153,22 +153,22 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     showToast(tr('Saved ✓'));
     go(prev);
   };
-  const handleDeleteBankTx=(t)=>{
+  const handleDeleteBankTx=async(t)=>{
     if(t.fx){
       // Both legs of a currency exchange go together, so balances never end up one-sided
-      if(!confirm(tr('Delete this currency exchange? It is removed from both accounts.')))return;
+      if(!(await askGlobalConfirm(tr('Delete this currency exchange? It is removed from both accounts.'),{confirmLabel:tr('Delete')})))return;
       sBankTx(bankTx.filter(x=>!(x.fx&&x.fx.id===t.fx.id)));
       showToast(tr('Deleted'));
       return;
     }
     if(t.xpay){
-      if(!confirm(tr('Delete this payment? Its fee row is removed too.')))return;
+      if(!(await askGlobalConfirm(tr('Delete this payment? Its fee row is removed too.'),{confirmLabel:tr('Delete')})))return;
       const pay=bankTx.find(x=>x.xpay&&x.xpay.id===t.xpay.id&&x.xpayLeg==='pay');
       const next=bankTx.filter(x=>!(x.xpay&&x.xpay.id===t.xpay.id));
       sBankTx(next);syncDocStatuses(next,pay?txAllocs(pay):[]);showToast(tr('Deleted'));
       return;
     }
-    if(!confirm(tr('Delete this transaction?')))return;
+    if(!(await askGlobalConfirm(tr('Delete this transaction?'),{confirmLabel:tr('Delete')})))return;
     const next=bankTx.filter(x=>x.id!==t.id);
     sBankTx(next);
     syncDocStatuses(next,txAllocs(t));
@@ -235,9 +235,9 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
   const handleSave=docIn=>{
     const doc={...docIn,number:(docIn.number||'').trim()};
     if(doc.type!=='received'){
-      if(!doc.number){alert(tr('Enter a document number.'));return;}
+      if(!doc.number){uiAlert(tr('Enter a document number.'));return;}
       const dup=docsOfType(doc.type).find(d=>d.id!==doc.id&&(d.number||'').trim().toLowerCase()===doc.number.toLowerCase());
-      if(dup){alert(tr("Number \"{0}\" is already used by another {1}. Enter a different number.", doc.number, doc.type==='po'?tr('purchase order'):doc.type));return;}
+      if(dup){uiAlert(tr("Number \"{0}\" is already used by another {1}. Enter a different number.", doc.number, doc.type==='po'?tr('purchase order'):doc.type));return;}
     }
     const fresh=!doc.id;const saved=fresh?{...doc,id:uid()}:doc;
     if(doc.type==='invoice')si(fresh?[...inv,saved]:inv.map(d=>d.id===saved.id?saved:d));
@@ -249,8 +249,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     showToast(tr('Saved ✓'));
     go(doc.type==='invoice'?'off_invoices':doc.type==='po'?'off_pos':doc.type==='received'?'off_received':'off_quotes');
   };
-  const handleDel=doc=>{
-    if(!confirm(tr("Delete {0}?", doc.number||doc.supplier)))return false;
+  const handleDel=async doc=>{
+    if(!(await askGlobalConfirm(tr("Delete {0}?", doc.number||doc.supplier),{confirmLabel:tr('Delete')})))return false;
     if(doc.type==='invoice')si(inv.filter(d=>d.id!==doc.id));
     else if(doc.type==='quote')sq(quo.filter(d=>d.id!==doc.id));
     else if(doc.type==='po')sp(pos.filter(d=>d.id!==doc.id));
@@ -387,7 +387,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
             <Pagination total={filtered.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/>
           </div>
         )}
-        {quickView&&<DocQuickModal doc={quickView} co={co} docType={type} onClose={()=>setQuickView(null)} onEdit={()=>{setQuickView(null);setCur(quickView);go('off_form');}} onDelete={()=>{if(handleDel(quickView))setQuickView(null);}}/>}
+        {quickView&&<DocQuickModal doc={quickView} co={co} docType={type} onClose={()=>setQuickView(null)} onEdit={()=>{setQuickView(null);setCur(quickView);go('off_form');}} onDelete={()=>{handleDel(quickView).then(ok=>{if(ok)setQuickView(null);});}}/>}
       </div>
     );
   }
@@ -448,8 +448,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_pos'&&<S.OffListView type="po" items={pos}/>}
         {view==='off_received'&&<S.OffListView type="received" items={rec}/>}
         {view==='off_contact'&&customers.find(c=>c.id===selectedContactId)&&<OffContactStatement contact={customers.find(c=>c.id===selectedContactId)} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go('off_customers')} onEdit={c=>{setCur(c);go('off_custform');}}/>}
-        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>{if(!confirm(tr("Delete \"{0}\"?", c.company||c.contact)))return;sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));}}/>}
-        {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>{if(!confirm(tr("Delete \"{0}\"?", p.name)))return;spr(projects.filter(d=>d.id!==p.id));showToast(tr('Deleted'));}}/>}
+        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>askGlobalConfirm(tr("Delete \"{0}\"?", c.company||c.contact),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));})}/>}
+        {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>askGlobalConfirm(tr("Delete \"{0}\"?", p.name),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;spr(projects.filter(d=>d.id!==p.id));showToast(tr('Deleted'));})}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
         {view==='off_cat_detail'&&categoryBrowse&&<CategoryTransactions categoryBrowse={categoryBrowse} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go(categoryBrowse.direction==='out'?'off_expenses':'off_incomes')} onEdit={t=>{const{account,...raw}=t;editTx(raw);}} onDelete={handleDeleteBankTx}/>}
@@ -910,7 +910,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
   const readImage=(e,typeRe,typeMsg,apply)=>{
     const f=e.target.files[0];e.target.value='';
     if(!f)return;
-    if(!typeRe.test(f.type)){alert(tr(typeMsg));return;}
+    if(!typeRe.test(f.type)){uiAlert(tr(typeMsg));return;}
     const r=new FileReader();r.onload=()=>apply(r.result);r.readAsDataURL(f);
   };
 
@@ -1321,18 +1321,18 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
   const setAllocAmt=(o,v)=>applyAllocs(list=>list.map(x=>x.type===docType&&x.id===o.d.id?{...x,amount:v}:x));
 
   const trySave=()=>{
-    if(!t.date){alert(tr('Enter a valid date.'));return;}
-    if(!(+t.amount>0)){alert(tr('Enter an amount.'));return;}
-    if(isNew&&kind!=='expense'&&!t.contactId){alert(tr("Select who the money {0}.", kind==='in'?tr('came from'):tr('went to')));return;}
-    if(kind==='expense'&&!t.category){alert(tr('Select an expense category.'));return;}
+    if(!t.date){uiAlert(tr('Enter a valid date.'));return;}
+    if(!(+t.amount>0)){uiAlert(tr('Enter an amount.'));return;}
+    if(isNew&&kind!=='expense'&&!t.contactId){uiAlert(tr("Select who the money {0}.", kind==='in'?tr('came from'):tr('went to')));return;}
+    if(kind==='expense'&&!t.category){uiAlert(tr('Select an expense category.'));return;}
     if(xmode){
-      if(!(+t.payAmount>0)||!(+t.rate>0)||+(t.fee||0)<0){alert(tr("Enter the amount in {0} and the FX rate (fee cannot be negative).", t.payCur));return;}
-      if(+(t.fee||0)>0&&!t.feeCategory){alert(tr('Select an expense category for the fee.'));return;}
+      if(!(+t.payAmount>0)||!(+t.rate>0)||+(t.fee||0)<0){uiAlert(tr("Enter the amount in {0} and the FX rate (fee cannot be negative).", t.payCur));return;}
+      if(+(t.fee||0)>0&&!t.feeCategory){uiAlert(tr('Select an expense category for the fee.'));return;}
     }
-    for(const o of openDocs){if(o.mine&&(!(+o.mine.amount>0)||+o.mine.amount>o.remaining+0.005)){alert(tr("Amount for {0} must be between 0 and its outstanding {1}.", o.d.number, curFmt(docCur,o.remaining)));return;}}
-    if(allocTotal>payTarget+0.005){alert(tr("The invoices total {0}, more than the payment of {1}.", curFmt(docCur,allocTotal), curFmt(docCur,payTarget)));return;}
+    for(const o of openDocs){if(o.mine&&(!(+o.mine.amount>0)||+o.mine.amount>o.remaining+0.005)){uiAlert(tr("Amount for {0} must be between 0 and its outstanding {1}.", o.d.number, curFmt(docCur,o.remaining)));return;}}
+    if(allocTotal>payTarget+0.005){uiAlert(tr("The invoices total {0}, more than the payment of {1}.", curFmt(docCur,allocTotal), curFmt(docCur,payTarget)));return;}
     if(account.openingBalanceDate&&t.date<account.openingBalanceDate){
-      alert(tr("This transaction is dated before the account's Opening Balance date ({0}). Pick a later date.", account.openingBalanceDate));
+      uiAlert(tr("This transaction is dated before the account's Opening Balance date ({0}). Pick a later date.", account.openingBalanceDate));
       return;
     }
     const allocations=kind==='expense'?[]:allocs.map(x=>({...x,amount:r2(+x.amount)}));
@@ -1451,13 +1451,13 @@ function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,dirtyRef})
   const accOpt=b=><option key={b.id} value={b.id}>{b.accountName||tr('Unnamed')} ({b.currency||tr('GBP')})</option>;
 
   const trySave=()=>{
-    if(!f.date){alert(tr('Enter a valid date.'));return;}
-    if(!from||!to){alert(tr('Select both accounts.'));return;}
-    if(from.id===to.id){alert(tr('Choose two different accounts.'));return;}
-    if(!(+f.sold>0)||!(+f.rate>0)||!(+f.received>0)||+(f.fee||0)<0){alert(tr('Enter the amount out, FX rate and amount in (fee cannot be negative).'));return;}
-    if(+(f.fee||0)>0&&!f.feeCategory){alert(tr('Select an expense category for the fee.'));return;}
+    if(!f.date){uiAlert(tr('Enter a valid date.'));return;}
+    if(!from||!to){uiAlert(tr('Select both accounts.'));return;}
+    if(from.id===to.id){uiAlert(tr('Choose two different accounts.'));return;}
+    if(!(+f.sold>0)||!(+f.rate>0)||!(+f.received>0)||+(f.fee||0)<0){uiAlert(tr('Enter the amount out, FX rate and amount in (fee cannot be negative).'));return;}
+    if(+(f.fee||0)>0&&!f.feeCategory){uiAlert(tr('Select an expense category for the fee.'));return;}
     const early=[from,to].find(b=>b.openingBalanceDate&&f.date<b.openingBalanceDate);
-    if(early){alert(tr("This exchange is dated before the Opening Balance date of {0} ({1}). Pick a later date.", early.accountName, early.openingBalanceDate));return;}
+    if(early){uiAlert(tr("This exchange is dated before the Opening Balance date of {0} ({1}). Pick a later date.", early.accountName, early.openingBalanceDate));return;}
     onSave(f);
   };
 

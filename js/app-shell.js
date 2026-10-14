@@ -388,11 +388,11 @@ function ProfileModal({session,onClose,onUpdate}){
   };
 
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center'}}>
-      <div style={{background:'#fff',borderRadius:14,padding:32,maxWidth:480,width:'90%',boxShadow:'0 20px 60px rgba(0,0,0,.2)'}}>
-        <div style={{display:'flex',alignItems:'center',marginBottom:24}}>
-          <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)',flex:1}}>{tr("Profile")}</h2>
-          <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',fontSize:22,color:'var(--g400)',lineHeight:1,padding:'0 4px'}}>×</button>
+    <div className="gdlg-bg" style={{zIndex:9000}}>
+      <div className="glass pf-modal" role="dialog" aria-modal="true" aria-label={tr("Profile")}>
+        <div className="pf-head">
+          <h2 className="pf-title">{tr("Profile")}</h2>
+          <button className="pf-close" onClick={onClose} aria-label={tr("Close")}><Ico n="x" size={16}/></button>
         </div>
         <div className="pf-photo">
           <Avatar className="pf-avatar" user={{avatar}} name={form.firstName||form.username}/>
@@ -413,7 +413,7 @@ function ProfileModal({session,onClose,onUpdate}){
           <Fld label={tr("New Password")}><input type="password" value={form.password} onChange={e=>s('password',e.target.value)} className="fi" placeholder={tr("Leave blank to keep current")} autoComplete="new-password"/></Fld>
           <Fld label={tr("Confirm Password")}><input type="password" value={form.confirmPassword} onChange={e=>s('confirmPassword',e.target.value)} className="fi" placeholder={tr("Confirm password")}/></Fld>
         </div>
-        {error&&<div style={{background:'rgba(192,57,43,.08)',border:'1.5px solid rgba(192,57,43,.3)',borderRadius:8,padding:'10px 14px',marginTop:14,color:'var(--red)',fontSize:13}}>{error}</div>}
+        {error&&<div className="pf-error" role="alert">{error}</div>}
         <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:20}}>
           <Btn v="bgh bsm" onClick={onClose}>{tr("Cancel")}</Btn>
           <Btn v="bp bsm" onClick={handleSave} disabled={saving}>{saving?tr('Saving...'):tr('Save')}</Btn>

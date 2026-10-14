@@ -764,7 +764,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
 
           if(!rows||rows.length===0){
-            alert(tr('No data found in file'));
+            uiAlert(tr('No data found in file'));
             return;
           }
 
@@ -772,7 +772,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           // so the sheet can freely include/omit Brand, Model, Category, Total, etc.
           const headerMap=rows[0].map(h=>IMPORT_HEADER_ALIASES(h));
           if(!headerMap.includes('desc')){
-            alert(tr('Could not find a "Description" column in the first row. Use "Download Template" to get the expected headers.'));
+            uiAlert(tr('Could not find a "Description" column in the first row. Use "Download Template" to get the expected headers.'));
             return;
           }
 
@@ -802,7 +802,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           }
 
           if(imported.length===0){
-            alert(tr('No valid items found'));
+            uiAlert(tr('No valid items found'));
             return;
           }
 
@@ -831,13 +831,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
         }catch(err){
           console.error('Import error:', err);
-          alert(tr('Import error: ')+err.message);
+          uiAlert(tr('Import error: ')+err.message);
         }
       };
 
       reader.onerror=(err)=>{
         console.error('File read error:', err);
-        alert(tr('Failed to read file'));
+        uiAlert(tr('Failed to read file'));
       };
 
       ensureXLSX().then(()=>{if(isCSV)reader.readAsText(file);else reader.readAsBinaryString(file);},libLoadFailed);
@@ -978,7 +978,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             </div>}
           </div>
         </div>
-        {importMsg&&<div style={{background:'var(--greenl)',color:'var(--green)',border:'1px solid rgba(61,105,22,.25)',borderRadius:7,padding:'7px 12px',fontSize:12,fontWeight:600,marginBottom:10}}>{importMsg}</div>}
+        {importMsg&&<div className="toast">{importMsg}</div>}
         <div className="iw">
           <table className="ie" style={{tableLayout:'auto'}}>
             <thead><tr>
@@ -1937,11 +1937,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           const wb=isCSV?XLSX.read(evt.target.result,{type:'string'}):XLSX.read(new Uint8Array(evt.target.result),{type:'array'});
           const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true});
           const res=ceReadSheet(rows,doc.rates||{});
-          if(res.error){alert(res.error);return;}
+          if(res.error){uiAlert(res.error);return;}
           setImp({file:file.name,...res});
-        }catch(err){console.error('Import error:',err);alert(tr('Import error: ')+err.message);}
+        }catch(err){console.error('Import error:',err);uiAlert(tr('Import error: ')+err.message);}
       };
-      reader.onerror=()=>alert(tr('Failed to read file'));
+      reader.onerror=()=>uiAlert(tr('Failed to read file'));
       ensureXLSX().then(()=>{if(isCSV)reader.readAsText(file);else reader.readAsArrayBuffer(file);},libLoadFailed);
     };
     const confirmImport=()=>{
@@ -2654,10 +2654,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           const wb=XLSX.read(evt.target.result,{type:isCSV?'string':'binary'});
           const ws=wb.Sheets[wb.SheetNames[0]];
           const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-          if(!raw||raw.length===0){alert(tr('No data found in file'));return;}
+          if(!raw||raw.length===0){uiAlert(tr('No data found in file'));return;}
           const headerMap=raw[0].map(h=>IMPORT_HEADER_ALIASES(h));
           if(!headerMap.includes('amount')&&!headerMap.includes('desc')){
-            alert(tr('Could not find Amount/Description columns in the first row. Use "Download Template" to get the expected headers.'));
+            uiAlert(tr('Could not find Amount/Description columns in the first row. Use "Download Template" to get the expected headers.'));
             return;
           }
           const parsed=[];
@@ -2690,14 +2690,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               _empUnmatched:!!obj.employee&&!empMatch,
             });
           }
-          if(parsed.length===0){alert(tr('No valid rows found'));return;}
+          if(parsed.length===0){uiAlert(tr('No valid rows found'));return;}
           setRows(parsed);
         }catch(err){
           console.error('Import error:',err);
-          alert(tr('Import error: ')+err.message);
+          uiAlert(tr('Import error: ')+err.message);
         }
       };
-      reader.onerror=()=>alert(tr('Failed to read file'));
+      reader.onerror=()=>uiAlert(tr('Failed to read file'));
       ensureXLSX().then(()=>{if(isCSV)reader.readAsText(file);else reader.readAsBinaryString(file);},libLoadFailed);
       ev.target.value='';
     };
@@ -2709,7 +2709,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const handleCommit=()=>{
       const toImport=rows.filter(r=>r._include);
       const invalid=toImport.filter(r=>!r.amount||isNaN(+r.amount)||+r.amount<=0);
-      if(invalid.length>0){alert(tr("{0} selected row(s) have a missing/invalid amount. Fix or uncheck them first.", invalid.length));return;}
+      if(invalid.length>0){uiAlert(tr("{0} selected row(s) have a missing/invalid amount. Fix or uncheck them first.", invalid.length));return;}
       const newExpenses=toImport.map(r=>({id:uid(),date:r.date||td(),employee:r.employee,category:r.category,description:r.description,reference:r.reference,amount:r.amount,currency:r.currency,project:r.project,notes:r.notes}));
       sExp([...expenses,...newExpenses]);
       showToast(tr("✓ {0} expenses imported", newExpenses.length));
@@ -3012,7 +3012,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const f=e.target.files[0];
       if(!f)return;
       if(!f.type.match(/^(application\/pdf|image\/jpeg|image\/jpg)$/)){
-        alert(tr('Please select a PDF or JPG file'));
+        uiAlert(tr('Please select a PDF or JPG file'));
         return;
       }
       const r=new FileReader();
@@ -3074,7 +3074,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const readImage=(e,typeRe,typeMsg,apply)=>{
       const f=e.target.files[0];e.target.value='';
       if(!f)return;
-      if(!typeRe.test(f.type)){alert(typeMsg);return;}
+      if(!typeRe.test(f.type)){uiAlert(typeMsg);return;}
       const r=new FileReader();r.onload=()=>apply(r.result);r.readAsDataURL(f);
     };
 
@@ -3391,12 +3391,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </React.Fragment>
       </div>
       {toast&&<div className="toast">{toast}</div>}
-      {confirmDlg&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setConfirmDlg(null)}>
-        <div style={{background:'#fff',borderRadius:12,padding:'28px 32px',minWidth:320,maxWidth:440,boxShadow:'0 8px 40px rgba(0,0,0,.18)',display:'flex',flexDirection:'column',gap:20}} onClick={e=>e.stopPropagation()}>
-          <p style={{margin:0,fontSize:14.5,lineHeight:1.6,color:'var(--g700)',fontWeight:500}}>{confirmDlg.msg}</p>
-          <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-            <button style={{padding:'7px 20px',borderRadius:7,border:'1.5px solid var(--g200)',background:'#fff',color:'var(--g600)',fontSize:13,fontWeight:500,cursor:'pointer'}} onClick={()=>setConfirmDlg(null)}>{tr("Cancel")}</button>
-            <button style={{padding:'7px 20px',borderRadius:7,border:'none',background:'var(--gm-600)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}} onClick={()=>{confirmDlg.onYes();setConfirmDlg(null);}}>{tr("Yes")}</button>
+      {confirmDlg&&<div className="gdlg-bg" style={{zIndex:9999}} onClick={()=>setConfirmDlg(null)}>
+        <div className="glass gdlg" role="alertdialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+          <p className="gdlg-msg">{confirmDlg.msg}</p>
+          <div className="gdlg-btns">
+            <button className="gdlg-cancel" onClick={()=>setConfirmDlg(null)}>{tr("Cancel")}</button>
+            <button className="gdlg-ok" onClick={()=>{confirmDlg.onYes();setConfirmDlg(null);}}>{tr("Yes")}</button>
           </div>
         </div>
       </div>}
@@ -3446,7 +3446,7 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
   const dateRef=useRef(null);
   const normExp=x=>({...x,description:toSentenceCase(x.description)});
   const handleSaveAndNew=()=>{
-    if(!e.amount){alert(tr('Amount is required'));return;}
+    if(!e.amount){uiAlert(tr('Amount is required'));return;}
     onSaveAndNew(normExp(e));
     const fresh=mkExpense();
     setE(fresh);

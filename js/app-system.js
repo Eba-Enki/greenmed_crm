@@ -20,7 +20,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
   // Sends the change to api/users.php; the server checks admin rights and hashes passwords.
   const callUsers=async(action,payload,okMsg)=>{
     try{setUsers(await usersApi(action,payload));showToast(okMsg);return true;}
-    catch(e){alert(e.message);return false;}
+    catch(e){uiAlert(e.message);return false;}
   };
 
   // ==========================
@@ -37,7 +37,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
       // Login matches usernames case-insensitively, so two accounts differing only by case
       // would be ambiguous at sign-in — block that outright rather than just warning.
       if(findCaseInsensitiveDup(users,'username',norm.username,norm.id)){
-        alert(tr("A user named \"{0}\" already exists. Usernames must be unique (case doesn't matter).", norm.username));
+        uiAlert(tr("A user named \"{0}\" already exists. Usernames must be unique (case doesn't matter).", norm.username));
         return;
       }
       onSave(norm);
@@ -178,12 +178,12 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
 
       {toast&&<div className="toast">{toast}</div>}
       {confirmDlg&&(
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center'}}>
-          <div style={{background:'#fff',borderRadius:12,padding:28,maxWidth:360,width:'90%',boxShadow:'0 8px 32px rgba(0,0,0,.18)'}}>
-            <p style={{fontSize:14,color:'var(--dk)',marginBottom:20,lineHeight:1.5}}>{confirmDlg.msg}</p>
-            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
-              <Btn v="bgh bsm" onClick={()=>setConfirmDlg(null)}>{tr("Cancel")}</Btn>
-              <Btn v="bgr bsm" onClick={()=>{confirmDlg.onYes();setConfirmDlg(null);}}>{tr("Yes, Delete")}</Btn>
+        <div className="gdlg-bg" style={{zIndex:9999}} onClick={()=>setConfirmDlg(null)}>
+          <div className="glass gdlg" role="alertdialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+            <p className="gdlg-msg">{confirmDlg.msg}</p>
+            <div className="gdlg-btns">
+              <button className="gdlg-cancel" onClick={()=>setConfirmDlg(null)}>{tr("Cancel")}</button>
+              <button className="gdlg-ok danger" onClick={()=>{confirmDlg.onYes();setConfirmDlg(null);}}>{tr("Yes, Delete")}</button>
             </div>
           </div>
         </div>
