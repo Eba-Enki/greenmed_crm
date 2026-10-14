@@ -1137,6 +1137,18 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .gmodal .fi:focus,.st-modal .fi:focus{background:rgba(255,255,255,.85);border-color:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.18)}
 .gmodal .bgh,.st-modal .bgh{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 1px rgba(255,255,255,.8)}
 .gmodal .bgh:hover,.st-modal .bgh:hover{background:rgba(255,255,255,.85);border-color:#fff}
+/* Form / detail header (FormHeader): the list header's look; the slot adds no box of its own so the header
+   sticks to the panel like the list header does */
+.fh-slot{display:contents}
+.fh .fh-back{margin-left:-4px}
+.fh-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.fh-title>span:first-child{min-width:0}
+.fh+.content,.fh-slot:not(:empty)+.content{padding-top:18px}
+.topbar.fh{padding-bottom:14px;border-bottom:1px solid var(--bz-line-2)}
+.crumb-link{all:unset;cursor:pointer;color:var(--bz-ink-2);border-radius:5px;padding:1px 4px;margin:-1px -4px;transition:background .14s var(--bz-ease),color .14s var(--bz-ease)}
+.crumb-link:hover{background:var(--bz-hover);color:var(--bz-ink)}
+.crumb-link:active{background:var(--bz-press)}
+.crumb-link:focus-visible{outline:2px solid var(--gm-400);outline-offset:1px}
 /* Full-page preview: a light row with the standard buttons (was a dark bar with small ghost buttons) */
 .pvbar{background:transparent;padding:16px 22px 0;gap:8px}
 /* Quick view: header and footer stay put, the body scrolls */

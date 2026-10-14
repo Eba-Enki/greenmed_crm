@@ -286,14 +286,11 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     dirtyCheckRef.current=_isDirty;
     return(
       <div className="content"><div className="fw">
-        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-          <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Back")}</button>
-          <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}", typeLabel):tr("New {0}", typeLabel)}</h2>
-          <div style={{flex:1}}/>
+        <FormHeader parent={({invoice:'off_invoices',quote:'off_quotes',po:'off_pos',received:'off_received'})[doc.type]} onBack={_handleCancel} title={<>{doc.id?tr("Edit {0}", typeLabel):tr("New {0}", typeLabel)}</>}>
           {onPreview&&<Btn v="bgh bsm" onClick={()=>onPreview(savedDoc)}><Ico n="eye"/>{tr("Preview")}</Btn>}
           <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,doc.type)}><Ico n="dl"/>{tr("PDF")}</Btn>
           <Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>{tr("Save {0}", typeLabel)}</Btn>
-        </div>
+        </FormHeader>
         <div className="fc"><div className="fct">{tr("Document Details")}</div>
           <div className="fg g3">
             <Fld label={tr("No")}><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={!isRec&&autoNumber} placeholder={!isRec&&!autoNumber?tr('Type the document number'):''} style={!isRec?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld>
@@ -452,6 +449,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
+        <div className="fh-slot"/>
         <React.Fragment key={navSeq}>
         {!['off_preview','off_form','off_custform','off_projform','off_bank_detail','off_banktx_form','off_fx_form','off_cat_detail','off_contact'].includes(view)&&(()=>{
           const offTitles={home:tr('Dashboard'),off_invoices:tr('Invoices'),off_quotes:tr('Quotations'),off_pos:tr('Purchase Orders'),off_received:tr('Received Invoices'),off_customers:tr('Contacts'),off_projects:tr('Projects'),off_expenses:tr('Expenses'),off_incomes:tr('Incomes'),off_bank:tr('Bank Accounts'),settings:tr('Settings')};
@@ -490,8 +488,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_bank_detail'&&selectedBank&&<OffBankLedger account={selectedBank} banks={co.banks||[]} transactions={bankTxForAccount} onBack={()=>go('off_bank')} onNew={()=>{setCur({id:null,accountId:selectedBank.id,date:td(),type:'in',amount:'',category:'',description:'',reference:'',linkedDoc:null});go('off_banktx_form');}}
           onExchange={()=>{setCur({id:null,date:td(),fromAccountId:selectedBank.id,toAccountId:((co.banks||[]).find(b=>b.id!==selectedBank.id)||{}).id||'',sold:'',rate:'',fee:'',feeCategory:'',received:'',reference:'',description:''});go('off_fx_form');}}
           onEdit={editTx} onDelete={handleDeleteBankTx}/>}
-        {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
-        {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} bankTx={bankTx} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} dirtyRef={dirtyCheckRef}/>}
+        {view==='off_fx_form'&&cur&&<OffFxForm fx={cur} banks={co.banks||[]} cats={expCats} accountBalance={accountBalance} onSave={handleSaveFx} onCancel={()=>go(prev)} onList={()=>goGuarded('off_bank')} dirtyRef={dirtyCheckRef}/>}
+        {view==='off_banktx_form'&&cur&&<OffBankTxForm tx={cur} account={(co.banks||[]).find(b=>b.id===cur.accountId)} cats={expCats} incomeCats={incomeCats} contacts={customers} bankTx={bankTx} invoices={inv} receivedInvoices={rec} onSave={handleSaveBankTx} onCancel={()=>go(prev)} onList={()=>goGuarded('off_bank')} dirtyRef={dirtyCheckRef}/>}
         {view==='settings'&&<OffSettings ns={ns} co={co} go={go} onAutoNumberChange={v=>{const newCo={...co,autoNumber:v};setCo(newCo);LS.set(ns+'co',newCo);showToast(v?tr('Automatic numbering on'):tr('Automatic numbering off — type numbers by hand'));}} setCur={setCur} cur={cur} showToast={showToast} banks={co.banks||[]} onAddBank={()=>setEditingBank({id:null,accountName:'',accountNumber:'',iban:'',bic:'',currency:'GBP',openingBalance:'',isDefault:false})} onEditBank={b=>setEditingBank(b)} onDeleteBank={deleteBank} onSetDefaultBank={setDefaultBank} onSave={d=>{const{logo,signature,...coWithoutLogoAndSig}=d;setLogo(logo||'');setSignature(signature||'');const merged={...d,banks:co.banks};setCo(merged);LS.set(ns+'co',{...coWithoutLogoAndSig,banks:co.banks});showToast(tr('Saved ✓'));go('home');}} onClose={()=>go('home')}/>}
         </React.Fragment>
       </div>
@@ -603,15 +601,10 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
   const exportRows=()=>exportExcel([['Date','Reference','Type','Description','Debit','Credit','Balance'],...rows.map(e=>[e.date,e.ref,kindLabel[e.kind],e.desc,e.amount>0?e.amount:'',e.amount<0?-e.amount:'',e.balance])],`statement-${name.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-${cur.toLowerCase()}`);
 
   return(<div className="content">
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap'}}>
-      <SidebarToggle className="sb-toggle-form"/><button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
-      <div style={{width:1,height:24,background:'var(--g200)'}}/>
-      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{name}</h2>
-      <span className="ct-type">{contactTypeLabel(c.type)}</span>
-      <div style={{flex:1}}/>
+    <FormHeader parent={'off_customers'} onBack={onBack} title={<>{name}</>} meta={<><span className="ct-type">{contactTypeLabel(c.type)}</span></>}>
       {rows.length>0&&<Btn v="bex bsm" onClick={exportRows}><Ico n="export"/>{tr("Export Statement")}</Btn>}
       <Btn v="bgh bsm" onClick={()=>onEdit(c)}><Ico n="edit"/>{tr("Edit Contact")}</Btn>
-    </div>
+    </FormHeader>
     {curs.length>1&&<div className="st-tabs" style={{marginBottom:14}}>{curs.map(k=><button key={k} className={`st-tab${k===cur?' active':''}`} onClick={()=>setCur(k)}>{k}</button>)}</div>}
     {entries.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{tr("No invoices or payments yet")}</div><div className="empty-s">{tr("Invoices in this name and bank transactions with this contact appear here")}</div></div></div>:(<>
       <div className="ct-cards">
@@ -747,7 +740,9 @@ function OffCustForm({cust:init,customers,onSave,onCancel,dirtyRef}){
     onSave(norm);
   };
   return(<div className="content"><div className="fw" style={{maxWidth:640}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Contact'):tr('New Contact')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+    <FormHeader parent={'off_customers'} onBack={_handleCancel} title={<>{c.id?tr('Edit Contact'):tr('New Contact')}</>}>
+      <Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn>
+    </FormHeader>
     <div className="fc"><div className="fct">{tr("Contact Info")}</div>
       <div className="fg g2"><Fld label={tr("Company / Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Contact Person")}><input value={c.contact||''} onChange={e=>s('contact',e.target.value)} className="fi" placeholder={tr("John Smith")}/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label={tr("Email")}><input type="email" value={c.email||''} onChange={e=>s('email',e.target.value)} className="fi"/></Fld><Fld label={tr("Phone")}><input value={c.phone||''} onChange={e=>s('phone',e.target.value)} className="fi"/></Fld></div>
@@ -806,7 +801,9 @@ function OffProjForm({proj:init,projects,onSave,onCancel,dirtyRef}){
     onSave(norm);
   };
   return(<div className="content"><div className="fw" style={{maxWidth:580}}>
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?tr('Edit Project'):tr('New Project')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+    <FormHeader parent={'off_projects'} onBack={_handleCancel} title={<>{p.id?tr('Edit Project'):tr('New Project')}</>}>
+      <Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn>
+    </FormHeader>
     <div className="fc"><div className="fct">{tr("Project Details")}</div>
       <div className="fg g2"><Fld label={tr("Name")}><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi" placeholder={tr("Project name")}/></Fld><Fld label={tr("Client")}><input value={p.client||''} onChange={e=>s('client',e.target.value)} className="fi" placeholder={tr("Client")}/></Fld></div>
       <div className="fg g2" style={{marginTop:12}}><Fld label={tr("Start Date")}><input type="date" value={p.startDate||''} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld><Fld label={tr("Status")}><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">{tr("Active")}</option><option value="completed">{tr("Completed")}</option><option value="on-hold">{tr("On Hold")}</option><option value="cancelled">{tr("Cancelled")}</option></select></Fld></div>
@@ -921,12 +918,7 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
   }),sort,{date:t=>t.date,no:t=>linkLabel(t)||t.reference,account:t=>t.account&&t.account.accountName,desc:t=>t.description,linked:linkLabel,amount:t=>+t.amount||0});
   const totalsByCurrency=filtered.reduce((acc,t)=>{const c=(t.account&&t.account.currency)||'GBP';acc[c]=(acc[c]||0)+(+t.amount||0);return acc;},{});
   return(<div className="content">
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <SidebarToggle className="sb-toggle-form"/><button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
-      <div style={{width:1,height:24,background:'var(--g200)'}}/>
-      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{mainName}</h2>
-      {filtered.length>0&&<span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{Object.entries(totalsByCurrency).map(([c,amt])=>`${CURR[c]||c}${fmt(amt)}`).join(' · ')}</span>}
-    </div>
+    <FormHeader parent={direction==='out'?'off_expenses':'off_incomes'} onBack={onBack} title={<>{mainName}</>} meta={<>{filtered.length>0&&<span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{Object.entries(totalsByCurrency).map(([c,amt])=>`${CURR[c]||c}${fmt(amt)}`).join(' · ')}</span>}</>}/>
     <ListTools q={q} onQ={setQ} placeholder={tr("Search description, reference, account...")} onExport={()=>exportExcel([['Date','Account','Description','Linked','Amount'],...filtered.map(t=>[t.date||'',(t.account&&t.account.accountName)||'',t.description||'',linkLabel(t)||'',+t.amount])],`${mainName.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-transactions`)}/>
     <div className="tcard"><table className="dt">
       <Cg w={[0.8,1.6,2.2,1,0.9,0.6]}/>
@@ -1237,15 +1229,10 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
     category:t=>isFx(t)?'Currency Exchange':t.category,linked:linkLabel,in:t=>t.type==='in'?+t.amount:0,out:t=>t.type==='out'?+t.amount:0,balance:t=>t.balance});
 
   return(<div className="content">
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <SidebarToggle className="sb-toggle-form"/><button onClick={onBack} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
-      <div style={{width:1,height:24,background:'var(--g200)'}}/>
-      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{account.accountName||tr('Bank Account')}</h2>
-      <span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{tr("Current: {0}{1}", curSym, fmt(running))}</span>
-      <div style={{flex:1}}/>
+    <FormHeader parent={'off_bank'} onBack={onBack} title={<>{account.accountName||tr('Bank Account')}</>} meta={<><span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{tr("Current: {0}{1}", curSym, fmt(running))}</span></>}>
       {(banks||[]).length>1&&<Btn v="bgh bsm" onClick={onExchange}><Ico n="convert"/>{tr("Exchange")}</Btn>}
       <Btn v="bp bsm" onClick={onNew}><Ico n="plus"/>{tr("New Transaction")}</Btn>
-    </div>
+    </FormHeader>
     <ListTools q={q} onQ={setQ} placeholder={tr("Search description, reference...")} active={[dateFrom,dateTo].filter(Boolean).length} onClear={()=>{setDateFrom('');setDateTo('');}}
       extra={filtered.length>0&&<span className="lt-note">{tr("In: {0}{1} · Out: {2}{3}", curSym, fmt(totalIn), curSym, fmt(totalOut))}</span>}
       onExport={()=>exportExcel([['Date','Contact','Description','Category','Linked','In','Out','Balance'],...filtered.map(t=>[t.date||'',t.contactName||'',isFx(t)?`${fxTitle(t)} (${fxDetail(t.fx)}; ${t.type==='out'?'received':'sold'} ${fxCounter(t)})`:isXpay(t)?`${t.description||''} (${xpayAmt(t)}; ${xpayDetail(t)})`:(t.description||''),isFx(t)?'Currency Exchange':(t.category||''),linkLabel(t)||'',t.type==='in'?+t.amount:'',t.type==='out'?+t.amount:'',t.balance])],`bank-${(account.accountName||'account').toLowerCase().replace(/[^a-z0-9]+/g,'-')}`)}>
@@ -1288,7 +1275,7 @@ const txKindOf=t=>t.kind||(t.type==='out'&&t.category&&!t.linkedDoc&&!t.contactI
 // Which contact relationships to list first for each kind
 const TX_CONTACT_ORDER={in:['customer','both','owner','supplier','employee','expense'],out:['supplier','both','employee','owner','customer','expense'],expense:['expense']};
 
-function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receivedInvoices,bankTx,onSave,onCancel,dirtyRef}){
+function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receivedInvoices,bankTx,onSave,onCancel,onList,dirtyRef}){
   // Cross-currency payment (e.g. GBP account → supplier paid in USD) is entered as on the statement:
   // amount the contact paid/received in their currency, FX rate (1 account currency = ? payment currency)
   // and the bank fee in the account currency. Saved as tx.xpay (see handleSaveBankTx).
@@ -1397,13 +1384,9 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
   const catSelect=(<select value={t.category||''} onChange={x=>s('category',x.target.value)} className="fi"><option value="">{kind==='expense'?tr('— Select —'):tr('— None —')}</option>{groupCats(catList).map(({main,children})=>children.length===0?<option key={main.id} value={main.name}>{main.name}</option>:<optgroup key={main.id} label={main.name}>{children.map(ch=><option key={ch.id} value={ch.name}>{ch.name}</option>)}</optgroup>)}</select>);
 
   return(<div className="content"><div className="fw">
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
-      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{t.id?tr('Edit Transaction'):tr('New Transaction')}</h2>
-      <span style={{fontSize:13,color:'var(--g500)'}}>{account.accountName||tr('Account')} · {curSym}</span>
-      <div style={{flex:1}}/>
+    <FormHeader parent={'off_bank'} onBack={_handleCancel} onList={onList} trail={account?[{label:account.accountName||tr('Bank Account'),onClick:_handleCancel}]:[]} title={<>{t.id?tr('Edit Transaction'):tr('New Transaction')}</>} meta={<><span style={{fontSize:13,color:'var(--g500)'}}>{account.accountName||tr('Account')} · {curSym}</span></>}>
       <Btn v="bp bsm" onClick={trySave}>{tr("Save")}</Btn>
-    </div>
+    </FormHeader>
     <div className="tx-kinds" role="radiogroup" aria-label={tr("Transaction type")}>
       {kinds.map(([k,label,hint])=>(
         <button key={k} type="button" role="radio" aria-checked={kind===k} className={`tx-kind tx-${k}${kind===k?' active':''}`} onClick={()=>setKind(k)}>
@@ -1475,7 +1458,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
 
 // Currency exchange between two bank accounts, entered from the bank statement:
 // amount out (source currency), FX rate, fee (target currency) and amount in (target currency).
-function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,dirtyRef}){
+function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,onList,dirtyRef}){
   // The fee is booked as an expense; preselect a "Bank Fee"/"Bank Charges" category when there is one
   const defaultFeeCat=((cats||[]).find(c=>/bank\s*(fee|charge)/i.test(c.name||''))||{}).name||'';
   const[f,setF]=useState(()=>({...init,feeCategory:init.feeCategory||defaultFeeCat}));
@@ -1514,12 +1497,9 @@ function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,dirtyRef})
   };
 
   return(<div className="content"><div className="fw">
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}>
-      <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
-      <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{init.id?tr('Edit Currency Exchange'):tr('Currency Exchange')}</h2>
-      <div style={{flex:1}}/>
+    <FormHeader parent={'off_bank'} onBack={_handleCancel} onList={onList} title={<>{init.id?tr('Edit Currency Exchange'):tr('Currency Exchange')}</>}>
       <Btn v="bp bsm" onClick={trySave}>{tr("Save")}</Btn>
-    </div>
+    </FormHeader>
     <div className="fc"><div className="fct">{tr("Accounts")}</div>
       <div className="fx-accounts">
         <Fld label={tr("From Account (money out)")}>

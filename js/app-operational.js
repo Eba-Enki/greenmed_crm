@@ -978,18 +978,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     };
     
     return(<div className="content"><div className="fw doc-fw">
-      <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
-        <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
-        <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)',letterSpacing:'-.3px'}}>
-          {q.id?tr('Edit Quotation'):tr('New Quotation')} — <span style={{fontFamily:'Inter',fontWeight:700,color:'var(--gm-500)'}}>{q.number}</span>
-          {q.rev>0&&<span className="rev-badge" style={{marginLeft:10}}>{tr("Revision {0}", q.rev)}</span>}
-        </h2>
-        <div style={{flex:1}}/>
+      <FormHeader parent={'sales_quotes'} onBack={_handleCancel} title={<>{q.id?tr('Edit Quotation'):tr('New Quotation')} — <span style={{fontFamily:'Inter',fontWeight:700,color:'var(--gm-500)'}}>{q.number}</span>
+          {q.rev>0&&<span className="rev-badge" style={{marginLeft:10}}>{tr("Revision {0}", q.rev)}</span>}</>}>
         <Btn v="bgh bsm" onClick={()=>{setCur({...savedQ});go('sales_quote_preview','sales_quote_form')}}><Ico n="eye"/>{tr("Preview")}</Btn>
         <Btn v="bgh bsm" onClick={()=>savePDF(savedQ,co,'sales_quote',FULL_BANK)}><Ico n="dl"/>{tr("PDF")}</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedQ)}>{tr("Save Quotation")}</Btn>
-      </div>
+      </FormHeader>
       {q.ce&&costEsts.some(d=>d.id===q.ce.id)&&<div className="mt-banner">{q.status==='draft'
         ?tr("From approximate cost {0}. Transferring it again replaces the items of this draft.",q.ce.number)
         :tr("From approximate cost {0}.",q.ce.number)}</div>}
@@ -1193,13 +1187,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
     return(<div className="content"><div className="fw doc-fw">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
-        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("{0} Sales Invoice —", inv.id?tr('Edit'):tr('New'))} <span style={{fontFamily:'Inter',fontWeight:600,color:'var(--gm-500)'}}>{inv.number}</span></h2>
-        <div style={{flex:1}}/>
+      <FormHeader parent={'sales_invoices'} onBack={_handleCancel} title={<>{tr("{0} Sales Invoice —", inv.id?tr('Edit'):tr('New'))} <span style={{fontFamily:'Inter',fontWeight:600,color:'var(--gm-500)'}}>{inv.number}</span></>}>
         <Btn v="bgh bsm" onClick={()=>savePDF(savedInv,co,'invoice',FULL_BANK)}><Ico n="dl"/>{tr("PDF")}</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedInv)}>{tr("Save Invoice")}</Btn>
-      </div>
+      </FormHeader>
       {inv.quoteNum&&<div style={{background:'var(--bluel)',border:'1px solid #bfdbfe',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--blue)',display:'flex',alignItems:'center',gap:8}}><Ico n="quote"/>{tr("From Quotation:")} <strong>{inv.quoteNum}</strong></div>}
       <div className="fc"><div className="fct">{tr("Invoice Details")}</div>
         <div className="fg g4">
@@ -1513,13 +1504,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {sqChoices.map(q=><option key={sqBaseOf(q)} value={sqBaseOf(q)}>{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</option>)}
     </select></Fld>;
     return(<div className="content"><div className="fw doc-fw">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
-        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}", lbl):tr("New {0}", lbl)}</h2>
-        <div style={{flex:1}}/>
+      <FormHeader parent={isPO?'purchase_orders':isRI?'received_invoices':'purchase_quotes'} onBack={_handleCancel} title={<>{doc.id?tr("Edit {0}", lbl):tr("New {0}", lbl)}</>}>
         <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,isPO?'po':isRI?'invoice':'quote',SALES_PDF)}><Ico n="dl"/>{tr("PDF")}</Btn>
         <Btn v="bp bsm" onClick={()=>onSave(savedDoc)}>{tr("Save {0}", lbl)}</Btn>
-      </div>
+      </FormHeader>
       {doc.pqNum&&<div style={{background:'var(--teall)',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--teal)'}}>{tr("From Purchase Quotation:")} <strong>{doc.pqNum}</strong></div>}
       {doc.poNum&&<div style={{background:'var(--teall)',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--teal)'}}>{tr("From Purchase Order:")} <strong>{doc.poNum}</strong></div>}
       <div className="fc"><div className="fct">{tr("Document Details")}</div>
@@ -1839,12 +1827,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const used=isQ&&(init.items||[]).filter(i=>srcLineState(i)==='quoted').map(i=>i.quotedIn&&i.quotedIn.number).filter((v,i,a)=>v&&a.indexOf(v)===i);
     const save=()=>{if(!(doc.number||'').trim()){showToast(isQ?tr('Enter the quote number'):tr('Enter the invoice number'));return;}onSave({...doc,number:doc.number.trim(),items});};
     return(<div className="content"><div className="fw doc-fw">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
-        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}</h2>
-        <div style={{flex:1}}/>
+      <FormHeader parent={isQ?'source_quotes':'source_invoices'} onBack={_handleCancel} title={<>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}</>}>
         <Btn v="bp bsm" onClick={save}>{tr("Save {0}",lbl)}</Btn>
-      </div>
+      </FormHeader>
       {used&&used.length>0&&<div className="mt-banner">{tr("Lines of this quote are used in {0}. Changes here are not copied there.",used.join(', '))}</div>}
       {!isQ&&doc.srcqNumber&&<div className="mt-banner">{tr("From sub-supplier quote {0}",doc.srcqNumber)}</div>}
       <div className="fc"><div className="fct">{tr("Document Details")}</div>
@@ -2123,16 +2108,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const colW=[...(locked?[]:[34]),34,280,110,110,100,64,68,104,80,80,80,104,116,150,...(locked?[]:[34])];
     const pin=locked?[0,34]:[34,68]; // left offsets of the pinned # and product name columns
     return(<div className="content"><div className="fw ce-fw">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
-        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}{doc.number&&<> — <span style={{color:'var(--gm-500)'}}>{doc.number}</span></>}</h2>
-        <CeBadge s={state}/>
-        <div style={{flex:1}}/>
+      <FormHeader parent={'cost_estimates'} onBack={_handleCancel} title={<>{doc.id?tr("Edit {0}",lbl):tr("New {0}",lbl)}{doc.number&&<> — <span style={{color:'var(--gm-500)'}}>{doc.number}</span></>}</>} meta={<><CeBadge s={state}/></>}>
         <Btn v="bgh bsm" onClick={()=>exportCostEst({...doc,items})}><Ico n="export"/>{tr("Export to Excel")}</Btn>
         {doc.id&&!locked&&<Btn v="bgh bsm" onClick={del}><Ico n="trash"/>{tr("Delete")}</Btn>}
         {!locked&&<Btn v="bex bsm" onClick={transfer}><Ico n="convert"/>{linked?tr("Update Quotation {0}",linked.number):tr("Transfer to Quotation")}</Btn>}
         {!locked&&<Btn v="bp bsm" onClick={()=>onSave({...doc,items})}>{tr("Save {0}",lbl)}</Btn>}
-      </div>
+      </FormHeader>
       {locked&&<div className="mt-banner">{tr("Transferred to {0}, which has been sent — this approximate cost can no longer be changed. Continue with revisions under Sales Quotations.",linked.number)}</div>}
       {state==='transferred'&&<div className="mt-banner">{tr("Transferred to the draft quotation {0}. After changing rates or items here, use \"Update Quotation\" to carry them over.",linked.number)}</div>}
       <div className="fc"><div className="fct">{tr("Details")}</div>
@@ -2473,11 +2454,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const visible=r=>(f.show!=='open'||!r.lines.length)&&(f.show!=='done'||r.lines.length)
       &&(!ql||[sqLineText(r.it),...r.lines.flatMap(({c,it})=>[c.lead.supplierCompany,it.desc,it.item,it.srcSupplier])].some(x=>(x||'').toLowerCase().includes(ql)));
     return(<div className="content">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={()=>go('proj_detail')} className="mt-back"><Ico n="back"/>{project.number||tr("Project")}</button>
-        <h2 style={{fontSize:17,fontWeight:700,color:'var(--g900)'}}>{tr("Item Matching")} — {project.name}</h2>
-        {total>0&&<span className={done===total?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",done,total)}</span>}
-      </div>
+      <FormHeader parent={'projects'} onBack={()=>go('proj_detail')} onList={()=>go('projects')} trail={[{label:project.number||project.name,onClick:()=>go('proj_detail')}]} title={<>{tr("Item Matching")} — {project.name}</>} meta={<>{total>0&&<span className={done===total?'mt-count ok':'mt-count'}>{tr("{0} / {1} matched",done,total)}</span>}</>}/>
       {groups.length===0?<div className="tcard"><div className="empty"><Ico n="link" size={36}/><div className="empty-t">{tr("No sales quotations in this project")}</div><div className="empty-s">{tr("Customer items appear here once a sales quotation is saved with this project.")}</div></div></div>:<>
       <div className="st-tabs" role="tablist" style={{marginBottom:14}}>
         {[['match',tr('Matching')],['chain',tr('Supply Chain & Margins')]].map(([k,l])=><button key={k} role="tab" aria-selected={tab===k} className={'st-tab'+(tab===k?' active':'')} onClick={()=>setFilter({tab:k})}>{l}</button>)}
@@ -2567,14 +2544,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const net=curTotals([...Object.entries(revenue),...Object.entries(poTotal).map(([c,v])=>[c,-v]),...Object.entries(expTotal).map(([c,v])=>[c,-v])]);
     const zero=CURR.GBP+fmt(0);
     return(<div className="content">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:20}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={()=>go('projects')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Projects")}</button>
-        <h2 style={{fontSize:17,fontWeight:700,color:'var(--g900)'}}>{project.number?`${project.number} — `:''}  {project.name}</h2>
-        <Badge s={project.status||'active'}/>
-        {(()=>{const m=projMatching(project.name);return <button className="mt-open" onClick={()=>{setCur(project);go('proj_matching');}}><Ico n="link"/>{tr("Item Matching")}{m.total>0&&<span className={m.done===m.total?'mt-count ok':'mt-count'}>{m.done}/{m.total}</span>}</button>;})()}
-        <div style={{flex:1}}/>
-        <button className="ab" onClick={()=>{setCur(project);go('proj_form');}}><Ico n="edit"/>{tr("Edit Project")}</button>
-      </div>
+      <FormHeader parent={'projects'} onBack={()=>go('projects')} title={<>{project.number?`${project.number} — `:''}  {project.name}</>} meta={<><Badge s={project.status||'active'}/>
+        {(()=>{const m=projMatching(project.name);return <button className="mt-open" onClick={()=>{setCur(project);go('proj_matching');}}><Ico n="link"/>{tr("Item Matching")}{m.total>0&&<span className={m.done===m.total?'mt-count ok':'mt-count'}>{m.done}/{m.total}</span>}</button>;})()}</>}>
+        <Btn v="bgh bsm" onClick={()=>{setCur(project);go('proj_form');}}><Ico n="edit"/>{tr("Edit Project")}</Btn>
+      </FormHeader>
       {/* Stats */}
       <div className="stats" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
         {[{lbl:tr('Revenue'),val:fmtCurTotals(revenue,zero),sub:tr("{0} invoices", pI.length),cls:'sc-green'},{lbl:tr('PO Costs'),val:fmtCurTotals(poTotal,zero),sub:tr("{0} orders", pPO.length),cls:'sc-blue'},{lbl:tr('Expenses'),val:fmtCurTotals(expTotal,zero),sub:tr("{0} items", pExp.length),cls:'sc-purple'},{lbl:tr('Net'),val:fmtCurTotals(net,zero),sub:tr('revenue - costs'),cls:Object.values(net).every(v=>v>=0)?'sc-teal':'sc-red'}].map(s=><div key={s.lbl} className={`stat-card ${s.cls}`}><div className="stat-val">{s.val}</div><div className="stat-lbl">{s.lbl}</div><div className="stat-sub">{s.sub}</div></div>)}
@@ -2611,7 +2584,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     };
     const custPick=customers.filter(c=>{const t=c.type||'customer';return t==='customer'||t==='both';});
     return(<div className="content"><div className="fw">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{p.id?tr('Edit Project'):tr('New Project')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+      <FormHeader parent={'projects'} onBack={_handleCancel} title={<>{p.id?tr('Edit Project'):tr('New Project')}</>}>
+        <Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn>
+      </FormHeader>
       <div className="fc"><div className="fct">{tr("Project Details")}</div>
         <div className="fg g-no-name"><Fld label={tr("Project No")}><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label={tr("Project Name")}><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
         <div className="fg g-2-1-1" style={{marginTop:12}}>
@@ -3002,14 +2977,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     ],'expense-import-template');
 
     return(<div className="content">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:5}}><Ico n="back"/>{tr("Back")}</button>
-        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("Import Expenses")}</h2>
-        <div style={{flex:1}}/>
+      <FormHeader parent={'expenses'} onBack={()=>go('expenses')} title={<>{tr("Import Expenses")}</>}>
         <Btn v="bgh bsm" onClick={downloadTemplate}><Ico n="dl"/>{tr("Download Template")}</Btn>
         <Btn v="bgh bsm" onClick={()=>fileRef.current&&fileRef.current.click()}><Ico n="upload"/>{tr("Choose File")}</Btn>
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}} onChange={handleFile}/>
-      </div>
+      </FormHeader>
 
       {!rows&&<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">{tr("No file selected yet")}</div><div className="empty-s">{tr("Download the template, fill it in, then choose the file to preview before importing.")}</div></div></div>}
 
@@ -3111,13 +3083,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const parentChoices=dlg?mains.filter(m=>m.id!==dlg.id):[];
     const canMove=dlg&&!(dlg.id&&subsOf(dlg.id).length);
     return(<div className="content"><div className="fw" style={{maxWidth:820}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}>
-        <SidebarToggle className="sb-toggle-form"/><button onClick={()=>go('expenses')} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button>
-        <h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{tr("Expense Categories")}</h2>
-        <div style={{flex:1}}/>
+      <FormHeader parent={'expenses'} onBack={()=>go('expenses')} title={<>{tr("Expense Categories")}</>}>
         {expCats.length>0&&<Btn v="bgh bsm" onClick={exportList}>{tr("Export to Excel")}</Btn>}
         <Btn v="bp bsm" onClick={()=>setDlg({code:'',name:'',parentId:null})}><Ico n="plus"/>{tr("New Main Category")}</Btn>
-      </div>
+      </FormHeader>
       {tree.length===0?<div className="tcard"><div className="empty"><Ico n="tag" size={38}/><div className="empty-t">{tr("No categories yet")}</div></div></div>:
       <div className="tcard"><table className="dt">
         <Cg w={[1,3,1,1.6]}/>
@@ -3235,7 +3204,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       onSave(norm);
     };
     return(<div className="content"><div className="fw">
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{c.id?tr('Edit Customer'):tr('New Customer')}</h2><div style={{flex:1}}/><Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn></div>
+      <FormHeader parent={'customers'} onBack={_handleCancel} title={<>{c.id?tr('Edit Customer'):tr('New Customer')}</>}>
+        <Btn v="bp bsm" onClick={handleSave}>{tr("Save")}</Btn>
+      </FormHeader>
       <div className="fc"><div className="fct">{tr("Customer Info")}</div>
         <div className="fg g-2-1"><Fld label={tr("Company Name *")}><input value={c.company||''} onChange={e=>s('company',e.target.value)} className="fi" placeholder={tr("Acme Ltd")} required/></Fld><Fld label={tr("Relationship")}><select value={c.type||'customer'} onChange={e=>s('type',e.target.value)} className="fi"><option value="customer">{tr("Customer")}</option><option value="supplier">{tr("Supplier")}</option><option value="both">{tr("Both")}</option><option value="source">{tr("Sub-supplier")}</option></select></Fld></div>
         {(c.type==='supplier'||c.type==='both')&&<label className="mt-check"><input type="checkbox" checked={!!c.groupCompany} onChange={e=>s('groupCompany',e.target.checked)}/><span><b>{tr("Group company")}</b> — {tr("our own company (e.g. Egefe): its purchase documents also record the sub-supplier, sub-supplier price and shipment")}</span></label>}
@@ -3671,8 +3642,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
+        <div className="fh-slot"/>
         <React.Fragment key={navSeq}>
-        {!['sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','source_quotes_form','source_invoices_form','cost_estimates_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
+        {!['sales_invoice_edit','received_invoice_form','proj_detail','proj_matching','sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','source_quotes_form','source_invoices_form','cost_estimates_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
           <PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={titles[view]||''}>
             {view==='cost_estimates'&&<Btn v="bp bsm" onClick={()=>{setCur(mkCostEst());go('cost_estimates_form');}}><Ico n="plus"/>{tr("New Approximate Cost")}</Btn>}
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
@@ -3796,7 +3768,9 @@ function ExpenseForm({exp:init,expCats,projects,mkExpense,onSave,onSaveAndNew,on
   const userNames=(LS.get('gm_users')||[]).map(u=>`${u.firstName||''} ${u.lastName||''}`.trim()||u.username).filter(Boolean);
   const employeeOptions=Array.from(new Set([...userNames,...(e.employee?[e.employee]:[])]));
   return(<div className="content"><div className="fw">
-    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:18,flexWrap:'wrap'}}><SidebarToggle className="sb-toggle-form"/><button onClick={_handleCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13}}><Ico n="back"/>{tr("Back")}</button><h2 style={{fontSize:16,fontWeight:700,color:'var(--g900)'}}>{e.id?tr('Edit Expense'):tr('New Expense')}</h2><div style={{flex:1}}/>{!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>{tr('Save & New')}</Btn>}<Btn v="bp bsm" onClick={()=>onSave(normExp(e))}>{tr("Save")}</Btn></div>
+    <FormHeader parent={'expenses'} onBack={_handleCancel} title={<>{e.id?tr('Edit Expense'):tr('New Expense')}</>}>
+      {!e.id&&<Btn v="bgh bsm" onClick={handleSaveAndNew}><Ico n="plus"/>{tr('Save & New')}</Btn>}<Btn v="bp bsm" onClick={()=>onSave(normExp(e))}>{tr("Save")}</Btn>
+    </FormHeader>
     <div className="fc"><div className="fct">{tr("Expense Details")}</div>
       <div className="fg g3"><Fld label={tr("Date")}><input ref={dateRef} type="date" value={e.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld><Fld label={tr("Amount")}><input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01"/></Fld><Fld label={tr("Currency")}><select value={e.currency||'GBP'} onChange={x=>s('currency',x.target.value)} className="fi">{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select></Fld></div>
       <div className="fg g3" style={{marginTop:12,gridTemplateColumns:'1fr 2fr 1fr'}}>

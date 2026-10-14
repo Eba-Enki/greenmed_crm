@@ -213,7 +213,11 @@ function SidebarUserMenu({session,portalLabel,onOpenProfile,onLogout,onLang}){
   );
 }
 
+// The portal's menu and session, kept for headers drawn outside PageHeader (forms, detail screens)
+let navInfo={sb:[],session:null};
+
 function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,onLogout,onLang}){
+  navInfo={sb,session};
   const[,bump]=useState(0);
   useEffect(()=>{const h=()=>bump(n=>n+1);window.addEventListener('seen-changed',h);return()=>window.removeEventListener('seen-changed',h);},[]);
   // Opening a list tells the server it has been seen (once per visit, not on every render)
@@ -283,6 +287,47 @@ function SidebarToggle({className=''}){
   };
   const lbl=hidden?tr('Show sidebar'):tr('Hide sidebar');
   return <button type="button" className={'sb-toggle'+(className?' '+className:'')} onClick={flip} aria-pressed={hidden} aria-label={lbl} title={lbl}><Ico n="sidebar" size={16}/></button>;
+}
+
+// ==========================
+// FORM HEADER: the PageHeader look for form, detail and import screens. Breadcrumb up to the list the screen
+// belongs to (parent = that list's menu key; clicking it goes back), optional extra crumbs (trail), then the
+// title with its badges (meta) and the screen's buttons. Rendered into the panel's .fh-slot so it spans the
+// full panel width and sticks like the list header, whatever width the form below it has.
+// ==========================
+function FormHeader({parent,onBack,onList,trail=[],title,meta,children}){
+  const[slot,setSlot]=useState(null);
+  React.useLayoutEffect(()=>{setSlot(document.querySelector('.main .fh-slot'));},[]);
+  const ref=useRef(null);
+  useEffect(()=>{
+    const el=ref.current;if(!el||!window.ResizeObserver)return;
+    const ro=new ResizeObserver(()=>document.documentElement.style.setProperty('--topbar-h',el.offsetHeight+'px'));
+    ro.observe(el);return()=>ro.disconnect();
+  },[slot]);
+  const{sb,session}=navInfo;
+  const portalLabel=session?(PORTAL_INFO[session.activePortal]||{label:session.activePortal}).label:'';
+  const sec=sbSections(sb).find(s=>s.items.some(it=>it.k===parent));
+  const item=sec&&sec.items.find(it=>it.k===parent);
+  const sep=<span className="crumb-sep">›</span>;
+  const head=(
+    <header className="topbar fh no-print" ref={ref}>
+      <div className="crumbs-row">
+        <SidebarToggle/>
+        <button type="button" className="sb-toggle fh-back" onClick={onBack} aria-label={tr('Back')} title={tr('Back')}><Ico n="back" size={16}/></button>
+        <nav className="crumbs" aria-label="Breadcrumb">
+          {portalLabel&&<span className="crumb">{portalLabel}</span>}
+          {sec&&sec.label&&<>{sep}<span className="crumb">{sec.label}</span></>}
+          {item&&<>{sep}<button type="button" className="crumb-link" onClick={onList||onBack}>{item.lbl}</button></>}
+          {trail.map((t,i)=><React.Fragment key={i}>{sep}<button type="button" className="crumb-link" onClick={t.onClick}>{t.label}</button></React.Fragment>)}
+        </nav>
+      </div>
+      <div className="topbar-row">
+        <h1 className="topbar-title fh-title"><span>{title}</span>{meta}</h1>
+        {children&&<div className="topbar-actions">{children}</div>}
+      </div>
+    </header>
+  );
+  return slot?ReactDOM.createPortal(head,slot):null;
 }
 
 // ==========================
