@@ -650,6 +650,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const numbered=fresh?assignProjectNumber(p):p;
     const saved={...numbered,id:numbered.id||uid()};
     sProj(fresh?[...projects,saved]:projects.map(x=>x.id===saved.id?saved:x));
+    // Documents are filed under their project's name, so a rename carries over to everything filed under the old one
+    const old=!fresh&&projects.find(x=>x.id===saved.id);
+    if(old&&old.name&&old.name!==saved.name){
+      const moved=list=>list.some(d=>d.project===old.name)?list.map(d=>d.project===old.name?{...d,project:saved.name,projectNumber:saved.number||d.projectNumber||''}:d):null;
+      [[salesQuotes,sSQ],[salesInvoices,sSI],[purchaseQuotes,sPQ],[purchaseOrders,sPO],[receivedInvoices,sRI],[srcQuotes,sSRQ],[srcInvoices,sSRI],[costEsts,sCE],[expenses,sExp],[documents,sDocs]]
+        .forEach(([list,set])=>{const next=moved(list);if(next)set(next);});
+    }
     showToast(tr('Saved ✓'));go('projects');
   };
 
