@@ -1011,7 +1011,7 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .glass,.glass-soft{position:relative;isolation:isolate;border:none}
 .glass{background:var(--glass-fill);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-glow),var(--glass-drop)}
 .glass-soft{background:rgba(255,255,255,.26);box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 1px 2px rgba(26,42,10,.04)}
-.glass::before,.glass-soft::before,.sb-item.active::before,.portal-dropdown::before,.sb-menu::before,.toast::before,.fpanel::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;padding:1px;pointer-events:none;background:var(--glass-rim);
+.glass::before,.glass-soft::before,.sb-item.active::before,.portal-dropdown::before,.sb-menu::before,.toast::before,.fpanel::before,.mt-dialog::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;padding:1px;pointer-events:none;background:var(--glass-rim);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 .glass-soft::before{opacity:.75}
 /* Glass in the app frame: the selected sidebar item, the sidebar search box and the two pop-up menus (portal
@@ -1069,6 +1069,20 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .fp-clear{padding:0 14px}
 .fp-clear:hover{background:rgba(255,255,255,.6);box-shadow:inset 0 1px 1px rgba(255,255,255,.9)}
 .fp-clear:active{background:rgba(255,255,255,.8)}
+/* Work dialogs (Apply Rates, source links, transfer from sub-supplier quotes): the same glass card as the
+   confirm dialogs, with glass fields and buttons inside */
+.mt-overlay{background:rgba(31,32,35,.22);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);animation:bzFade .18s var(--bz-ease)}
+.mt-dialog{position:relative;isolation:isolate;border-radius:22px;background:rgba(255,255,255,.74);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-glow),0 2px 6px rgba(26,42,10,.08),0 24px 60px rgba(26,42,10,.22);animation:bzPop .22s var(--bz-spring)}
+.mt-dialog-h{padding:18px 22px 14px;border-bottom:1px solid rgba(31,32,35,.07)}
+.mt-dialog-b{padding:16px 22px}
+.mt-dialog-f{padding:14px 22px 18px;border-top:1px solid rgba(31,32,35,.07)}
+.mt-dialog-t{font-size:16px;color:var(--bz-ink)}
+.mt-dialog .fi{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 2px rgba(26,42,10,.05)}
+.mt-dialog .fi:hover{background:rgba(255,255,255,.62);border-color:#fff}
+.mt-dialog .fi:focus{background:rgba(255,255,255,.85);border-color:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.18)}
+.mt-dialog .bgh,.mt-dialog-h .ab{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 1px rgba(255,255,255,.8)}
+.mt-dialog .bgh:hover,.mt-dialog-h .ab:hover{background:rgba(255,255,255,.85);border-color:#fff}
+@media (prefers-reduced-motion:reduce){.mt-overlay,.mt-dialog{animation:none}}
 /* Toasts: a glass pill floating over the page. They mostly land on the white panel, where a clear glass would
    read as plain white, so the fill carries a faint tint of the canvas gradient and the rim is brighter. */
 .toast{isolation:isolate;color:var(--bz-ink);border-radius:16px;padding:12px 18px;font-weight:600;

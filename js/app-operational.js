@@ -1685,8 +1685,25 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,supplier:d=>d.supplierCompany,project:d=>d.project,sq:sqNum,src:d=>d.srcqNumber,total:d=>dt(d.items||[]),state:srcQuoteState});
     const lbl=isQ?tr('Sub-supplier Quote'):tr('Sub-supplier Invoice');
     const projNames=[...new Set(docs.map(d=>d.project).filter(Boolean))];
+    const inQuote=d=>isQ&&(d.items||[]).some(i=>srcLineState(i)==='quoted');
+    const exportRows=list=>exportExcel([isQ?['Date','Quote No','Sub-supplier','Project','Sales Quotation','Currency','Total','Status']:['Date','Invoice No','Sub-supplier','Sub-supplier Quote','Project','Currency','Total'],
+      ...list.map(d=>isQ?[d.date,d.number,d.supplierCompany,d.project,sqNum(d),d.currency,dt(d.items||[]),SRC_STATE[srcQuoteState(d)][0]]:[d.date,d.number,d.supplierCompany,d.srcqNumber||'',d.project,d.currency,dt(d.items||[])])],isQ?'source-quotes':'source-invoices');
+    const bulk=useBulkSelect(sorted.map(d=>d.id));
+    const picked=sorted.filter(d=>bulk.has(d.id));
+    // Same rule as deleting one: a quote whose lines are used in a group company quote stays
+    const pickedFree=picked.filter(d=>!inQuote(d));
+    const bulkDelete=()=>{
+      const kept=picked.length-pickedFree.length;
+      askGlobalConfirm(tr('Delete {0} selected documents?',pickedFree.length)+(kept?' '+tr('{0} selected quotes are used in a group company quote and will be kept.',kept):''),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+        if(!ok)return;
+        const ids=new Set(pickedFree.map(d=>d.id));
+        isQ?sSRQ(srcQuotes.filter(x=>!ids.has(x.id))):sSRI(srcInvoices.filter(x=>!ids.has(x.id)));
+        showToast(tr('{0} deleted',ids.size));
+        bulk.clear();
+      });
+    };
     const del=d=>{
-      if(isQ&&(d.items||[]).some(i=>srcLineState(i)==='quoted')){showToast(tr('Used in a group company quote — remove it from that quote first'));return;}
+      if(inQuote(d)){showToast(tr('Used in a group company quote — remove it from that quote first'));return;}
       askConfirm(tr("Delete this {0}?",lbl.toLowerCase()),()=>{isQ?sSRQ(srcQuotes.filter(x=>x.id!==d.id)):sSRI(srcInvoices.filter(x=>x.id!==d.id));showToast(tr('Deleted'));setQuickView(null);});
     };
     const lineNote=d=>it=>{
@@ -1700,8 +1717,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return(<div className="content">
       <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={isQ?tr("Search quote no, supplier or item..."):tr("Search invoice no, supplier or item...")}
         active={[fs.s,fs.p].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',p:''}))}
-        onExport={()=>exportExcel([isQ?['Date','Quote No','Sub-supplier','Project','Sales Quotation','Currency','Total','Status']:['Date','Invoice No','Sub-supplier','Sub-supplier Quote','Project','Currency','Total'],
-          ...sorted.map(d=>isQ?[d.date,d.number,d.supplierCompany,d.project,sqNum(d),d.currency,dt(d.items||[]),SRC_STATE[srcQuoteState(d)][0]]:[d.date,d.number,d.supplierCompany,d.srcqNumber||'',d.project,d.currency,dt(d.items||[])])],isQ?'source-quotes':'source-invoices')}>
+        onExport={()=>exportRows(sorted)}>
         {isQ&&<FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
           <option value="">{tr("All")}</option>{Object.entries(SRC_STATE).map(([k,[l]])=><option key={k} value={k}>{tr(l)}</option>)}
         </select></FilterField>}
@@ -1709,12 +1725,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <option value="">{tr("All")}</option>{projNames.map(p=><option key={p} value={p}>{p}</option>)}
         </select></FilterField>
       </ListTools>
+      <BulkBar bulk={bulk}>
+        <BulkBtn onClick={()=>exportRows(picked)}>{tr("Export selected")}</BulkBtn>
+        <BulkBtn icon="trash" danger badge={pickedFree.length} disabled={!pickedFree.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+      </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isQ?'rq':'ri'} size={38}/>
         <div className="empty-t">{docs.length?tr("No items match the filter"):isQ?tr("No sub-supplier quotes yet"):tr("No sub-supplier invoices yet")}</div>
         {!docs.length&&<div className="empty-s">{isQ?tr("Enter each quote the group company collects from its suppliers, linked to the project and the customer's items."):tr("Create a sub-supplier invoice from a sub-supplier quote, or add one with + New.")}</div>}</div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={isQ?[0.8,1,1.6,1.2,1,0.9,1]:[0.8,1,1.6,1,1.2,0.9]}/>
+          <Cg w={isQ?[0.32,0.8,1,1.28,1.2,1,0.9,1]:[0.32,0.8,1,1.28,1,1.2,0.9]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{isQ?tr("Quote No"):tr("Invoice No")}</SortTh>
             <SortTh k="supplier" sort={sort} onSort={onSort}>{tr("Sub-supplier")}</SortTh>
@@ -1725,7 +1746,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {isQ&&<SortTh k="state" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>}
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
-            <tr key={d.id} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+            <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
+              <SelTd bulk={bulk} id={d.id}/>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
               <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g800)'}}>{d.supplierCompany||'—'}</td>
@@ -1822,11 +1844,21 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       cost:d=>ceTotals(d.items).c,offer:d=>ceTotals(d.items).o,sq:sqNo,state:ceState});
     const projNames=[...new Set(costEsts.map(d=>d.project).filter(Boolean))];
     const open=d=>{setCur(d);go('cost_estimates_form');};
+    const exportRows=list=>exportExcel([['Date','Number','Project','Customer','Currency','Items','Total Cost','Offer Total','Sales Quotation','Status'],
+      ...list.map(d=>{const t=ceTotals(d.items);return[d.date,d.number,d.project||'',cust(d),d.currency,(d.items||[]).length,Math.round(t.c*100)/100,Math.round(t.o*100)/100,sqNo(d),CE_STATE[ceState(d)][0]];})],'approximate-costs');
+    const bulk=useBulkSelect(sorted.map(d=>d.id));
+    const picked=sorted.filter(d=>bulk.has(d.id));
+    const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected documents?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;
+      const ids=new Set(picked.map(d=>d.id));
+      sCE(costEsts.filter(x=>!ids.has(x.id)));
+      showToast(tr('{0} deleted',ids.size));
+      bulk.clear();
+    });
     return(<div className="content">
       <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search number, project, customer or item...")}
         active={[fs.s,fs.p].filter(Boolean).length} onClear={()=>setFs(f=>({...f,s:'',p:''}))}
-        onExport={()=>exportExcel([['Date','Number','Project','Customer','Currency','Items','Total Cost','Offer Total','Sales Quotation','Status'],
-          ...sorted.map(d=>{const t=ceTotals(d.items);return[d.date,d.number,d.project||'',cust(d),d.currency,(d.items||[]).length,Math.round(t.c*100)/100,Math.round(t.o*100)/100,sqNo(d),CE_STATE[ceState(d)][0]];})],'approximate-costs')}>
+        onExport={()=>exportRows(sorted)}>
         <FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(f=>({...f,s:e.target.value}))}>
           <option value="">{tr("All")}</option>{Object.entries(CE_STATE).map(([k,[l]])=><option key={k} value={k}>{tr(l)}</option>)}
         </select></FilterField>
@@ -1834,12 +1866,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <option value="">{tr("All")}</option>{projNames.map(p=><option key={p} value={p}>{p}</option>)}
         </select></FilterField>
       </ListTools>
+      <BulkBar bulk={bulk}>
+        <BulkBtn onClick={()=>exportRows(picked)}>{tr("Export selected")}</BulkBtn>
+        <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+      </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="calc" size={38}/>
         <div className="empty-t">{costEsts.length?tr("No items match the filter"):tr("No approximate costs yet")}</div>
         {!costEsts.length&&<div className="empty-s">{tr("Collect the purchase price of each item, add freight, customs and margin, then transfer the result to a sales quotation.")}</div>}</div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.8,0.9,1.3,1.5,0.6,1,1,0.9,1.1]}/>
+          <Cg w={[0.32,0.8,0.9,1.3,1.18,0.6,1,1,0.9,1.1]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{tr("Number")}</SortTh>
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
@@ -1851,7 +1888,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="state" sort={sort} onSort={onSort} className="tac">{tr("Status")}</SortTh>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>{const t=ceTotals(d.items);const sym=CURR[d.currency]||'';return(
-            <tr key={d.id} style={{cursor:'pointer'}} tabIndex={0} onClick={()=>open(d)} onKeyDown={e=>{if(e.key==='Enter')open(d);}}>
+            <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} tabIndex={0} onClick={()=>open(d)} onKeyDown={e=>{if(e.key==='Enter'&&e.target===e.currentTarget)open(d);}}>
+              <SelTd bulk={bulk} id={d.id}/>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
               <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
@@ -2564,16 +2602,24 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     });
     const sorted=sortRows(filtered,sort,{date:p=>p.date,no:p=>p.quoteNum,code:p=>p.code,name:p=>p.name,qty:p=>+(p.qty||0),price:p=>+(p.price||0),
       purchasePrice:p=>+(p.purchasePrice||0),project:p=>p.projectId,customer:p=>p.customer});
+    // Pool rows are built from sent quotations, so the only bulk action is exporting them
+    const bulk=useBulkSelect(sorted.map(p=>p.id));
+    const picked=sorted.filter(p=>bulk.has(p.id));
+    const exportPicked=()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Purchase Price','Quote No','Date','Project','Customer'],...picked.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool');
     return(<div className="content">
       <ListTools q={q} onQ={setQ} placeholder={tr("Search item, customer, project...")} active={[dateFrom,dateTo].filter(Boolean).length} onClear={()=>{setDateFrom('');setDateTo('');}} extra={<><span className="lt-note">{tr("{0} items", filtered.length)}</span></>}>
         <FilterField label={tr("From")}><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></FilterField>
         <FilterField label={tr("To")}><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></FilterField>
       </ListTools>
+      <BulkBar bulk={bulk}>
+        <BulkBtn onClick={exportPicked}>{tr("Export selected")}</BulkBtn>
+      </BulkBar>
       <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{tr("All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.")}</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">{tr("Pool is empty")}</div><div className="empty-s">{tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.8,1,1,2,0.6,0.9,0.9,1,2,0.6]}/>
+          <Cg w={[0.32,0.8,1,1,1.84,0.6,0.9,0.9,1,1.84,0.6]}/>
           <thead><tr>
+            <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={sort} onSort={onSort}>{tr("Quote No")}</SortTh>
             <SortTh k="code" sort={sort} onSort={onSort}>{tr("Code")}</SortTh>
@@ -2587,7 +2633,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(p=>{
             const isDup=sorted.some(x=>x.id!==p.id&&x.customer===p.customer&&x.name.toLowerCase().trim()===p.name.toLowerCase().trim());
-            return(<tr key={p.id} style={isDup?{background:'#fff7ed',borderLeft:'3px solid var(--amber)'}:{}}>
+            return(<tr key={p.id} className={bulk.has(p.id)?'is-sel':''} style={isDup?{background:'#fff7ed',borderLeft:'3px solid var(--amber)'}:{}}>
+              <SelTd bulk={bulk} id={p.id}/>
               <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{p.date||'—'}</td>
               <td><span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{p.quoteNum||'—'}</span></td>
               <td style={{fontFamily:'monospace',fontSize:11,whiteSpace:'nowrap'}}>{p.code||'—'}</td>
