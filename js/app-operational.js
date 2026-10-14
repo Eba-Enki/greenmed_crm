@@ -202,20 +202,35 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     askGlobalConfirm(tr(warn),{confirmLabel:tr('Edit anyway'),cancelLabel:tr('Cancel')}).then(ok=>{if(ok)open();});
   };
   const handleSaveSQ=q0=>{
-    const{_unlock,...q}=addrCaseDoc(q0);
+    const{_unlock,_revOf,...q}=addrCaseDoc(q0);
     const fresh=!q.id;
     const numbered=fresh?assignQuoteNumber(q):q;
     const saved={...numbered,id:numbered.id||uid()};
-    sSQ(fresh?[...salesQuotes,saved]:salesQuotes.map(x=>x.id===saved.id?saved:x));
+    // A new revision replaces the quote it revises only now, when it is saved; prevStatus lets that quote take its
+    // place again if the revision is deleted later
+    const base=_revOf?salesQuotes.map(x=>x.id===_revOf?{...x,status:'passive',locked:false,prevStatus:x.status}:x):salesQuotes;
+    sSQ(fresh?[...base,saved]:base.map(x=>x.id===saved.id?saved:x));
     showToast(tr('Saved ✓'));go('sales_quotes');
   };
 
+  // Opens the next revision as an unsaved draft; cancelling it leaves the current quote exactly as it was
   const handleNewRevision=(q)=>{
-    // Make current passive
-    sSQ(salesQuotes.map(x=>x.id===q.id?{...x,status:'passive',locked:false}:x));
-    const newQ=mkSalesQuote(q.base,q.rev+1,q);
+    const newQ={...mkSalesQuote(q.base,q.rev+1,q),_revOf:q.id};
     setCur(newQ);go('sales_quote_form');
-    showToast(tr('New revision created'));
+  };
+  // After quotes are deleted: in each group whose latest revision went, the revision before it becomes the active
+  // quote again, with the status it had before it was revised
+  const reactivateAfterDelete=list=>{
+    const groups={};
+    list.forEach(q=>{const b=sqBaseOf(q);(groups[b]=groups[b]||[]).push(q);});
+    const back=new Set(Object.values(groups).map(revs=>revs.reduce((a,x)=>(x.rev||0)>(a.rev||0)?x:a)).filter(q=>q.status==='passive').map(q=>q.id));
+    if(!back.size)return list;
+    return list.map(q=>{
+      if(!back.has(q.id))return q;
+      const{prevStatus,...rest}=q;
+      const st=prevStatus||'sent';
+      return{...rest,status:st,locked:st==='approved'||st==='locked'};
+    });
   };
 
   const handleUnlockQuote=(q)=>{
@@ -236,32 +251,54 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     showToast(tr('Invoice marked as sent'));
   };
   const handleApproveQuote=(q)=>{
-    sSQ(salesQuotes.map(x=>x.id===q.id?{...x,status:'approved',locked:true}:x));
+    // already fully invoiced on an earlier revision → it closes right away
+    sSQ(syncQuoteStatuses(salesQuotes.map(x=>x.id===q.id?{...x,status:'approved',locked:true}:x),salesInvoices));
     showToast(tr('Quote approved & locked'));
   };
 
-  // Check remaining items for a quote
-  const getQuoteRemainingItems=(q)=>{
-    return (q.items||[]).filter(it=>{
-      const invoiced=salesInvoices.filter(si=>si.quoteId===q.id).reduce((s,si)=>{
-        const match=si.items&&si.items.find(i=>i.quoteItemId===it.id);
-        return s+(match?+(match.qty||0):0);
-      },0);
-      return invoiced<+(it.qty||0);
-    }).map(it=>{
-      const invoiced=salesInvoices.filter(si=>si.quoteId===q.id).reduce((s,si)=>{
-        const match=si.items&&si.items.find(i=>i.quoteItemId===it.id);
-        return s+(match?+(match.qty||0):0);
-      },0);
-      return{...it,invoicedQty:invoiced,remainingQty:+(it.qty||0)-invoiced};
+  // What is still to invoice on a quote. Invoices count per quotation line across every revision of the group (lines
+  // keep their key across revisions), so a revision of a partly invoiced quote only offers what is left.
+  const invoicedByKey=(base,invs=salesInvoices,quotes=salesQuotes)=>{
+    const byId={};quotes.forEach(q=>{byId[q.id]=q;});
+    const m={};
+    invs.forEach(si=>{
+      const sq=byId[si.quoteId];
+      if(!sq||sqBaseOf(sq)!==base)return;
+      (si.items||[]).forEach(ii=>{
+        const line=(sq.items||[]).find(i=>i.id===ii.quoteItemId);
+        const k=line?sqItemKey(line):ii.quoteItemKey;
+        if(k)m[k]=(m[k]||0)+(+(ii.qty||0));
+      });
     });
+    return m;
+  };
+  const getQuoteRemainingItems=(q,invs=salesInvoices,quotes=salesQuotes)=>{
+    const done=invoicedByKey(sqBaseOf(q),invs,quotes);
+    return(q.items||[]).map(it=>{const invoiced=done[sqItemKey(it)]||0;return{...it,invoicedQty:invoiced,remainingQty:+(it.qty||0)-invoiced};})
+      .filter(it=>it.remainingQty>0);
+  };
+  // An approved quote closes once every line is invoiced and opens again when an invoice is removed or reduced
+  const syncQuoteStatuses=(quotes,invs)=>{
+    let changed=false;
+    const next=quotes.map(q=>{
+      if(q.status!=='approved'&&q.status!=='closed')return q;
+      const st=getQuoteRemainingItems(q,invs,quotes).length?'approved':'closed';
+      if(st===q.status)return q;
+      changed=true;return{...q,status:st};
+    });
+    return changed?next:quotes;
+  };
+  const saveInvoices=invs=>{
+    sSI(invs);
+    const next=syncQuoteStatuses(salesQuotes,invs);
+    if(next!==salesQuotes)sSQ(next);
   };
 
   // Create SI from quote
   const mkSalesInvoice=(q)=>{
     const num=docNum('si');
     const remaining=getQuoteRemainingItems(q);
-    return{id:null,number:num,quoteId:q.id,quoteNum:q.number,date:td(),dueDate:td(),terms:'Due on Receipt',currency:q.currency||'GBP',bankId:q.bankId||'',status:'draft',project:q.project||'',projectNumber:q.projectNumber||'',client:{...q.client},shipToEnabled:q.shipToEnabled||false,shipTo:q.shipTo?{...q.shipTo}:{company:'',contact:'',email:'',phone:'',address:''},items:remaining.map(it=>({id:uid(),quoteItemId:it.id,item:it.item,desc:it.desc,unit:it.unit,price:it.price,qty:String(it.remainingQty),maxQty:it.remainingQty})),notes:q.notes||''};
+    return{id:null,number:num,quoteId:q.id,quoteNum:q.number,date:td(),dueDate:td(),terms:'Due on Receipt',currency:q.currency||'GBP',bankId:q.bankId||'',status:'draft',project:q.project||'',projectNumber:q.projectNumber||'',client:{...q.client},shipToEnabled:q.shipToEnabled||false,shipTo:q.shipTo?{...q.shipTo}:{company:'',contact:'',email:'',phone:'',address:''},items:remaining.map(it=>({id:uid(),quoteItemId:it.id,quoteItemKey:sqItemKey(it),item:it.item,desc:it.desc,unit:it.unit,price:it.price,qty:String(it.remainingQty),maxQty:it.remainingQty})),notes:q.notes||''};
   };
   const assignInvoiceNumber=(si)=>{
     return isAutoNum('si',si.number)?{...si,number:docNum('si')}:si;
@@ -272,14 +309,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const fresh=!si.id;
     const numbered=fresh?assignInvoiceNumber(si):si;
     const saved={...numbered,id:numbered.id||uid()};
-    sSI(fresh?[...salesInvoices,saved]:salesInvoices.map(x=>x.id===saved.id?saved:x));
-    // Check if quote is fully invoiced
-    const q=salesQuotes.find(x=>x.id===si.quoteId);
-    if(q){
-      const remaining=getQuoteRemainingItems({...q});
-      const stillOpen=remaining.some(it=>it.remainingQty>+((saved.items&&saved.items.find(i=>i.quoteItemId===it.id)&&saved.items.find(i=>i.quoteItemId===it.id).qty)||0));
-      if(!stillOpen){sSQ(salesQuotes.map(x=>x.id===q.id?{...x,status:'closed'}:x));}
-    }
+    // The quote's status follows from all its invoices including this one (an edited invoice replaces its old version)
+    saveInvoices(fresh?[...salesInvoices,saved]:salesInvoices.map(x=>x.id===saved.id?saved:x));
     showToast(tr('Invoice saved'));go('sales_invoices');
   };
 
@@ -359,7 +390,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const groups={};
     salesQuotes.forEach(q=>{const b=sqBaseOf(q);(groups[b]=groups[b]||[]).push(q);});
     const rows=Object.entries(groups).filter(([,revs])=>revs.some(q=>q.status!=='draft')).flatMap(([base,revs])=>{
-      const q=revs.reduce((a,x)=>(x.rev||0)>(a.rev||0)?x:a);
+      // the latest revision that went to the customer; a draft revision in progress does not change the pool yet
+      const q=revs.filter(x=>x.status!=='draft').reduce((a,x)=>(x.rev||0)>(a.rev||0)?x:a);
       return(q.items||[]).filter(it=>it.desc).map(it=>{
         const id=poolKey(base,it);
         const manual=manualPP(purchasePrices[id]);
@@ -623,7 +655,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // ── CASCADE DELETE HELPERS ──
   const deleteSQ=(id)=>{
-    sSQ(salesQuotes.filter(x=>x.id!==id));
+    sSQ(reactivateAfterDelete(salesQuotes.filter(x=>x.id!==id)));
     sSI(salesInvoices.map(si=>si.quoteId===id?{...si,quoteId:null,quoteNum:''}:si));
   };
   // Source-quote lines used by deleted received quotes become available again (what syncSrcStatus(doc,true) does
@@ -720,7 +752,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const kept=picked.length-ids.size;
       askGlobalConfirm(tr('Delete {0} draft quotations?',ids.size)+(kept?' '+tr('{0} selected quotations are not drafts and will be kept.',kept):''),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
         if(!ok)return;
-        sSQ(salesQuotes.filter(x=>!ids.has(x.id)));
+        sSQ(reactivateAfterDelete(salesQuotes.filter(x=>!ids.has(x.id))));
         sSI(salesInvoices.map(si=>ids.has(si.quoteId)?{...si,quoteId:null,quoteNum:''}:si));
         showToast(tr('{0} deleted',ids.size));
         bulk.clear();
@@ -1370,7 +1402,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       )}
       {quickView&&<DocQuickModal doc={quickView} co={co} docType="invoice" pdfOpts={FULL_BANK} onClose={()=>setQuickView(null)}
         onEdit={()=>{const openEdit=()=>{setQuickView(null);setCur(quickView);go('sales_invoice_edit');};if(quickView.status==='sent'){askConfirm(tr('This invoice has been marked as sent. Edit anyway?'),openEdit);}else{openEdit();}}}
-        onDelete={()=>askConfirm(tr('Delete this invoice?'),()=>{sSI(salesInvoices.filter(x=>x.id!==quickView.id));showToast(tr('Deleted'));setQuickView(null);})}
+        onDelete={()=>askConfirm(tr('Delete this invoice?'),()=>{saveInvoices(salesInvoices.filter(x=>x.id!==quickView.id));showToast(tr('Deleted'));setQuickView(null);})}
         extraActions={[]}/>}
     </div>);
   }
