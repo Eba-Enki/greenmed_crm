@@ -489,13 +489,13 @@ function App(){
       {session.activePortal==='ops'&&<AppOperational key={dataEpoch} {...portalProps}/>}
       {session.activePortal==='system'&&<AppSystem {...portalProps}/>}
       {profileOpen&&<ProfileModal session={session} onClose={()=>setProfileOpen(false)} onUpdate={handleSessionUpdate}/>}
-      {(loadError||(syncState.pending>0&&syncState.error))&&<div role="alert" style={{position:'fixed',left:'calc(var(--sidebar) + 16px)',right:16,bottom:16,zIndex:9999,display:'flex',alignItems:'center',gap:12,background:'#fff',border:'1.5px solid rgba(192,57,43,.35)',borderRadius:10,padding:'12px 16px',boxShadow:'0 8px 28px rgba(26,42,10,.12)',color:'var(--red)',fontSize:13,fontWeight:500}}>
+      {(loadError||(syncState.pending>0&&syncState.error))&&<div role="alert" className="sync-bar">
         <span style={{flex:1}}>{syncState.pending>0&&syncState.error
           ?tr("{0} change(s) could not be saved to the server yet ({1}). They are kept on this computer and retried automatically — don't clear the browser data or log out until this message disappears.", syncState.pending, syncState.error)
           :loadError}</span>
         {syncState.pending>0&&syncState.error
-          ?<button onClick={()=>Sync.retryAll()} style={{border:'none',background:'transparent',color:'var(--g600)',cursor:'pointer',fontSize:13,fontWeight:600}}>{tr("Retry now")}</button>
-          :<button onClick={()=>setLoadError('')} style={{border:'none',background:'transparent',color:'var(--g600)',cursor:'pointer',fontSize:13,fontWeight:600}}>{tr("Dismiss")}</button>}
+          ?<button className="sync-bar-btn" onClick={()=>Sync.retryAll()}>{tr("Retry now")}</button>
+          :<button className="sync-bar-btn" onClick={()=>setLoadError('')}>{tr("Dismiss")}</button>}
       </div>}
       {conflicts.length>0&&<div className="gdlg-bg" style={{zIndex:99998}}>
         <div className="glass gdlg" role="alertdialog" aria-modal="true" aria-labelledby="sync-conflict-title" style={{maxWidth:520,gap:16}}>

@@ -1068,23 +1068,16 @@ function Preview({doc,co,docType,onBack,onEdit,pdfOpts}){
 // noPdf: records that are only filed, never printed (source quotes / invoices)
 function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfOpts,itemNote,noPdf}){
   useEscape(onClose);
-  const statusMap={draft:'b-draft',sent:'b-sent',approved:'b-approved',paid:'b-paid',received:'b-received',locked:'b-locked',declined:'b-declined',cancelled:'b-cancelled','po-created':'b-po-created',pending:'b-pending',closed:'b-closed',overdue:'b-overdue'};
-  const statusClass=statusMap[doc.status]||'b-draft';
-  const statusLabel=doc.status?((SM[doc.status]&&SM[doc.status].l)||(doc.status.charAt(0).toUpperCase()+doc.status.slice(1).replace(/-/g,' '))):tr('Draft');
+  // Number and status are already at the top of the summary card, so the dialog has no header bar of its own;
+  // it closes with Close, Escape or a click outside
   return(
     <div className="gdlg-bg" style={{zIndex:2000,padding:20}} onClick={onClose}>
-      <div className="glass gmodal gq" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
-        <div className="gq-h">
-          <span style={{fontSize:11,fontWeight:700,color:'var(--g400)',textTransform:'uppercase',letterSpacing:'.5px'}}>{doc.number||'—'}</span>
-          {doc.status&&<span className={`bdg ${statusClass}`}>{statusLabel}</span>}
-          <div style={{flex:1}}/>
-          <button className="pf-close" onClick={onClose} aria-label={tr("Close")}><Ico n="x" size={16}/></button>
-        </div>
+      <div className="glass gmodal gq" role="dialog" aria-modal="true" aria-label={doc.number||undefined} onClick={e=>e.stopPropagation()}>
         <div className="gq-b">
           <DocSummaryBody doc={doc} co={co} docType={docType} itemNote={itemNote}/>
         </div>
         <div className="gq-f">
-          {onDelete&&<button className="ab danger" onClick={onDelete}><Ico n="trash"/></button>}
+          {onDelete&&<Btn v="bgh bsm gq-del" onClick={onDelete}><Ico n="trash"/>{tr("Delete")}</Btn>}
           <div style={{flex:1}}/>
           <Btn v="bgh bsm" onClick={onClose}>{tr("Close")}</Btn>
           {onEdit&&<Btn v="bgh bsm" onClick={onEdit}>{tr("Edit")}</Btn>}

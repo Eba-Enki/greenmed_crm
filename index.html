@@ -1024,7 +1024,7 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .glass,.glass-soft{position:relative;isolation:isolate;border:none}
 .glass{background:var(--glass-fill);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-glow),var(--glass-drop)}
 .glass-soft{background:rgba(255,255,255,.26);box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 1px 2px rgba(26,42,10,.04)}
-.glass::before,.glass-soft::before,.sb-item.active::before,.portal-dropdown::before,.sb-menu::before,.toast::before,.fpanel::before,.mt-dialog::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;padding:1px;pointer-events:none;background:var(--glass-rim);
+.glass::before,.glass-soft::before,.sb-item.active::before,.portal-dropdown::before,.sb-menu::before,.toast::before,.fpanel::before,.mt-dialog::before,.sync-bar::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;padding:1px;pointer-events:none;background:var(--glass-rim);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 .glass-soft::before{opacity:.75}
 /* Glass in the app frame: the selected sidebar item, the sidebar search box and the two pop-up menus (portal
@@ -1116,10 +1116,25 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .gmodal .bgh:hover,.st-modal .bgh:hover{background:rgba(255,255,255,.85);border-color:#fff}
 /* Quick view: header and footer stay put, the body scrolls */
 .gmodal.gq{width:900px;max-width:100%;max-height:90vh;padding:0;display:flex;flex-direction:column;overflow:hidden}
-.gq-h{display:flex;align-items:center;gap:10px;padding:16px 24px;border-bottom:1px solid rgba(31,32,35,.07);flex-shrink:0}
-.gq-b{overflow-y:auto;padding:20px 24px;flex:1}
-.gq-f{display:flex;align-items:center;gap:8px;padding:14px 24px;border-top:1px solid rgba(31,32,35,.07);flex-shrink:0}
+.gq-b{overflow-y:auto;padding:24px 24px 8px;flex:1}
+.gq-f{display:flex;align-items:center;gap:8px;padding:12px 24px 18px;flex-shrink:0}
+.gmodal .bgh.gq-del{color:var(--red)}
+.gmodal .bgh.gq-del:hover{background:rgba(253,236,234,.9);border-color:#f5c2bd;color:var(--red)}
 @media (prefers-reduced-motion:reduce){.gmodal,.st-modal{animation:none}}
+/* "Could not save to the server" bar: frosted glass with a faint red tint, red text — it is a warning, so it keeps
+   the red signal. It sits under the panel, so it follows the sidebar being hidden. */
+.sync-bar{position:fixed;left:calc(var(--sidebar) + 16px);right:16px;bottom:16px;z-index:9999;isolation:isolate;display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:16px;
+  background:linear-gradient(135deg,rgba(253,236,234,.78) 0%,rgba(255,255,255,.62) 55%,rgba(253,236,234,.7) 100%);
+  -webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.95),inset 0 0 18px rgba(255,255,255,.35),0 0 0 1px rgba(192,57,43,.22),0 1px 2px rgba(26,42,10,.08),0 12px 32px rgba(26,42,10,.16);
+  color:var(--red);font-size:13px;font-weight:500;animation:toastIn .32s var(--bz-spring)}
+.sync-bar>span{flex:1}
+html.sb-wide .sync-bar{left:16px}
+.sync-bar-btn{flex-shrink:0;height:32px;padding:0 14px;border-radius:var(--bz-ctl-r);border:1px solid var(--glass-field-line);background:var(--glass-field);color:var(--bz-ink-2);font-size:13px;font-weight:600;cursor:pointer;box-shadow:inset 0 1px 1px rgba(255,255,255,.85);transition:background .15s var(--bz-ease),color .15s var(--bz-ease),transform .15s var(--bz-spring)}
+.sync-bar-btn:hover{background:rgba(255,255,255,.85);color:var(--bz-ink)}
+.sync-bar-btn:active{transform:scale(.97)}
+.sync-bar-btn:focus-visible{outline:2px solid var(--gm-400);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.sync-bar{animation:none}}
 /* Toasts: a glass pill floating over the page. They mostly land on the white panel, where a clear glass would
    read as plain white, so the fill carries a faint tint of the canvas gradient and the rim is brighter. */
 .toast{isolation:isolate;color:var(--bz-ink);border-radius:16px;padding:12px 18px;font-weight:600;
