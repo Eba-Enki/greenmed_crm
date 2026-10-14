@@ -275,6 +275,23 @@ function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,on
   );
 }
 
+// Hide / show the sidebar (the panel then takes the full width). A per-browser preference, so plain
+// localStorage rather than LS (which syncs to the server). Applied at load so a hidden sidebar never flashes in.
+const SB_HIDDEN_KEY='gm_sb_hidden';
+const sbHiddenSaved=()=>{try{return localStorage.getItem(SB_HIDDEN_KEY)==='1';}catch{return false;}};
+document.documentElement.classList.toggle('sb-hidden',sbHiddenSaved());
+
+function SidebarToggle(){
+  const[hidden,setHidden]=useState(sbHiddenSaved);
+  const flip=()=>{
+    const h=!hidden;setHidden(h);
+    document.documentElement.classList.toggle('sb-hidden',h);
+    try{localStorage.setItem(SB_HIDDEN_KEY,h?'1':'0');}catch{}
+  };
+  const lbl=hidden?tr('Show sidebar'):tr('Hide sidebar');
+  return <button type="button" className="sb-toggle" onClick={flip} aria-pressed={hidden} aria-label={lbl} title={lbl}><Ico n="sidebar" size={16}/></button>;
+}
+
 // ==========================
 // PAGE HEADER (Buzz-style): breadcrumb, title + actions, pill tabs for the pages of the same section
 // ==========================
@@ -295,11 +312,14 @@ function PageHeader({sb,isActive,onGo,session,title,children}){
   },[]);
   return(
     <header className="topbar no-print" ref={ref}>
-      <nav className="crumbs" aria-label="Breadcrumb">
-        <Ico n={(cur||{}).ico||'dash'} size={14}/>
-        {crumbs.map((c,i)=><React.Fragment key={i}>{i>0&&<span className="crumb-sep">›</span>}<span className="crumb">{c}</span></React.Fragment>)}
-        <span className="crumb-sep">›</span><span className="crumb crumb-cur">{title}</span>
-      </nav>
+      <div className="crumbs-row">
+        <SidebarToggle/>
+        <nav className="crumbs" aria-label="Breadcrumb">
+          <Ico n={(cur||{}).ico||'dash'} size={14}/>
+          {crumbs.map((c,i)=><React.Fragment key={i}>{i>0&&<span className="crumb-sep">›</span>}<span className="crumb">{c}</span></React.Fragment>)}
+          <span className="crumb-sep">›</span><span className="crumb crumb-cur">{title}</span>
+        </nav>
+      </div>
       <div className="topbar-row">
         <h1 className="topbar-title">{title}</h1>
         <div className="topbar-actions">{children}</div>
