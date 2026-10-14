@@ -194,7 +194,9 @@ const I18N_TR={
   'Purchase price saved ✓':'Alış fiyatı kaydedildi ✓','Search item, customer, project...':'Ürün, müşteri, proje ara...',
   'All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.':'Gönderilen tekliflerdeki tüm kalemler otomatik görünür. Turuncu satırlar = aynı müşteriye aynı ürün birden fazla kez teklif edilmiş.',
   'Pool is empty':'Havuz boş','Mark quotations as Sent to populate the pool':'Havuzu doldurmak için teklifleri Gönderildi olarak işaretleyin',
-  'Sale Price':'Satış Fiyatı','Purchase Price':'Alış Fiyatı','Set Purchase Price':'Alış Fiyatı Gir','{0} · {1} · Sale: £{2}':'{0} · {1} · Satış: £{2}',
+  'Sale Price':'Satış Fiyatı','Purchase Price':'Alış Fiyatı','Set Purchase Price':'Alış Fiyatı Gir','{0} · {1} · Sale: £{2}':'{0} · {1} · Satış: £{2}','{0} · {1} · Sale: {2}':'{0} · {1} · Satış: {2}',
+  'Manual':'Elle','cheapest of {0}':'{0} teklifin en ucuzu','Purchase price details':'Alış fiyatı ayrıntıları',
+  'The purchase price comes from the Received Quotes matched to this line; the cheapest is used. If the match is removed, the price entered by hand applies.':'Alış fiyatı bu kaleme eşleştirilmiş Alınan Tekliflerden geliyor; en ucuzu kullanılır. Eşleşme kaldırılırsa elle girilen fiyat geçerli olur.',
   'Purchase Price (£)':'Alış Fiyatı (£)','Save Price':'Fiyatı Kaydet',
 
   // Expenses

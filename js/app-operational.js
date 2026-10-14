@@ -79,7 +79,25 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     if(pq&&migratedPQ.some((q,i)=>q!==pq[i]))LS.set(ns+'pq',migratedPQ);
     if(po&&migratedPO.some((p,i)=>p!==po[i]))LS.set(ns+'po',migratedPO);
     if(ri&&migratedRI.some((r,i)=>r!==ri[i]))LS.set(ns+'ri',migratedRI);
-    const pp=load('pp');if(pp&&!Array.isArray(pp))setPurchasePrices(pp);
+    // Pool purchase prices were keyed by quotation id + line id (lost on every revision); they move to
+    // quote group + line key, the latest revision's price winning, and keep the £ they were shown in
+    const pp=load('pp');
+    if(pp&&!Array.isArray(pp)){
+      const next={},rev={};let moved=false;
+      Object.entries(pp).forEach(([k,v])=>{
+        if(k.includes('|')){next[k]=v;return;}
+        const q=(sq||[]).find(x=>x.id&&k.startsWith(x.id+'_'));
+        const it=q&&(q.items||[]).find(i=>i.id===k.slice(q.id.length+1));
+        if(!it){next[k]=v;return;}
+        const nk=(q.base||q.number)+'|'+(it.key||it.id);
+        moved=true;
+        if(nk in rev&&rev[nk]>(q.rev||0))return;
+        rev[nk]=q.rev||0;
+        next[nk]=typeof v==='object'?v:{price:String(v),currency:'GBP'};
+      });
+      setPurchasePrices(next);
+      if(moved)LS.set(ns+'pp',next);
+    }
     const ex=load('exp');if(ex)setExpenses(ex);
     const ec=load('expcat');if(ec)setExpCats(ec);else setExpCats(EXP_CATS_DEF.map(n=>({id:uid(),name:n})));
     const docs=load('docs');if(docs)setDocuments(docs);
@@ -98,8 +116,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sSRQ=d=>save('srcq',setSrcQuotes,d);
   const sSRI=d=>save('srci',setSrcInvoices,d);
   const sCE=d=>save('ce',setCostEsts,d);
-  const sPP=(id,price)=>{const next={...purchasePrices,[id]:price};setPurchasePrices(next);LS.set(ns+'pp',next);};
-  const poolItems=salesQuotes.filter(q=>q.status!=='draft').flatMap(q=>(q.items||[]).filter(it=>it.desc).map(it=>({id:q.id+'_'+(it.id||''),projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',qty:it.qty,unit:it.unit||'',price:it.price,purchasePrice:purchasePrices[q.id+'_'+(it.id||'')]||'',quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''})));
+  // Purchase price entered by hand in the Product Pool: {price, currency}; an empty price removes it
+  const sPP=(id,val)=>{const next={...purchasePrices};if(val&&+val.price>0)next[id]=val;else delete next[id];setPurchasePrices(next);LS.set(ns+'pp',next);};
   const sExp=d=>save('exp',setExpenses,d);
   const sExpCats=d=>save('expcat',setExpCats,d);
   const sProj=d=>save('proj',setProjects,d);
@@ -254,6 +272,44 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sqBaseOf=q=>q.base||q.number;
   const latestSQ=base=>base?salesQuotes.filter(q=>sqBaseOf(q)===base).reduce((a,q)=>!a||(q.rev||0)>(a.rev||0)?q:a,null):null;
   const sqLineText=it=>it.desc||it.item||'—';
+
+  // ── PRODUCT POOL ──
+  // Price memory for later quotations: one row per quotation line across its revisions (quote group + line key), always
+  // showing the latest revision; a quotation enters the pool once any revision has been sent, so a revision never adds
+  // a second row. Purchase price: the cheapest Received Quote line matched to it (among those in the quotation's
+  // currency when there are any), otherwise the price entered by hand (ops_pp, keyed like the row so it survives
+  // revisions). Approximate costs are preliminary work and never a purchase price source.
+  const poolKey=(base,it)=>base+'|'+sqItemKey(it);
+  const poolOffers=(base,key)=>purchaseQuotes.filter(pq=>pq.sqBase===base).flatMap(pq=>(pq.items||[])
+    .filter(i=>i.sqKey===key&&+i.price>0)
+    .map(i=>({price:+i.price,currency:pq.currency||'GBP',number:pq.number||'',supplier:pq.supplierCompany||pq.supplier||''})));
+  const manualPP=v=>{
+    if(v==null||v==='')return null;
+    if(typeof v==='object')return +v.price>0?{price:+v.price,currency:v.currency||'GBP'}:null;
+    return +v>0?{price:+v,currency:'GBP'}:null; // prices saved before currencies were added were shown in £
+  };
+  const poolItems=(()=>{
+    const groups={};
+    salesQuotes.forEach(q=>{const b=sqBaseOf(q);(groups[b]=groups[b]||[]).push(q);});
+    return Object.entries(groups).filter(([,revs])=>revs.some(q=>q.status!=='draft')).flatMap(([base,revs])=>{
+      const q=revs.reduce((a,x)=>(x.rev||0)>(a.rev||0)?x:a);
+      const cur=q.currency||'GBP';
+      return(q.items||[]).filter(it=>it.desc).map(it=>{
+        const id=poolKey(base,it);
+        const offers=poolOffers(base,sqItemKey(it));
+        // Prices in different currencies cannot be compared without a rate: compare within one currency
+        const same=offers.filter(o=>o.currency===cur);
+        const cands=same.length?same:offers.filter(o=>offers.length&&o.currency===offers[0].currency);
+        const best=cands.reduce((a,o)=>!a||o.price<a.price?o:a,null);
+        const manual=manualPP(purchasePrices[id]);
+        const buy=best?{price:best.price,currency:best.currency,src:'rq',ref:best.number}:manual?{...manual,src:'manual',ref:''}:null;
+        return{id,base,projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',
+          qty:it.qty,unit:it.unit||'',price:it.price,currency:cur,
+          purchasePrice:buy?buy.price:'',purchaseCurrency:buy?buy.currency:'',purchaseSrc:buy?buy.src:'',purchaseRef:buy?buy.ref:'',
+          offers,manual,quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''};
+      });
+    });
+  })();
   const sqMatchOptions=base=>{const q=latestSQ(base);return q?(q.items||[]).map((it,i)=>({key:sqItemKey(it),label:`#${i+1} ${sqLineText(it)}`})):[];};
   // "↳ Customer line (SQ0001.R01 #3)" under a supplier line in quick views
   const sqItemNote=doc=>it=>{
@@ -734,7 +790,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(!description||description.trim()==='')return[];
       const descNorm=_norm(description);
       return poolItems.filter(p=>{
-        if(!p.name||p.quoteId===q.id)return false;
+        if(!p.name||p.quoteId===q.id||(q.base&&p.base===q.base))return false; // not this quotation or its other revisions
         const pNorm=_norm(p.name);
         if(pNorm===descNorm)return true;
         const t1=descNorm.split(' ').filter(Boolean);
@@ -2466,16 +2522,18 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[dateFrom,setDateFrom]=useState('');
     const[dateTo,setDateTo]=useState('');
     const[editingItem,setEditingItem]=useState(null);
-    const[tempPrice,setTempPrice]=useState('');
+    const[temp,setTemp]=useState({price:'',currency:'GBP'});
     const{sort,onSort}=useSort();
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo,sort}));
 
-    const openPriceModal=(item)=>{setEditingItem(item);setTempPrice(item.purchasePrice||'');};
-    const closeModal=()=>{setEditingItem(null);setTempPrice('');};
+    const openPriceModal=(item)=>{setEditingItem(item);setTemp(item.manual?{price:String(item.manual.price),currency:item.manual.currency}:{price:'',currency:item.currency||'GBP'});};
+    const closeModal=()=>{setEditingItem(null);};
     useEscape(closeModal,!!editingItem);
     const savePurchasePrice=()=>{
-      if(editingItem){sPP(editingItem.id,tempPrice);setEditingItem(null);setTempPrice('');showToast(tr('Purchase price saved ✓'));}
+      if(editingItem){sPP(editingItem.id,+temp.price>0?{price:String(temp.price),currency:temp.currency}:null);setEditingItem(null);showToast(tr('Purchase price saved ✓'));}
     };
+    const money=(v,c)=>(CURR[c]||(c?c+' ':''))+fmt(+(v||0));
+    const offerLine=o=>`${o.number||'—'} · ${o.supplier||'—'} · ${money(o.price,o.currency)}`;
 
     const filtered=poolItems.filter(p=>{
       if(q&&![p.name,p.code,p.projectId,p.customer].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
@@ -2514,13 +2572,18 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td style={{fontFamily:'monospace',fontSize:11,whiteSpace:'nowrap'}}>{p.code||'—'}</td>
               <td style={{maxWidth:'300px',wordBreak:'break-word',whiteSpace:'normal',lineHeight:1.4}}>{p.name||'—'}</td>
               <td className="tar">{p.qty} {p.unit||''}</td>
-              <td className="tar" style={{fontWeight:600}}>£{fmt(+(p.price||0))}</td>
-              <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>
-                {p.purchasePrice?`£${fmt(+(p.purchasePrice||0))}`:'—'}
+              <td className="tar" style={{fontWeight:600}}>{money(p.price,p.currency)}</td>
+              <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}} title={p.offers.length>1?p.offers.map(offerLine).join('\n'):undefined}>
+                {p.purchasePrice?<>
+                  <div>{money(p.purchasePrice,p.purchaseCurrency)}</div>
+                  <div style={{fontSize:10.5,color:'var(--g500)',marginTop:1}}>{p.purchaseSrc==='rq'
+                    ?<>{p.purchaseRef}{p.offers.length>1&&<span> · {tr("cheapest of {0}",p.offers.length)}</span>}</>
+                    :tr("Manual")}</div>
+                </>:'—'}
               </td>
               <td style={{color:'var(--g500)',fontSize:12}}>{p.projectId||'—'}</td>
               <td style={{fontWeight:500,color:isDup?'var(--amber)':'var(--g900)'}}>{p.customer||'—'}</td>
-              <td><button className="ab" onClick={()=>openPriceModal(p)} title={tr("Set Purchase Price")}><Ico n="edit"/></button></td>
+              <td><button className="ab" onClick={()=>openPriceModal(p)} title={p.purchaseSrc==="rq"?tr("Purchase price details"):tr("Set Purchase Price")}><Ico n="edit"/></button></td>
             </tr>);
           })}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
@@ -2528,19 +2591,29 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
       {editingItem&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999}} onClick={closeModal}>
         <div style={{background:'var(--white)',borderRadius:12,padding:24,width:'90%',maxWidth:420,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={e=>e.stopPropagation()}>
-          <h3 style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{tr("Set Purchase Price")}</h3>
+          <h3 style={{fontSize:16,fontWeight:700,color:'var(--g900)',marginBottom:16}}>{editingItem.purchaseSrc==="rq"?tr("Purchase price details"):tr("Set Purchase Price")}</h3>
           <div style={{marginBottom:16}}>
             <div style={{fontSize:13,fontWeight:600,color:'var(--g700)',marginBottom:2}}>{editingItem.name}</div>
-            <div style={{fontSize:12,color:'var(--g500)'}}>{tr("{0} · {1} · Sale: £{2}", editingItem.customer||'—', editingItem.quoteNum||'—', fmt(+(editingItem.price||0)))}</div>
+            <div style={{fontSize:12,color:'var(--g500)'}}>{tr("{0} · {1} · Sale: {2}", editingItem.customer||'—', editingItem.quoteNum||'—', money(editingItem.price,editingItem.currency))}</div>
           </div>
-          <div style={{marginBottom:20}}>
-            <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--g700)',marginBottom:6}}>{tr("Purchase Price (£)")}</label>
-            <input type="number" value={tempPrice} onChange={e=>setTempPrice(e.target.value)} placeholder="0.00" min="0" step="0.01" autoFocus onKeyDown={e=>{if(e.key==='Enter')savePurchasePrice();if(e.key==='Escape')closeModal();}} style={{width:'100%',padding:'10px 12px',fontSize:14,fontWeight:600,border:'1px solid var(--g300)',borderRadius:8,fontFamily:'inherit'}}/>
-          </div>
-          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-            <button onClick={closeModal} style={{padding:'8px 16px',fontSize:13,fontWeight:600,border:'1px solid var(--g300)',borderRadius:7,background:'var(--white)',color:'var(--g700)',cursor:'pointer'}}>{tr("Cancel")}</button>
-            <button onClick={savePurchasePrice} style={{padding:'8px 16px',fontSize:13,fontWeight:600,border:'none',borderRadius:7,background:'linear-gradient(135deg,var(--btn),var(--btn-hover))',color:'var(--white)',cursor:'pointer'}}>{tr("Save Price")}</button>
-          </div>
+          {editingItem.purchaseSrc==='rq'?<>
+            {/* Matched to Received Quotes: the cheapest is used and cannot be overwritten here */}
+            <div style={{fontSize:12.5,color:'var(--g600)',marginBottom:8}}>{tr("The purchase price comes from the Received Quotes matched to this line; the cheapest is used. If the match is removed, the price entered by hand applies.")}</div>
+            <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:20}}>
+              {editingItem.offers.map((o,i)=><div key={i} style={{fontSize:12.5,padding:'6px 10px',borderRadius:6,border:'1px solid var(--g200)',
+                background:o.number===editingItem.purchaseRef&&o.price===editingItem.purchasePrice&&o.currency===editingItem.purchaseCurrency?'rgba(97,154,48,.08)':'var(--white)'}}>{offerLine(o)}</div>)}
+            </div>
+            <div style={{display:'flex',justifyContent:'flex-end'}}><Btn v="bgh bsm" onClick={closeModal}>{tr("Close")}</Btn></div>
+          </>:<>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 120px',gap:8,marginBottom:20}}>
+              <Fld label={tr("Purchase Price")}><input type="number" className="fi" value={temp.price} onChange={e=>{const v=e.target.value;setTemp(t=>({...t,price:v}));}} placeholder="0.00" min="0" step="0.01" autoFocus onKeyDown={e=>{if(e.key==='Enter')savePurchasePrice();}}/></Fld>
+              <Fld label={tr("Currency")}><select className="fi" value={temp.currency} onChange={e=>{const v=e.target.value;setTemp(t=>({...t,currency:v}));}}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <Btn v="bgh bsm" onClick={closeModal}>{tr("Cancel")}</Btn>
+              <Btn v="bp bsm" onClick={savePurchasePrice}>{tr("Save Price")}</Btn>
+            </div>
+          </>}
         </div>
       </div>}
     </div>);
@@ -3343,7 +3416,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {view==='purchase_orders'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>{tr("New Purchase Order")}</Btn>}
             {view==='received_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>{tr("New Received Invoice")}</Btn>}
             {view==='projects'&&<Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>{tr("New Project")}</Btn>}
-            {view==='product_pool'&&<Btn v="bex bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Purchase Price','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}>{tr("Export Excel")}</Btn>}
+            {view==='product_pool'&&<Btn v="bex bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Sale Currency','Purchase Price','Purchase Currency','Purchase Price Source','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.currency||'',p.purchasePrice||'',p.purchaseCurrency||'',p.purchaseSrc==='rq'?'Received Quote '+p.purchaseRef:p.purchaseSrc==='manual'?'Manual':'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}>{tr("Export Excel")}</Btn>}
             {view==='expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>{tr("Categories")}</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>{tr("New Expense")}</Btn></div>}
             {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('cust_form');}}><Ico n="plus"/>{tr("New Customer")}</Btn>}
             {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>{tr("Upload Document")}</Btn>}
