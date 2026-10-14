@@ -2614,21 +2614,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const PRICE_KIND={sq:'Sales Quotation',pq:'Received Quote',manual:'Entered by hand'};
   const money=(v,c)=>(CURR[c]||(c?c+' ':''))+fmt(+(v||0));
 
-  // One product's prices from every document, newest first; similar products are listed apart and never set a price
+  // One product's prices from every quotation, oldest to newest; similar products are listed apart and never set a price
   function ProductHistoryModal({row,onClose,onSetPrice}){
-    const sales=row.records.filter(r=>r.side==='sale'),buys=row.records.filter(r=>r.side==='buy');
-    const similar=poolSimilar(row);
+    const oldestFirst=l=>[...l].reverse();
+    const sales=oldestFirst(row.records.filter(r=>r.side==='sale')),buys=oldestFirst(row.records.filter(r=>r.side==='buy'));
+    const similar=oldestFirst(poolSimilar(row));
     const[tab,setTab]=useState(buys.length||!sales.length?'buy':'sale');
     const[docView,setDocView]=useState(null);
     useEscape(onClose,!docView);
-    const curs=[...new Set(row.records.map(r=>r.currency))];
-    const lowest={};
-    buys.forEach(r=>{if(!lowest[r.currency]||r.price<lowest[r.currency].price)lowest[r.currency]=r;});
     const DOCS={sq:[salesQuotes,'sales_quote',FULL_BANK],pq:[purchaseQuotes,'quote',SALES_PDF]};
     const openDoc=r=>{const[list,docType,pdfOpts]=DOCS[r.kind];const doc=list.find(d=>d.id===r.docId);if(doc)setDocView({doc,docType,pdfOpts,buy:r.side==='buy'});};
     const list=tab==='sale'?sales:tab==='buy'?buys:similar;
-    const stat=(label,r)=><div><div className="ph-stat-l">{label}</div>
-      {r?<><div className="ph-stat-v">{money(r.price,r.currency)}</div><div className="ph-stat-d">{r.date||'—'}</div></>:<div className="ph-stat-v ph-none">—</div>}</div>;
     const meta=[row.code,row.brand,row.model,row.unit].filter(Boolean).join(' · ');
     const partyHead=tab==='sale'?tr("Customer"):tab==='buy'?tr("Supplier"):tr("Customer / Supplier");
     return(<>
@@ -2637,16 +2633,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="gq-b">
             <h3 className="gmodal-t" style={{marginBottom:4}}>{row.name}</h3>
             <div className="ph-meta">{meta||tr("No product code")}</div>
-            {curs.length>0&&<div className="ph-sum">{curs.map(c=>(
-              <div key={c} className="ph-cur">
-                <div className="ph-cur-h">{c}</div>
-                <div className="ph-stats">
-                  {stat(tr("Last sale"),sales.find(r=>r.currency===c))}
-                  {stat(tr("Last purchase"),buys.find(r=>r.currency===c))}
-                  {stat(tr("Lowest purchase"),lowest[c])}
-                </div>
-              </div>))}
-            </div>}
             <div className="st-tabs" role="tablist" style={{marginBottom:12}}>
               {[['buy',tr('Purchase prices'),buys.length],['sale',tr('Sale prices'),sales.length],...(similar.length?[['similar',tr('Similar products'),similar.length]]:[])].map(([k,l,n])=>
                 <button key={k} role="tab" aria-selected={tab===k} className={'st-tab'+(tab===k?' active':'')} onClick={()=>setTab(k)}>{l}<span className="ph-count">{n}</span></button>)}
@@ -2672,7 +2658,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <td className={tab==='similar'?'':'fit-grow'}>{r.party||'—'}</td>
                   <td className="tar">{r.qty?`${r.qty} ${r.unit||''}`:'—'}</td>
                   <td className="tar" style={{fontWeight:600}}>
-                    {tab==='buy'&&lowest[r.currency]===r&&buys.filter(x=>x.currency===r.currency).length>1&&<span className="mt-tag ok" style={{marginRight:6}}>{tr("lowest")}</span>}
                     {money(r.price,r.currency)}
                     {r.prev&&r.prev.length>0&&<div className="ph-prev">{tr("previous: {0}",r.prev.map(x=>money(x.price,x.currency)).join(' · '))}</div>}
                   </td>
@@ -2737,7 +2722,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{tr("All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.")} {tr("Click a row to see all its sale and purchase prices.")}</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">{tr("Pool is empty")}</div><div className="empty-s">{tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.32,0.8,1,0.8,1.6,0.78,1.08,1.3,0.9,1.5,0.86]}/>
+          <Cg w={[0.32,0.8,1,0.8,2.4,0.78,1.08,1.3,1.3,0.86]}/>
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
@@ -2748,7 +2733,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="price" sort={sort} onSort={onSort} className="tar">{tr("Sale Price")}</SortTh>
             <SortTh k="purchasePrice" sort={sort} onSort={onSort} className="tar">{tr("Last Purchase Price")}</SortTh>
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
-            <SortTh k="customer" sort={sort} onSort={onSort}>{tr("Customer")}</SortTh>
             <th>{tr("Actions")}</th>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(p=>{
@@ -2768,7 +2752,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 </>:'—'}
               </td>
               <td style={{color:'var(--g500)',fontSize:12}}>{p.projectId||'—'}</td>
-              <td style={{fontWeight:500,color:isDup?'var(--amber)':'var(--g900)'}}>{p.customer||'—'}</td>
               <td><button className="ab" onClick={e=>{e.stopPropagation();openPriceModal(p);}} title={tr("Set Purchase Price")}><Ico n="edit"/></button></td>
             </tr>);
           })}</tbody>
