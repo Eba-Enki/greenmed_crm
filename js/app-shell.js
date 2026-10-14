@@ -95,24 +95,26 @@ function PortalSelectScreen({user,portals,onSelect}){
     <div className="acc-screen">
       <LangSwitch className="lang-sw-corner"/>
       <div className="ps-wrap">
-        <img src={logo||LOGO} className="ps-logo" alt="Green Med Ltd"/>
+        <img src={logo||LOGO} className={`ps-logo${logo?' ps-logo-up':''}`} alt="Green Med Ltd"/>
         {!logo&&<h2 className="ps-title">{tr("Green Med Ltd")}</h2>}{/* an uploaded logo already carries the name */}
         <p className="ps-sub">{tr("Please select the portal you want to use")}</p>
         <div className="ps-cards">
           {list.map(p=>{
             const info=PORTAL_INFO[p]||{label:p,desc:'',ico:'dash'};
             return(
-              <button key={p} className={`ps-card ps-${p}`} onClick={()=>onSelect(p)}>
-                <span className="ps-ico"><Ico n={info.ico} size={26}/></span>
+              <button key={p} className={`ps-card ps-${p}`} onClick={()=>onSelect(p)} title={tr("Enter Portal")}>
+                <span className="ps-top">
+                  <span className="ps-ico"><Ico n={info.ico} size={17}/></span>
+                  <svg className="ps-go" viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </span>
                 <span className="ps-name">{info.label}</span>
                 <span className="ps-desc">{info.desc}</span>
-                <span className="ps-go">{tr("Enter Portal")} <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
               </button>
             );
           })}
         </div>
         {isAdminUser(user)&&(
-          <button className="ps-sys" onClick={()=>onSelect('system')}><Ico n="settings" size={12}/><span>{tr("System Management")}</span></button>
+          <button className="ps-sys" onClick={()=>onSelect('system')}><Ico n="settings" size={14}/><span>{tr("System Management")}</span></button>
         )}
       </div>
     </div>
