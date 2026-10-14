@@ -336,7 +336,6 @@ function PageHeader({sb,isActive,onGo,session,title,children}){
       <div className="crumbs-row">
         <SidebarToggle/>
         <nav className="crumbs" aria-label="Breadcrumb">
-          <Ico n={(cur||{}).ico||'dash'} size={14}/>
           {crumbs.map((c,i)=><React.Fragment key={i}>{i>0&&<span className="crumb-sep">›</span>}<span className="crumb">{c}</span></React.Fragment>)}
           <span className="crumb-sep">›</span><span className="crumb crumb-cur">{title}</span>
         </nav>
