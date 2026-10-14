@@ -807,7 +807,7 @@ html.sb-wide .main{left:8px}
 .sb-toggle:active{background:var(--bz-press);transform:scale(.94)}
 .sb-toggle:focus-visible{outline:2px solid var(--gm-400);outline-offset:1px}
 @media (prefers-reduced-motion:reduce){.sidebar,html.sb-hidden .sidebar{transition:none}}
-.sb-acc-pill{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;padding:6px 8px;margin:0 0 10px;border-radius:var(--bz-ctl-r);cursor:pointer;transition:background .15s var(--bz-ease)}
+.sb-acc-pill{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:10px;width:100%;padding:6px 8px;margin:0 0 14px;border-radius:var(--bz-ctl-r);cursor:pointer;transition:background .15s var(--bz-ease)}
 .sb-acc-pill:hover{background:var(--bz-hover)}
 .sb-acc-pill:active{background:var(--bz-press)}
 .sb-acc-pill:focus-visible{outline:2px solid var(--gm-400);outline-offset:1px}
@@ -820,13 +820,6 @@ html.sb-wide .main{left:8px}
 .pd-item:hover{background:var(--bz-hover)}
 .pd-active{background:var(--bz-active);color:var(--bz-ink)}
 
-.sb-search{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;margin:0 0 14px;border-radius:var(--bz-ctl-r);background:rgba(255,255,255,.42);border:1px solid rgba(255,255,255,.55);box-shadow:inset 0 0 0 1px rgba(31,32,35,.035);color:var(--bz-faint);cursor:text;transition:background .15s var(--bz-ease),box-shadow .15s var(--bz-ease)}
-.sb-search:hover{background:rgba(255,255,255,.6)}
-.sb-search:focus-within{background:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.16)}
-.sb-search svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.75}
-.sb-search input{flex:1;min-width:0;border:none;background:transparent;font-size:14px;color:var(--bz-ink);outline:none;box-shadow:none!important}
-.sb-search input::placeholder{color:#8d8f8b}
-.sb-search kbd{font:500 10.5px/1 'Inter',sans-serif;color:#8d8f8b;letter-spacing:.2px}
 
 .sb-nav{flex:1;overflow-y:auto;overflow-x:hidden;margin:0 -4px;padding:0 4px}
 .sb-sec+.sb-sec{margin-top:14px}
@@ -840,7 +833,6 @@ html.sb-wide .main{left:8px}
 .sb-item svg{width:16px;height:16px;stroke-width:1.7;color:var(--bz-ink-2)}
 .sb-item .lbl{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-cnt,.sb-item.active .sb-cnt{background:transparent;color:var(--bz-faint);font-size:11.5px;font-weight:500;padding:0}
-.sb-none{padding:6px 8px;font-size:13px;color:var(--bz-mute)}
 /* Something to look at here: bold label + dot (reasons in the tooltip), like unread channels in Buzz */
 .sb-item.att .lbl{font-weight:600;color:var(--bz-ink)}
 .sb-dot{width:7px;height:7px;border-radius:50%;background:var(--bz-pill);flex-shrink:0;animation:bzFade .3s var(--bz-ease)}
@@ -1018,17 +1010,13 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .glass,.glass-soft{position:relative;isolation:isolate;border:none}
 .glass{background:var(--glass-fill);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-glow),var(--glass-drop)}
 .glass-soft{background:rgba(255,255,255,.26);box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 1px 2px rgba(26,42,10,.04)}
-.glass::before,.glass-soft::before,.sb-item.active::before,.sb-search::before,.portal-dropdown::before,.sb-menu::before,.toast::before,.fpanel::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;padding:1px;pointer-events:none;background:var(--glass-rim);
+.glass::before,.glass-soft::before,.sb-item.active::before,.portal-dropdown::before,.sb-menu::before,.toast::before,.fpanel::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;padding:1px;pointer-events:none;background:var(--glass-rim);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
 .glass-soft::before{opacity:.75}
 /* Glass in the app frame: the selected sidebar item, the sidebar search box and the two pop-up menus (portal
    switcher, user menu). The menus stay mostly opaque so their text reads as clearly as before. */
 .sb-item.active{position:relative;isolation:isolate;background:rgba(255,255,255,.4);box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 1px 2px rgba(26,42,10,.06),0 4px 12px rgba(26,42,10,.05)}
 .sb-item.active::before{opacity:.85}
-.sb-search{position:relative;isolation:isolate;background:rgba(255,255,255,.3);border-color:transparent;box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 1px 2px rgba(26,42,10,.04)}
-.sb-search:hover{background:rgba(255,255,255,.45)}
-.sb-search:focus-within{background:rgba(255,255,255,.75);box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 0 0 3px rgba(97,154,48,.16)}
-.sb-search::before{opacity:.7}
 .portal-dropdown,.sb-menu{isolation:isolate;border-color:transparent;border-radius:14px;background:rgba(255,255,255,.72);-webkit-backdrop-filter:blur(24px) saturate(1.8);backdrop-filter:blur(24px) saturate(1.8);box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 1px 2px rgba(26,42,10,.06),0 14px 36px rgba(26,42,10,.16)}
 .pd-item,.sb-menu-item{border-radius:9px}
 .pd-active{background:rgba(255,255,255,.6);box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 1px 2px rgba(26,42,10,.06)}

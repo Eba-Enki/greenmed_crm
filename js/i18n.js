@@ -240,7 +240,7 @@ const I18N_TR={
   'Approved — not invoiced yet':'Onaylandı — henüz faturalanmadı','Convert to PO':'Siparişe dönüştür','Not ordered for over 14 days':'14 günden uzun süredir siparişe dönüşmedi',
   'Add Invoice':'Fatura ekle','No invoice for over 14 days':'14 günden uzun süredir fatura gelmedi','Overdue — not paid':'Vadesi geçti — ödenmedi','Not paid yet':'Henüz ödenmedi','{0} awaiting reply for over 14 days':'{0} teklif 14 günden uzun süredir cevap bekliyor',
   '{0} not ordered for over 14 days':'{0} teklif 14 günden uzun süredir siparişe dönüşmedi','{0} unpaid':'{0} ödenmemiş',
-  '{0} not ordered yet':'{0} siparişe dönüşmedi','{0} new':'{0} yeni','{0} awaiting invoice':'{0} fatura bekliyor','Search everything':'Her şeyi ara','No matches':'Eşleşme yok','Hide sidebar':'Kenar çubuğunu gizle','Show sidebar':'Kenar çubuğunu göster',
+  '{0} not ordered yet':'{0} siparişe dönüşmedi','{0} new':'{0} yeni','{0} awaiting invoice':'{0} fatura bekliyor','Hide sidebar':'Kenar çubuğunu gizle','Show sidebar':'Kenar çubuğunu göster',
   'A required component could not be loaded. Check your internet connection and try again.':'Gerekli bir bileşen yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.',
 
   // Added after the screen walkthrough

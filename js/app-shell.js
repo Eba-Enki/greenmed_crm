@@ -165,7 +165,7 @@ function PortalDropdown({session,onPortalSwitch}){
 }
 
 // ==========================
-// PORTAL SIDEBAR (Buzz-style): portal switcher, search, sections, user card
+// PORTAL SIDEBAR (Buzz-style): portal switcher, sections, user card
 // ==========================
 // sb is the portal's menu list: {sec|group} headers, {div} separators (ignored) and {k,ico,lbl,cnt} items.
 // Each section shows the icon of its first item, like the small emoji next to Buzz's section names.
@@ -180,28 +180,6 @@ const sbSections=sb=>{
   });
   return out;
 };
-
-function SidebarSearch({items,onGo,q,setQ}){
-  const ref=useRef(null);
-  useEffect(()=>{
-    // Ctrl+K / ⌘K jumps to the search box from anywhere
-    const h=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();ref.current&&ref.current.focus();}};
-    window.addEventListener('keydown',h);
-    return()=>window.removeEventListener('keydown',h);
-  },[]);
-  const isMac=/Mac/.test(navigator.platform||'');
-  return(
-    <label className="sb-search">
-      <Ico n="search" size={15}/>
-      <input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder={tr('Search everything')} aria-label={tr('Search everything')}
-        onKeyDown={e=>{
-          if(e.key==='Escape'){setQ('');e.currentTarget.blur();}
-          if(e.key==='Enter'&&items[0]){onGo(items[0].k);setQ('');e.currentTarget.blur();}
-        }}/>
-      {!q&&<kbd>{isMac?'⌘K':'Ctrl K'}</kbd>}
-    </label>
-  );
-}
 
 function SidebarUserMenu({session,portalLabel,onOpenProfile,onLogout,onLang}){
   const[open,setOpen]=useState(false);
@@ -236,7 +214,6 @@ function SidebarUserMenu({session,portalLabel,onOpenProfile,onLogout,onLang}){
 }
 
 function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,onLogout,onLang}){
-  const[q,setQ]=useState('');
   const[,bump]=useState(0);
   useEffect(()=>{const h=()=>bump(n=>n+1);window.addEventListener('seen-changed',h);return()=>window.removeEventListener('seen-changed',h);},[]);
   // Opening a list tells the server it has been seen (once per visit, not on every render)
@@ -245,12 +222,10 @@ function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,on
   const newCount=it=>it.col&&!isActive(it.k)?Seen.count(it.col):0;
   const portalLabel=(PORTAL_INFO[session.activePortal]||{label:session.activePortal}).label;
   const sections=sbSections(sb);
-  const ql=q.trim().toLocaleLowerCase(LANG);
-  const matches=ql?sections.flatMap(s=>s.items).filter(it=>String(it.lbl).toLocaleLowerCase(LANG).includes(ql)):[];
   const item=it=>{
     const n=newCount(it),why=n?tr('{0} new',n):'';
     return(
-      <button key={it.k} className={`sb-item${isActive(it.k)?' active':''}${n?' att':''}`} onClick={()=>{setQ('');onGo(it.k);}} aria-current={isActive(it.k)?'page':undefined} title={why||undefined}>
+      <button key={it.k} className={`sb-item${isActive(it.k)?' active':''}${n?' att':''}`} onClick={()=>onGo(it.k)} aria-current={isActive(it.k)?'page':undefined} title={why||undefined}>
         <Ico n={it.ico} size={16}/><span className="lbl">{it.lbl}</span>
         {n>0&&<><span className="sb-dot"/><span className="sr-only">{why}</span></>}
       </button>
@@ -259,11 +234,8 @@ function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,on
   return(
     <aside className="sidebar no-print">
       <PortalDropdown session={session} onPortalSwitch={onPortalSwitch}/>
-      <SidebarSearch items={matches} onGo={onGo} q={q} setQ={setQ}/>
       <nav className="sb-nav">
-        {ql?(
-          matches.length?matches.map(item):<div className="sb-none">{tr('No matches')}</div>
-        ):sections.map((s,i)=>(
+        {sections.map((s,i)=>(
           <div key={i} className="sb-sec">
             {s.label&&<div className="sb-group">{s.label}</div>}
             {s.items.map(item)}
