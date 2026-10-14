@@ -48,7 +48,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
 
     return(
       <div>
-        <div style={{background:'var(--white)',borderRadius:'10px',border:'1px solid var(--g200)',padding:'20px 24px',marginBottom:'20px',boxShadow:'0 2px 8px rgba(0,0,0,.04)',display:'flex',alignItems:'center',gap:12}}>
+        <div className="glass-soft sys-formbar">
           <button onClick={onCancel} style={{background:'none',border:'none',cursor:'pointer',color:'var(--g500)',fontSize:13,display:'flex',alignItems:'center',gap:6}}><Ico n="back"/>{tr("Back")}</button>
           <div style={{width:'1px',height:'24px',background:'var(--g200)'}}/>
           <h2 style={{fontSize:18,fontWeight:700,color:'var(--dk)'}}>{init.id?tr('Edit User'):tr('New User')}</h2>
@@ -129,12 +129,12 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
           <Ico n="plus" size={13}/>{tr("New User")}
         </Btn>
       </div>
-      {users.length===0&&<div className="sys-card sys-empty">{tr("No users yet")}</div>}
+      {users.length===0&&<div className="glass-soft sys-card sys-empty">{tr("No users yet")}</div>}
       {users.map(u=>{
         const role=topRole(u);
         const name=fullName(u)||u.username;
         return(
-          <div key={u.id} className={`sys-card${u.active?'':' inactive'}`}>
+          <div key={u.id} className={`glass-soft sys-card${u.active?'':' inactive'}`}>
             <Avatar className="sys-avatar" user={u} name={name}/>
             <div className="sys-info">
               <div className="sys-name">{name}<span className="sys-uname">@{u.username}</span></div>
@@ -171,7 +171,7 @@ function AppSystem({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProfil
         </div>
       </header>
 
-      <main className="sys-wrap">
+      <main className="glass sys-wrap">
         {view==='users'&&renderUsers()}
         {view==='user_form'&&cur&&<S.SysUserForm key={cur.id||'new'} user={cur} onSave={handleSaveUser} onCancel={()=>{setView('users');setCur(null);}}/>}
       </main>

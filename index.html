@@ -1004,15 +1004,29 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .ps-title{font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--bz-ink);margin-bottom:6px}
 .ps-sub{color:var(--bz-mute);margin-bottom:28px}
 .ps-cards{gap:12px}
-/* Liquid-glass cards: translucent frosted fill, blurred canvas behind, a bright rim (::before) and inner glow */
-.ps-card{all:unset;box-sizing:border-box;position:relative;isolation:isolate;flex:none;width:220px;aspect-ratio:1/1;display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:18px;text-align:left;border-radius:22px;
-  background:linear-gradient(160deg,rgba(255,255,255,.42) 0%,rgba(255,255,255,.16) 55%,rgba(255,255,255,.26) 100%);
-  -webkit-backdrop-filter:blur(22px) saturate(1.7);backdrop-filter:blur(22px) saturate(1.7);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.75),inset 0 -1px 1px rgba(255,255,255,.18),inset 0 0 24px rgba(255,255,255,.22),0 1px 2px rgba(26,42,10,.05),0 10px 30px rgba(26,42,10,.08);
-  cursor:pointer;transition:box-shadow .2s var(--bz-ease),transform .2s var(--bz-spring)}
-.ps-card::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;padding:1px;pointer-events:none;
-  background:linear-gradient(140deg,rgba(255,255,255,.95) 0%,rgba(255,255,255,.25) 32%,rgba(255,255,255,.08) 60%,rgba(255,255,255,.7) 100%);
+/* Liquid glass, shared by the sign-in, portal and System Management screens: translucent frosted fill, the canvas
+   blurred behind, inner glow and a bright rim (::before, a masked gradient border). .glass-soft is the lighter
+   variant for rows and cards that already sit on a .glass panel. */
+:root{
+  --glass-fill:linear-gradient(160deg,rgba(255,255,255,.42) 0%,rgba(255,255,255,.16) 55%,rgba(255,255,255,.26) 100%);
+  --glass-blur:blur(22px) saturate(1.7);
+  --glass-glow:inset 0 1px 1px rgba(255,255,255,.75),inset 0 -1px 1px rgba(255,255,255,.18),inset 0 0 24px rgba(255,255,255,.22);
+  --glass-drop:0 1px 2px rgba(26,42,10,.05),0 10px 30px rgba(26,42,10,.08);
+  --glass-rim:linear-gradient(140deg,rgba(255,255,255,.95) 0%,rgba(255,255,255,.25) 32%,rgba(255,255,255,.08) 60%,rgba(255,255,255,.7) 100%);
+  --glass-field:rgba(255,255,255,.5);--glass-field-line:rgba(255,255,255,.75);
+}
+.glass,.glass-soft{position:relative;isolation:isolate;border:none}
+.glass{background:var(--glass-fill);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-glow),var(--glass-drop)}
+.glass-soft{background:rgba(255,255,255,.26);box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 1px 2px rgba(26,42,10,.04)}
+.glass::before,.glass-soft::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;padding:1px;pointer-events:none;background:var(--glass-rim);
   -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0)}
+.glass-soft::before{opacity:.75}
+/* Small controls on the glass screens */
+.acc-screen .lang-sw,.sys-bar .lang-sw,.sys-logout{background:rgba(255,255,255,.34);-webkit-backdrop-filter:blur(16px) saturate(1.6);backdrop-filter:blur(16px) saturate(1.6);border-color:var(--glass-field-line);box-shadow:inset 0 1px 1px rgba(255,255,255,.7),0 1px 2px rgba(26,42,10,.05)}
+
+.ps-card{all:unset;box-sizing:border-box;position:relative;isolation:isolate;flex:none;width:220px;aspect-ratio:1/1;display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:18px;text-align:left;border-radius:22px;
+  background:var(--glass-fill);-webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);box-shadow:var(--glass-glow),var(--glass-drop);
+  cursor:pointer;transition:box-shadow .2s var(--bz-ease),transform .2s var(--bz-spring)}
 .ps-card::after{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;pointer-events:none;background:rgba(255,255,255,.22);opacity:0;transition:opacity .2s var(--bz-ease)}
 .ps-card:hover{transform:translateY(-2px);box-shadow:inset 0 1px 1px rgba(255,255,255,.85),inset 0 -1px 1px rgba(255,255,255,.22),inset 0 0 28px rgba(255,255,255,.3),0 2px 4px rgba(26,42,10,.05),0 16px 38px rgba(26,42,10,.12)}
 .ps-card:hover::after{opacity:1}
@@ -1032,7 +1046,23 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .ps-sys:focus-visible{outline:2px solid var(--gm-400);outline-offset:1px}
 .sys-page{background:var(--bz-canvas);background-attachment:fixed;padding:8px}
 .sys-bar{background:transparent;border-bottom:none}
-.sys-wrap{background:#fff;border:1px solid rgba(31,32,35,.07);border-radius:var(--bz-panel-r);box-shadow:0 1px 2px rgba(26,42,10,.04),0 10px 30px rgba(26,42,10,.06);padding:28px 24px 36px;margin-top:4px}
+.sys-wrap{border-radius:22px;padding:28px 24px 36px;margin-top:4px}
+.sys-card{border-radius:14px}
+.sys-card:hover{background:rgba(255,255,255,.4);box-shadow:inset 0 1px 1px rgba(255,255,255,.8),0 4px 14px rgba(26,42,10,.06)}
+.sys-avatar,.sys-chip,.sys-ab{background:rgba(255,255,255,.55);border-color:var(--glass-field-line)}
+.sys-formbar{display:flex;align-items:center;gap:12px;padding:20px 24px;margin-bottom:20px;border-radius:14px}
+.sys-wrap .fc{background:rgba(255,255,255,.26);border-color:var(--glass-field-line);border-radius:14px;box-shadow:inset 0 1px 1px rgba(255,255,255,.7)}
+.sys-wrap .fi{background:var(--glass-field);border-color:var(--glass-field-line)}
+.sys-wrap .fi:hover{background:rgba(255,255,255,.65);border-color:#fff}
+.sys-wrap .bgh{background:var(--glass-field);border-color:var(--glass-field-line);box-shadow:inset 0 1px 1px rgba(255,255,255,.7)}
+.sys-wrap .bgh:hover{background:rgba(255,255,255,.7);border-color:#fff}
+/* Sign-in card */
+.login-card{border-radius:22px;padding:28px}
+.login-in{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid var(--glass-field-line);background:var(--glass-field);color:var(--bz-ink);font-size:14px;outline:none;box-shadow:inset 0 1px 2px rgba(26,42,10,.05);transition:background .15s var(--bz-ease),border-color .15s var(--bz-ease),box-shadow .15s var(--bz-ease)}
+.login-in:hover{background:rgba(255,255,255,.62)}
+.login-in:focus{background:rgba(255,255,255,.78);border-color:#fff;box-shadow:0 0 0 3px rgba(97,154,48,.18)}
+/* Chrome paints autofilled fields light blue; keep them glass (the fill is held off for good) */
+.login-in:-webkit-autofill{-webkit-text-fill-color:var(--bz-ink);transition:background-color 600000s 0s}
 
 @media print{
   body{background:#fff!important}

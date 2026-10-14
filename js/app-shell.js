@@ -58,14 +58,14 @@ function LoginScreen({onLogin}){
           </>:<div className="login-logo"><img src={LOGO_VERTICAL} alt="Green Med Ltd"/></div>}
           <p style={{fontSize:14,color:'var(--g500)'}}>{tr("Sign in to your account")}</p>
         </div>
-        <div style={{background:'#fff',border:'1px solid var(--gm-border)',borderRadius:12,padding:28,boxShadow:'0 8px 28px rgba(26,42,10,.08)'}}>
+        <div className="glass login-card">
           <div style={{marginBottom:16}}>
             <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--g600)',marginBottom:8,textTransform:'uppercase',letterSpacing:'.5px'}}>{tr("Username")}</label>
-            <input type="text" value={username} onChange={e=>{setUsername(e.target.value);setError('');}} onKeyDown={e=>e.key==='Enter'&&handleLogin()} placeholder={tr("Your username")} autoFocus style={{width:'100%',padding:'12px 14px',borderRadius:8,border:'1.5px solid var(--g300)',background:'#fff',color:'var(--g900)',fontSize:14,outline:'none',boxSizing:'border-box'}}/>
+            <input type="text" value={username} onChange={e=>{setUsername(e.target.value);setError('');}} onKeyDown={e=>e.key==='Enter'&&handleLogin()} placeholder={tr("Your username")} autoFocus className="login-in"/>
           </div>
           <div style={{marginBottom:20}}>
             <label style={{display:'block',fontSize:12,fontWeight:600,color:'var(--g600)',marginBottom:8,textTransform:'uppercase',letterSpacing:'.5px'}}>{tr("Password")}</label>
-            <input type="password" value={password} onChange={e=>{setPassword(e.target.value);setError('');}} onKeyDown={e=>e.key==='Enter'&&handleLogin()} placeholder={tr("Your password")} autoComplete="current-password" style={{width:'100%',padding:'12px 14px',borderRadius:8,border:'1.5px solid var(--g300)',background:'#fff',color:'var(--g900)',fontSize:14,outline:'none',boxSizing:'border-box'}}/>
+            <input type="password" value={password} onChange={e=>{setPassword(e.target.value);setError('');}} onKeyDown={e=>e.key==='Enter'&&handleLogin()} placeholder={tr("Your password")} autoComplete="current-password" className="login-in"/>
           </div>
           {error&&<div style={{background:'rgba(192,57,43,.08)',border:'1.5px solid rgba(192,57,43,.3)',borderRadius:8,padding:'10px 14px',marginBottom:16,color:'var(--red)',fontSize:13,fontWeight:500}}>{error}</div>}
           <button onClick={handleLogin} disabled={loading} style={{width:'100%',padding:'12px',borderRadius:8,border:'none',background:'linear-gradient(135deg,var(--btn),var(--btn-hover))',color:'#fff',fontSize:14,fontWeight:600,cursor:loading?'default':'pointer',boxShadow:'0 4px 14px rgba(97,154,48,.3)',opacity:loading?.7:1}}>
@@ -102,7 +102,7 @@ function PortalSelectScreen({user,portals,onSelect}){
           {list.map(p=>{
             const info=PORTAL_INFO[p]||{label:p,desc:'',ico:'dash'};
             return(
-              <button key={p} className={`ps-card ps-${p}`} onClick={()=>onSelect(p)} title={tr("Enter Portal")}>
+              <button key={p} className={`glass ps-card ps-${p}`} onClick={()=>onSelect(p)} title={tr("Enter Portal")}>
                 <span className="ps-top">
                   <span className="ps-ico"><Ico n={info.ico} size={17}/></span>
                   <svg className="ps-go" viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
