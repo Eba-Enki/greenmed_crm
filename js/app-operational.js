@@ -2745,13 +2745,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
       </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">{tr("No expenses yet")}</div></div></div>:(
-        <div className="tcard"><table className="dt">
-          <Cg w={[0.32,0.8,1.2,1,2.4,1.2,0.9,0.6]}/>
+        <div className="tcard"><table className="dt dt-fit">
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
             <SortTh k="employee" sort={sort} onSort={onSort}>{tr("Employee")}</SortTh>
-            <SortTh k="category" sort={sort} onSort={onSort}>{tr("Category")}</SortTh>
+            <SortTh k="category" sort={sort} onSort={onSort} className="fit-grow">{tr("Category")}</SortTh>
             <SortTh k="desc" sort={sort} onSort={onSort}>{tr("Description")}</SortTh>
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
             <SortTh k="amount" sort={sort} onSort={onSort} className="tar">{tr("Amount")}</SortTh>
@@ -2760,10 +2759,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id} className={bulk.has(e.id)?'is-sel':''}>
             <SelTd bulk={bulk} id={e.id}/>
             <td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td>
-            <td style={{color:'var(--g700)'}}>{e.employee||'—'}</td>
-            <td>{expCatText(expCats,e)?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{expCatText(expCats,e)}</span>:'—'}</td>
-            <td style={{fontWeight:500,color:'var(--g800)'}}>{e.description||'—'}</td>
-            <td style={{color:'var(--g500)',fontSize:12}}>{e.project||'—'}</td>
+            <td style={{color:'var(--g700)'}}><div className="fit-box fb-sm">{e.employee||'—'}</div></td>
+            <td className="fit-grow" style={{color:'var(--g700)'}}>{expCatText(expCats,e)||'—'}</td>
+            <td style={{fontWeight:500,color:'var(--g800)'}}><div className="fit-box fb-md">{e.description||'—'}</div></td>
+            <td style={{color:'var(--g500)',fontSize:12}}><div className="fit-box fb-sm">{e.project||'—'}</div></td>
             <td className="tar" style={{fontWeight:700}}>{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(e);go('exp_form');}}><Ico n="edit"/></button>

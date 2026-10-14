@@ -954,12 +954,16 @@ table.dt tbody tr{transition:background .12s var(--bz-ease)}
 /* Content-sized list: columns hug their content up to a cap on one line; only .fit-grow wraps and takes the rest */
 table.dt.dt-fit{table-layout:auto}
 table.dt.dt-fit th,table.dt.dt-fit td{white-space:nowrap;width:1px}
-table.dt.dt-fit .fit-grow{white-space:normal;width:100%;min-width:200px}
+table.dt.dt-fit .fit-grow{white-space:normal;width:100%;min-width:180px}
 .tcard:has(> .dt-fit){overflow-x:auto}
 .dt-fit .fit-cut{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dt-fit .fc-name{max-width:clamp(120px,12vw,220px)}
 .dt-fit .fc-mail{max-width:clamp(140px,14vw,260px)}
 .dt-fit .fc-tel{max-width:clamp(100px,8vw,160px)}
+/* Capped column that wraps past its cap: as wide as its content, at most the cap */
+.dt-fit .fit-box{white-space:normal;width:max-content;max-width:var(--fit-max)}
+.dt-fit .fb-sm{--fit-max:clamp(120px,11vw,200px)}
+.dt-fit .fb-md{--fit-max:clamp(160px,15vw,320px)}
 table.dt tbody tr:hover td{background:#fafaf8}
 table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;color:var(--bz-mute);border-bottom:1px solid var(--bz-line)}
 .dn{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:var(--bz-ink-2);background:#f2f2f0;border-radius:5px;padding:2px 6px}
