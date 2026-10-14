@@ -292,43 +292,101 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const latestSQ=base=>base?salesQuotes.filter(q=>sqBaseOf(q)===base).reduce((a,q)=>!a||(q.rev||0)>(a.rev||0)?q:a,null):null;
   const sqLineText=it=>it.desc||it.item||'—';
 
+  // ── PRODUCT IDENTITY ──
+  // Two lines are the same product when their codes match or their descriptions match, ignoring case, spaces and
+  // punctuation ("Pipet 10ml" = "pipet 10 ML"). Descriptions sharing 60 % of their words and the same numbers are only
+  // similar: "Pipet 10 ml" and "Pipet 100 ml" share two of three words but are different products.
+  const prodKey=s=>String(s||'').replace(/[İIı]/g,'i').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');
+  const prodWords=s=>String(s||'').replace(/[İIı]/g,'i').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const prodNumbers=s=>(String(s||'').match(/\d+(?:[.,]\d+)?/g)||[]).map(n=>n.replace(',','.')).sort().join('|');
+  const similarProduct=(a,b)=>{
+    if(prodNumbers(a)!==prodNumbers(b))return false;
+    const t1=prodWords(a),t2=prodWords(b);
+    const[shorter,longer]=t1.length<=t2.length?[t1,t2]:[t2,t1];
+    return shorter.length>0&&shorter.filter(t=>longer.includes(t)).length/shorter.length>=0.6;
+  };
+
+  // ── PRICE RECORDS ──
+  // Every priced sale and purchase line, for a product's price history: sent quotation revisions (a revision only
+  // when the line's price changed), issued sales invoices, received quotes, purchase orders and received invoices.
+  const BUY_RANK={ri:4,po:3,pq:2,manual:1}; // on the same date the firmest price wins
+  const priceRecords=(()=>{
+    const out=[];
+    const add=(side,kind,doc,it,extra)=>{
+      const price=+it.price;
+      if(!(price>0)||!(it.desc||it.item))return;
+      out.push({side,kind,docId:doc.id,date:doc.date||'',number:doc.number||'',qty:it.qty,unit:it.unit||'',price,currency:doc.currency||'GBP',
+        code:it.item||'',name:it.desc||'',codeKey:prodKey(it.item),nameKey:prodKey(it.desc),...extra});
+    };
+    const client=d=>(d.client&&(d.client.company||d.client.contact))||'';
+    const groups={};
+    salesQuotes.filter(q=>q.status!=='draft').forEach(q=>{const b=sqBaseOf(q);(groups[b]=groups[b]||[]).push(q);});
+    Object.values(groups).forEach(revs=>{
+      const last={};
+      [...revs].sort((a,b)=>(a.rev||0)-(b.rev||0)).forEach(q=>(q.items||[]).forEach(it=>{
+        const k=sqItemKey(it),sig=(q.currency||'GBP')+' '+(+it.price);
+        if(last[k]===sig)return;
+        last[k]=sig;
+        add('sale','sq',q,it,{party:client(q)});
+      }));
+    });
+    salesInvoices.filter(d=>d.status!=='draft').forEach(d=>(d.items||[]).forEach(it=>add('sale','si',d,it,{party:client(d)})));
+    [['pq',purchaseQuotes],['po',purchaseOrders],['ri',receivedInvoices]].forEach(([kind,list])=>list.forEach(d=>(d.items||[])
+      .forEach(it=>add('buy',kind,d,it,{party:d.supplierCompany||d.supplier||'',sqBase:d.sqBase||'',sqKey:it.sqKey||''}))));
+    return out;
+  })();
+  const newestFirst=(a,b)=>(b.date||'').localeCompare(a.date||'')||(BUY_RANK[b.kind]||0)-(BUY_RANK[a.kind]||0);
+
   // ── PRODUCT POOL ──
   // Price memory for later quotations: one row per quotation line across its revisions (quote group + line key), always
   // showing the latest revision; a quotation enters the pool once any revision has been sent, so a revision never adds
-  // a second row. Purchase price: the cheapest Received Quote line matched to it (among those in the quotation's
-  // currency when there are any), otherwise the price entered by hand (ops_pp, keyed like the row so it survives
-  // revisions). Approximate costs are preliminary work and never a purchase price source.
+  // a second row. A row's records are the price records of the same product plus the supplier lines matched to it by
+  // hand; its purchase price is the newest of those purchases or of the prices entered by hand (ops_pp, keyed like the
+  // row so it survives revisions, dated when entered). Approximate costs are preliminary work and never a price source.
   const poolKey=(base,it)=>base+'|'+sqItemKey(it);
-  const poolOffers=(base,key)=>purchaseQuotes.filter(pq=>pq.sqBase===base).flatMap(pq=>(pq.items||[])
-    .filter(i=>i.sqKey===key&&+i.price>0)
-    .map(i=>({price:+i.price,currency:pq.currency||'GBP',number:pq.number||'',supplier:pq.supplierCompany||pq.supplier||''})));
   const manualPP=v=>{
     if(v==null||v==='')return null;
-    if(typeof v==='object')return +v.price>0?{price:+v.price,currency:v.currency||'GBP'}:null;
-    return +v>0?{price:+v,currency:'GBP'}:null; // prices saved before currencies were added were shown in £
+    if(typeof v==='object')return +v.price>0?{price:+v.price,currency:v.currency||'GBP',date:v.date||''}:null;
+    return +v>0?{price:+v,currency:'GBP',date:''}:null; // prices saved before currencies were added were shown in £
   };
   const poolItems=(()=>{
     const groups={};
     salesQuotes.forEach(q=>{const b=sqBaseOf(q);(groups[b]=groups[b]||[]).push(q);});
-    return Object.entries(groups).filter(([,revs])=>revs.some(q=>q.status!=='draft')).flatMap(([base,revs])=>{
+    const rows=Object.entries(groups).filter(([,revs])=>revs.some(q=>q.status!=='draft')).flatMap(([base,revs])=>{
       const q=revs.reduce((a,x)=>(x.rev||0)>(a.rev||0)?x:a);
-      const cur=q.currency||'GBP';
       return(q.items||[]).filter(it=>it.desc).map(it=>{
         const id=poolKey(base,it);
-        const offers=poolOffers(base,sqItemKey(it));
-        // Prices in different currencies cannot be compared without a rate: compare within one currency
-        const same=offers.filter(o=>o.currency===cur);
-        const cands=same.length?same:offers.filter(o=>offers.length&&o.currency===offers[0].currency);
-        const best=cands.reduce((a,o)=>!a||o.price<a.price?o:a,null);
         const manual=manualPP(purchasePrices[id]);
-        const buy=best?{price:best.price,currency:best.currency,src:'rq',ref:best.number}:manual?{...manual,src:'manual',ref:''}:null;
-        return{id,base,projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',
-          qty:it.qty,unit:it.unit||'',price:it.price,currency:cur,
-          purchasePrice:buy?buy.price:'',purchaseCurrency:buy?buy.currency:'',purchaseSrc:buy?buy.src:'',purchaseRef:buy?buy.ref:'',
-          offers,manual,quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''};
+        return{id,base,key:sqItemKey(it),projectId:q.project||'',code:it.item||'',name:it.desc||'',brand:it.brand||'',model:it.model||'',category:it.category||'',
+          codeKey:prodKey(it.item),nameKey:prodKey(it.desc),qty:it.qty,unit:it.unit||'',price:it.price,currency:q.currency||'GBP',
+          manual,quoteNum:q.number,quoteId:q.id,date:q.date,customer:(q.client&&(q.client.company||q.client.contact))||''};
       });
     });
+    // Prices entered by hand are purchase records too; one without a date takes its quotation's date
+    const manuals=rows.filter(r=>r.manual).map(r=>({side:'buy',kind:'manual',date:r.manual.date||r.date||'',number:'',qty:'',unit:r.unit,
+      price:r.manual.price,currency:r.manual.currency,code:r.code,name:r.name,codeKey:r.codeKey,nameKey:r.nameKey,party:'',poolId:r.id}));
+    const index=list=>{
+      const byCode={},byName={};
+      list.forEach(r=>{if(r.codeKey)(byCode[r.codeKey]=byCode[r.codeKey]||[]).push(r);if(r.nameKey)(byName[r.nameKey]=byName[r.nameKey]||[]).push(r);});
+      return r=>[...(r.codeKey&&byCode[r.codeKey]||[]),...(r.nameKey&&byName[r.nameKey]||[])];
+    };
+    const sameRecords=index([...priceRecords,...manuals]),sameRows=index(rows);
+    // Supplier lines matched by hand to a row belong to its product, so every row of that product shows them
+    const byMatch={};
+    priceRecords.forEach(x=>{if(x.side==='buy'&&x.sqBase&&x.sqKey)(byMatch[x.sqBase+'|'+x.sqKey]=byMatch[x.sqBase+'|'+x.sqKey]||[]).push(x);});
+    const matched=r=>byMatch[r.id]||[];
+    return rows.map(r=>{
+      const own=new Set([...sameRecords(r),...[r,...sameRows(r)].flatMap(matched)]);
+      const records=[...own].sort(newestFirst);
+      const buy=records.find(x=>x.side==='buy');
+      return{...r,records,purchasePrice:buy?buy.price:'',purchaseCurrency:buy?buy.currency:'',purchaseSrc:buy?buy.kind:'',
+        purchaseRef:buy?buy.number:'',purchaseDate:buy?buy.date:''};
+    });
   })();
+  const poolSimilar=row=>{
+    const own=new Set(row.records);
+    return priceRecords.filter(x=>!own.has(x)&&similarProduct(row.name,x.name)).sort(newestFirst);
+  };
   const sqMatchOptions=base=>{const q=latestSQ(base);return q?(q.items||[]).map((it,i)=>({key:sqItemKey(it),label:`#${i+1} ${sqLineText(it)}`})):[];};
   // "↳ Customer line (SQ0001.R01 #3)" under a supplier line in quick views
   const sqItemNote=doc=>it=>{
@@ -803,20 +861,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _handleCancel=()=>{if(!isLocked&&_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=()=>!isLocked&&_isDirty();
     
-    // Check Product Pool for price history (fuzzy: normalization + token overlap)
-    const _norm=s=>s.toLowerCase().replace(/[\-\(\)\[\],\.\/\\:;'"]/g,' ').replace(/\s+/g,' ').trim();
+    // Check Product Pool for price history: the same or a similar product (see PRODUCT IDENTITY)
     const findPoolMatches=(description)=>{
       if(!description||description.trim()==='')return[];
-      const descNorm=_norm(description);
+      const descKey=prodKey(description);
       return poolItems.filter(p=>{
         if(!p.name||p.quoteId===q.id||(q.base&&p.base===q.base))return false; // not this quotation or its other revisions
-        const pNorm=_norm(p.name);
-        if(pNorm===descNorm)return true;
-        const t1=descNorm.split(' ').filter(Boolean);
-        const t2=pNorm.split(' ').filter(Boolean);
-        const shorter=t1.length<=t2.length?t1:t2;
-        const longer=t1.length>t2.length?t1:t2;
-        return shorter.length>0&&shorter.filter(t=>longer.includes(t)).length/shorter.length>=0.6;
+        return p.nameKey===descKey||similarProduct(description,p.name);
       }).slice(0,3).map(m=>({price:m.price,currency:m.currency,quoteNum:m.quoteNum,date:m.date,matchedName:m.name}));
     };
     const checkPriceHistory=(itemId,description)=>{
@@ -2579,23 +2630,107 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   }
 
   // Product Pool
+  const PRICE_KIND={sq:'Sales Quotation',si:'Sales Invoice',pq:'Received Quote',po:'Purchase Order',ri:'Received Invoice',manual:'Entered by hand'};
+  const money=(v,c)=>(CURR[c]||(c?c+' ':''))+fmt(+(v||0));
+
+  // One product's prices from every document, newest first; similar products are listed apart and never set a price
+  function ProductHistoryModal({row,onClose,onSetPrice}){
+    const sales=row.records.filter(r=>r.side==='sale'),buys=row.records.filter(r=>r.side==='buy');
+    const similar=poolSimilar(row);
+    const[tab,setTab]=useState(buys.length||!sales.length?'buy':'sale');
+    const[docView,setDocView]=useState(null);
+    useEscape(onClose,!docView);
+    const curs=[...new Set(row.records.map(r=>r.currency))];
+    const lowest={};
+    buys.forEach(r=>{if(!lowest[r.currency]||r.price<lowest[r.currency].price)lowest[r.currency]=r;});
+    const DOCS={sq:[salesQuotes,'sales_quote',FULL_BANK],si:[salesInvoices,'invoice',FULL_BANK],pq:[purchaseQuotes,'quote',SALES_PDF],po:[purchaseOrders,'po',SALES_PDF],ri:[receivedInvoices,'invoice',SALES_PDF]};
+    const openDoc=r=>{const[list,docType,pdfOpts]=DOCS[r.kind];const doc=list.find(d=>d.id===r.docId);if(doc)setDocView({doc,docType,pdfOpts,buy:r.side==='buy'});};
+    const list=tab==='sale'?sales:tab==='buy'?buys:similar;
+    const stat=(label,r)=><div><div className="ph-stat-l">{label}</div>
+      {r?<><div className="ph-stat-v">{money(r.price,r.currency)}</div><div className="ph-stat-d">{r.date||'—'}</div></>:<div className="ph-stat-v ph-none">—</div>}</div>;
+    const meta=[row.code,row.brand,row.model,row.unit].filter(Boolean).join(' · ');
+    const partyHead=tab==='sale'?tr("Customer"):tab==='buy'?tr("Supplier"):tr("Customer / Supplier");
+    return(<>
+      <div className="gdlg-bg" style={{zIndex:1900,padding:20}} onClick={onClose}>
+        <div className="glass gmodal gq ph" role="dialog" aria-modal="true" aria-label={row.name} onClick={e=>e.stopPropagation()}>
+          <div className="gq-b">
+            <h3 className="gmodal-t" style={{marginBottom:4}}>{row.name}</h3>
+            <div className="ph-meta">{meta||tr("No product code")}</div>
+            {curs.length>0&&<div className="ph-sum">{curs.map(c=>(
+              <div key={c} className="ph-cur">
+                <div className="ph-cur-h">{c}</div>
+                <div className="ph-stats">
+                  {stat(tr("Last sale"),sales.find(r=>r.currency===c))}
+                  {stat(tr("Last purchase"),buys.find(r=>r.currency===c))}
+                  {stat(tr("Lowest purchase"),lowest[c])}
+                </div>
+              </div>))}
+            </div>}
+            <div className="st-tabs" role="tablist" style={{marginBottom:12}}>
+              {[['buy',tr('Purchase prices'),buys.length],['sale',tr('Sale prices'),sales.length],...(similar.length?[['similar',tr('Similar products'),similar.length]]:[])].map(([k,l,n])=>
+                <button key={k} role="tab" aria-selected={tab===k} className={'st-tab'+(tab===k?' active':'')} onClick={()=>setTab(k)}>{l}<span className="ph-count">{n}</span></button>)}
+            </div>
+            {tab==='similar'&&<div className="ph-note">{tr("Similar descriptions — they may not be the same product, so they never set the pool's purchase price.")}</div>}
+            {list.length===0?<div className="ph-empty">{tab==='buy'?tr("No purchase price yet"):tr("No sale price yet")}</div>:(
+              <div className="tcard"><table className="dt dt-fit">
+                <thead><tr>
+                  <th>{tr("Date")}</th>
+                  <th>{tr("Document")}</th>
+                  {tab==='similar'&&<th className="fit-grow">{tr("Product")}</th>}
+                  <th className={tab==='similar'?'':'fit-grow'}>{partyHead}</th>
+                  <th className="tar">{tr("Qty")}</th>
+                  <th className="tar">{tr("Unit Price")}</th>
+                </tr></thead>
+                <tbody>{list.map((r,i)=><tr key={i}>
+                  <td style={{color:'var(--g500)',fontSize:12}}>{r.date||'—'}</td>
+                  <td>
+                    <span className="ph-kind">{tab==='similar'&&(r.side==='sale'?tr('Sales'):tr('Purchase'))+' · '}{tr(PRICE_KIND[r.kind])}</span>
+                    {r.kind==='manual'?<span style={{color:'var(--g500)'}}>—</span>:<button type="button" className="ph-doc" onClick={()=>openDoc(r)}>{r.number||'—'}</button>}
+                  </td>
+                  {tab==='similar'&&<td className="fit-grow">{r.name}{r.code&&<span className="ph-kind">{r.code}</span>}</td>}
+                  <td className={tab==='similar'?'':'fit-grow'}>{r.party||'—'}</td>
+                  <td className="tar">{r.qty?`${r.qty} ${r.unit||''}`:'—'}</td>
+                  <td className="tar" style={{fontWeight:600}}>
+                    {tab==='buy'&&lowest[r.currency]===r&&buys.filter(x=>x.currency===r.currency).length>1&&<span className="mt-tag ok" style={{marginRight:6}}>{tr("lowest")}</span>}
+                    {money(r.price,r.currency)}
+                  </td>
+                </tr>)}</tbody>
+              </table></div>
+            )}
+          </div>
+          <div className="gq-f">
+            <Btn v="bgh bsm" onClick={onSetPrice}>{row.manual?tr("Edit Manual Price"):tr("Set Purchase Price")}</Btn>
+            <div style={{flex:1}}/>
+            <Btn v="bgh bsm" onClick={onClose}>{tr("Close")}</Btn>
+          </div>
+        </div>
+      </div>
+      {docView&&<DocQuickModal doc={docView.doc} co={co} docType={docView.docType} pdfOpts={docView.pdfOpts}
+        itemNote={docView.buy?sqItemNote(docView.doc):undefined} onClose={()=>setDocView(null)}/>}
+    </>);
+  }
+
   function ProductPoolView(){
     const[q,setQ]=useState('');
     const[dateFrom,setDateFrom]=useState('');
     const[dateTo,setDateTo]=useState('');
     const[editingItem,setEditingItem]=useState(null);
+    const[historyId,setHistoryId]=useState(null);
     const[temp,setTemp]=useState({price:'',currency:'GBP'});
     const{sort,onSort}=useSort();
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo,sort}));
+    const historyRow=historyId&&poolItems.find(p=>p.id===historyId);
 
     const openPriceModal=(item)=>{setEditingItem(item);setTemp(item.manual?{price:String(item.manual.price),currency:item.manual.currency}:{price:'',currency:item.currency||'GBP'});};
     const closeModal=()=>{setEditingItem(null);};
     useEscape(closeModal,!!editingItem);
+    // A price entered by hand is dated the day it is entered (kept when it is saved again unchanged)
     const savePurchasePrice=()=>{
-      if(editingItem){sPP(editingItem.id,+temp.price>0?{price:String(temp.price),currency:temp.currency}:null);setEditingItem(null);showToast(tr('Purchase price saved ✓'));}
+      if(!editingItem)return;
+      const m=editingItem.manual,same=m&&+m.price===+temp.price&&m.currency===temp.currency;
+      sPP(editingItem.id,+temp.price>0?{price:String(temp.price),currency:temp.currency,date:same&&m.date?m.date:td()}:null);
+      setEditingItem(null);showToast(tr('Purchase price saved ✓'));
     };
-    const money=(v,c)=>(CURR[c]||(c?c+' ':''))+fmt(+(v||0));
-    const offerLine=o=>`${o.number||'—'} · ${o.supplier||'—'} · ${money(o.price,o.currency)}`;
 
     const filtered=poolItems.filter(p=>{
       if(q&&![p.name,p.code,p.projectId,p.customer].some(x=>(x||'').toLowerCase().includes(q.toLowerCase())))return false;
@@ -2617,10 +2752,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <BulkBar bulk={bulk}>
         <BulkBtn onClick={exportPicked}>{tr("Export selected")}</BulkBtn>
       </BulkBar>
-      <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{tr("All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.")}</div>
+      <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{tr("All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.")} {tr("Click a row to see all its sale and purchase prices.")}</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">{tr("Pool is empty")}</div><div className="empty-s">{tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
         <div className="tcard"><table className="dt">
-          <Cg w={[0.32,0.8,1,0.8,1.66,0.78,1.08,1.08,0.9,1.56,0.86]}/>
+          <Cg w={[0.32,0.8,1,0.8,1.6,0.78,1.08,1.3,0.9,1.5,0.86]}/>
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
@@ -2629,14 +2764,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="name" sort={sort} onSort={onSort}>{tr("Description")}</SortTh>
             <SortTh k="qty" sort={sort} onSort={onSort} className="tar">{tr("Qty")}</SortTh>
             <SortTh k="price" sort={sort} onSort={onSort} className="tar">{tr("Sale Price")}</SortTh>
-            <SortTh k="purchasePrice" sort={sort} onSort={onSort} className="tar">{tr("Purchase Price")}</SortTh>
+            <SortTh k="purchasePrice" sort={sort} onSort={onSort} className="tar">{tr("Last Purchase Price")}</SortTh>
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
             <SortTh k="customer" sort={sort} onSort={onSort}>{tr("Customer")}</SortTh>
             <th>{tr("Actions")}</th>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(p=>{
             const isDup=sorted.some(x=>x.id!==p.id&&x.customer===p.customer&&x.name.toLowerCase().trim()===p.name.toLowerCase().trim());
-            return(<tr key={p.id} className={bulk.has(p.id)?'is-sel':''} style={isDup?{background:'#fff7ed',borderLeft:'3px solid var(--amber)'}:{}}>
+            return(<tr key={p.id} className={bulk.has(p.id)?'is-sel':''} style={{cursor:'pointer',...(isDup?{background:'#fff7ed',borderLeft:'3px solid var(--amber)'}:{})}} onClick={()=>setHistoryId(p.id)}>
               <SelTd bulk={bulk} id={p.id}/>
               <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{p.date||'—'}</td>
               <td><span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{p.quoteNum||'—'}</span></td>
@@ -2644,47 +2779,38 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td style={{maxWidth:'300px',wordBreak:'break-word',whiteSpace:'normal',lineHeight:1.4}}>{p.name||'—'}</td>
               <td className="tar">{p.qty} {p.unit||''}</td>
               <td className="tar" style={{fontWeight:600}}>{money(p.price,p.currency)}</td>
-              <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}} title={p.offers.length>1?p.offers.map(offerLine).join('\n'):undefined}>
+              <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>
                 {p.purchasePrice?<>
                   <div>{money(p.purchasePrice,p.purchaseCurrency)}</div>
-                  <div style={{fontSize:10.5,color:'var(--g500)',marginTop:1}}>{p.purchaseSrc==='rq'
-                    ?<>{p.purchaseRef}{p.offers.length>1&&<span> · {tr("cheapest of {0}",p.offers.length)}</span>}</>
-                    :tr("Manual")}</div>
+                  <div style={{fontSize:10.5,color:'var(--g500)',marginTop:1,whiteSpace:'nowrap'}}>{p.purchaseSrc==='manual'?tr("Manual"):p.purchaseRef}{p.purchaseDate&&<> · {p.purchaseDate}</>}</div>
                 </>:'—'}
               </td>
               <td style={{color:'var(--g500)',fontSize:12}}>{p.projectId||'—'}</td>
               <td style={{fontWeight:500,color:isDup?'var(--amber)':'var(--g900)'}}>{p.customer||'—'}</td>
-              <td><button className="ab" onClick={()=>openPriceModal(p)} title={p.purchaseSrc==="rq"?tr("Purchase price details"):tr("Set Purchase Price")}><Ico n="edit"/></button></td>
+              <td><button className="ab" onClick={e=>{e.stopPropagation();openPriceModal(p);}} title={tr("Set Purchase Price")}><Ico n="edit"/></button></td>
             </tr>);
           })}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
 
+      {historyRow&&<S.ProductHistoryModal row={historyRow} onClose={()=>setHistoryId(null)} onSetPrice={()=>openPriceModal(historyRow)}/>}
+
       {editingItem&&<div className="gdlg-bg" style={{zIndex:9999}} onClick={closeModal}>
         <div className="glass gmodal" role="dialog" aria-modal="true" style={{width:'90%',maxWidth:420}} onClick={e=>e.stopPropagation()}>
-          <h3 className="gmodal-t">{editingItem.purchaseSrc==="rq"?tr("Purchase price details"):tr("Set Purchase Price")}</h3>
+          <h3 className="gmodal-t">{tr("Set Purchase Price")}</h3>
           <div style={{marginBottom:16}}>
             <div style={{fontSize:13,fontWeight:600,color:'var(--g700)',marginBottom:2}}>{editingItem.name}</div>
             <div style={{fontSize:12,color:'var(--g500)'}}>{tr("{0} · {1} · Sale: {2}", editingItem.customer||'—', editingItem.quoteNum||'—', money(editingItem.price,editingItem.currency))}</div>
           </div>
-          {editingItem.purchaseSrc==='rq'?<>
-            {/* Matched to Received Quotes: the cheapest is used and cannot be overwritten here */}
-            <div style={{fontSize:12.5,color:'var(--g600)',marginBottom:8}}>{tr("The purchase price comes from the Received Quotes matched to this line; the cheapest is used. If the match is removed, the price entered by hand applies.")}</div>
-            <div style={{display:'flex',flexDirection:'column',gap:4,marginBottom:20}}>
-              {editingItem.offers.map((o,i)=><div key={i} style={{fontSize:12.5,padding:'6px 10px',borderRadius:6,border:'1px solid var(--g200)',
-                background:o.number===editingItem.purchaseRef&&o.price===editingItem.purchasePrice&&o.currency===editingItem.purchaseCurrency?'rgba(97,154,48,.08)':'var(--white)'}}>{offerLine(o)}</div>)}
-            </div>
-            <div style={{display:'flex',justifyContent:'flex-end'}}><Btn v="bgh bsm" onClick={closeModal}>{tr("Close")}</Btn></div>
-          </>:<>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 120px',gap:8,marginBottom:20}}>
-              <Fld label={tr("Purchase Price")}><input type="number" className="fi" value={temp.price} onChange={e=>{const v=e.target.value;setTemp(t=>({...t,price:v}));}} placeholder="0.00" min="0" step="0.01" autoFocus onKeyDown={e=>{if(e.key==='Enter')savePurchasePrice();}}/></Fld>
-              <Fld label={tr("Currency")}><select className="fi" value={temp.currency} onChange={e=>{const v=e.target.value;setTemp(t=>({...t,currency:v}));}}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
-            </div>
-            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-              <Btn v="bgh bsm" onClick={closeModal}>{tr("Cancel")}</Btn>
-              <Btn v="bp bsm" onClick={savePurchasePrice}>{tr("Save Price")}</Btn>
-            </div>
-          </>}
+          <div style={{fontSize:12.5,color:'var(--g600)',marginBottom:12}}>{tr("The pool shows the newest purchase price among the documents and the prices entered by hand; a price entered here is dated today.")}</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 120px',gap:8,marginBottom:20}}>
+            <Fld label={tr("Purchase Price")}><input type="number" className="fi" value={temp.price} onChange={e=>{const v=e.target.value;setTemp(t=>({...t,price:v}));}} placeholder="0.00" min="0" step="0.01" autoFocus onKeyDown={e=>{if(e.key==='Enter')savePurchasePrice();}}/></Fld>
+            <Fld label={tr("Currency")}><select className="fi" value={temp.currency} onChange={e=>{const v=e.target.value;setTemp(t=>({...t,currency:v}));}}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+          </div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <Btn v="bgh bsm" onClick={closeModal}>{tr("Cancel")}</Btn>
+            <Btn v="bp bsm" onClick={savePurchasePrice}>{tr("Save Price")}</Btn>
+          </div>
         </div>
       </div>}
     </div>);
@@ -3540,7 +3666,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
-  const S=useStableComponents({CostEstimatesList,CostEstimateForm,SourceList,SourceForm,SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
+  const S=useStableComponents({CostEstimatesList,CostEstimateForm,SourceList,SourceForm,SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ProductHistoryModal,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
@@ -3557,7 +3683,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {view==='purchase_orders'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseOrder());go('po_form');}}><Ico n="plus"/>{tr("New Purchase Order")}</Btn>}
             {view==='received_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkReceivedInvoice());go('ri_form');}}><Ico n="plus"/>{tr("New Received Invoice")}</Btn>}
             {view==='projects'&&<Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>{tr("New Project")}</Btn>}
-            {view==='product_pool'&&<Btn v="bex bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Sale Currency','Purchase Price','Purchase Currency','Purchase Price Source','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.currency||'',p.purchasePrice||'',p.purchaseCurrency||'',p.purchaseSrc==='rq'?'Received Quote '+p.purchaseRef:p.purchaseSrc==='manual'?'Manual':'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}>{tr("Export Excel")}</Btn>}
+            {view==='product_pool'&&<Btn v="bex bsm" onClick={()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Sale Currency','Purchase Price','Purchase Currency','Purchase Price Source','Purchase Price Date','Quote No','Date','Project','Customer'],...poolItems.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.currency||'',p.purchasePrice||'',p.purchaseCurrency||'',p.purchaseSrc?(PRICE_KIND[p.purchaseSrc]+' '+(p.purchaseRef||'')).trim():'',p.purchaseDate||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool')}>{tr("Export Excel")}</Btn>}
             {view==='expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>{tr("Categories")}</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>{tr("New Expense")}</Btn></div>}
             {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('cust_form');}}><Ico n="plus"/>{tr("New Customer")}</Btn>}
             {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>{tr("Upload Document")}</Btn>}

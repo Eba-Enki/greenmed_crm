@@ -968,6 +968,25 @@ table.dt.dt-fit .fit-grow{white-space:normal;width:100%;min-width:180px}
 .dt-fit .fit-box{white-space:normal;width:max-content;max-width:var(--fit-max)}
 .dt-fit .fb-sm{--fit-max:clamp(120px,11vw,200px)}
 .dt-fit .fb-md{--fit-max:clamp(160px,15vw,320px)}
+/* Product price history (Product Pool) */
+.gmodal.gq.ph{width:960px}
+.ph-meta{font-size:12.5px;color:var(--g500);margin-bottom:16px}
+.ph-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:10px;margin-bottom:16px}
+.ph-cur{background:var(--white);border:1px solid var(--g200);border-radius:8px;padding:10px 14px;box-shadow:0 1px 2px rgba(61,105,22,.05),0 4px 12px rgba(61,105,22,.05)}
+.ph-cur-h{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--g500);margin-bottom:6px}
+.ph-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ph-stat-l{font-size:11px;color:var(--g500)}
+.ph-stat-v{font-size:14px;font-weight:600;color:var(--g900);font-variant-numeric:tabular-nums;margin-top:2px}
+.ph-stat-v.ph-none{color:var(--g300)}
+.ph-stat-d{font-size:10.5px;color:var(--g400)}
+.ph-count{font-size:11px;font-weight:600;padding:0 6px;border-radius:8px;background:var(--g100);color:var(--g600)}
+.ph-note{font-size:12px;color:var(--g500);margin:0 0 10px}
+.ph-empty{font-size:12.5px;color:var(--g400);padding:18px 4px}
+.ph-kind{display:block;font-size:10.5px;color:var(--g500)}
+.ph-doc{background:none;border:0;padding:0;font:inherit;font-weight:500;color:var(--gm-500);cursor:pointer;border-radius:4px;transition:color .15s,transform .15s}
+.ph-doc:hover{color:var(--gm-600);text-decoration:underline}
+.ph-doc:focus-visible{outline:2px solid var(--gm-400);outline-offset:2px}
+.ph-doc:active{transform:translateY(1px)}
 table.dt tbody tr:hover td{background:#fafaf8}
 table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;color:var(--bz-mute);border-bottom:1px solid var(--bz-line)}
 .dn{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:var(--bz-ink-2);background:#f2f2f0;border-radius:5px;padding:2px 6px}

@@ -195,8 +195,13 @@ const I18N_TR={
   'All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.':'Gönderilen tekliflerdeki tüm kalemler otomatik görünür. Turuncu satırlar = aynı müşteriye aynı ürün birden fazla kez teklif edilmiş.',
   'Pool is empty':'Havuz boş','Mark quotations as Sent to populate the pool':'Havuzu doldurmak için teklifleri Gönderildi olarak işaretleyin',
   'Sale Price':'Satış Fiyatı','Purchase Price':'Alış Fiyatı','Set Purchase Price':'Alış Fiyatı Gir','{0} · {1} · Sale: £{2}':'{0} · {1} · Satış: £{2}','{0} · {1} · Sale: {2}':'{0} · {1} · Satış: {2}',
-  'Manual':'Elle','cheapest of {0}':'{0} teklifin en ucuzu','Purchase price details':'Alış fiyatı ayrıntıları',
-  'The purchase price comes from the Received Quotes matched to this line; the cheapest is used. If the match is removed, the price entered by hand applies.':'Alış fiyatı bu kaleme eşleştirilmiş Alınan Tekliflerden geliyor; en ucuzu kullanılır. Eşleşme kaldırılırsa elle girilen fiyat geçerli olur.',
+  'Manual':'Elle','Last Purchase Price':'Son Alış Fiyatı','Edit Manual Price':'Elle Fiyatı Düzenle','Entered by hand':'Elle girildi',
+  'The pool shows the newest purchase price among the documents and the prices entered by hand; a price entered here is dated today.':'Havuzda belgeler ve elle girilen fiyatlar arasından en son tarihli alış fiyatı gösterilir; buraya girilen fiyat bugünün tarihini alır.',
+  'Click a row to see all its sale and purchase prices.':'Tüm satış ve alış fiyatlarını görmek için satıra tıklayın.',
+  'Last sale':'Son satış','Last purchase':'Son alış','Lowest purchase':'En düşük alış','Purchase prices':'Alış fiyatları','Sale prices':'Satış fiyatları',
+  'Similar products':'Benzer ürünler','No purchase price yet':'Henüz alış fiyatı yok','No sale price yet':'Henüz satış fiyatı yok','No product code':'Ürün kodu yok',
+  'Product':'Ürün','Purchase':'Alış','Customer / Supplier':'Müşteri / Tedarikçi','lowest':'en düşük',
+  "Similar descriptions — they may not be the same product, so they never set the pool's purchase price.":'Benzer açıklamalar — aynı ürün olmayabilir, bu yüzden havuzdaki alış fiyatını hiçbir zaman belirlemez.',
   'Purchase Price (£)':'Alış Fiyatı (£)','Save Price':'Fiyatı Kaydet',
 
   // Expenses
