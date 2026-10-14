@@ -800,9 +800,9 @@ body{background:var(--bz-canvas);background-attachment:fixed;color:var(--bz-ink)
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
 .sidebar{background:transparent;border-right:none;padding:10px 10px 8px 12px;overflow:hidden;gap:0}
 /* Hidden sidebar (toggle in the page header): it slides out and the panel takes the full width */
-.sidebar{transition:transform .26s var(--bz-ease),opacity .2s var(--bz-ease),visibility 0s linear 0s}
-html.sb-hidden .sidebar{transform:translateX(-24px);opacity:0;visibility:hidden;pointer-events:none;transition:transform .2s var(--bz-ease),opacity .16s var(--bz-ease),visibility 0s linear .2s}
-html.sb-hidden .main{left:8px}
+.sidebar{transition:transform .76s cubic-bezier(.45,.05,.2,1),opacity .6s cubic-bezier(.45,.05,.2,1),visibility 0s linear 0s}
+html.sb-hidden .sidebar{transform:translateX(-56px);opacity:0;visibility:hidden;pointer-events:none;transition:transform .76s cubic-bezier(.45,.05,.2,1),opacity .45s cubic-bezier(.45,.05,.2,1),visibility 0s linear .76s}
+html.sb-wide .main{left:8px}
 .crumbs-row{display:flex;align-items:center;gap:8px}
 .sb-toggle{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;margin-left:-5px;border-radius:7px;color:var(--bz-ink-2);cursor:pointer;flex-shrink:0;transition:background .14s var(--bz-ease),color .14s var(--bz-ease),transform .14s var(--bz-spring)}
 .sb-toggle svg{stroke:currentColor;fill:none;stroke-width:1.75}

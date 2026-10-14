@@ -277,16 +277,35 @@ function PortalSidebar({sb,isActive,onGo,session,onPortalSwitch,onOpenProfile,on
 
 // Hide / show the sidebar (the panel then takes the full width). A per-browser preference, so plain
 // localStorage rather than LS (which syncs to the server). Applied at load so a hidden sidebar never flashes in.
+// Two classes: sb-hidden slides the sidebar out, sb-wide moves the panel's left edge. The panel itself glides with
+// a transform only; its width changes in one step, at the start when widening and at the end when narrowing.
 const SB_HIDDEN_KEY='gm_sb_hidden';
+const SB_FLOW={duration:760,easing:'cubic-bezier(.45,.05,.2,1)'}; // keep in step with the .sidebar transition
 const sbHiddenSaved=()=>{try{return localStorage.getItem(SB_HIDDEN_KEY)==='1';}catch{return false;}};
-document.documentElement.classList.toggle('sb-hidden',sbHiddenSaved());
+const sbSetClasses=(hidden,wide)=>{const c=document.documentElement.classList;c.toggle('sb-hidden',hidden);c.toggle('sb-wide',wide);};
+sbSetClasses(sbHiddenSaved(),sbHiddenSaved());
+let sbAnim=null;
 
 function SidebarToggle(){
   const[hidden,setHidden]=useState(sbHiddenSaved);
   const flip=()=>{
     const h=!hidden;setHidden(h);
-    document.documentElement.classList.toggle('sb-hidden',h);
     try{localStorage.setItem(SB_HIDDEN_KEY,h?'1':'0');}catch{}
+    const main=document.querySelector('.main');
+    if(!main||!main.animate||matchMedia('(prefers-reduced-motion:reduce)').matches){sbSetClasses(h,h);return;}
+    // Start from wherever the panel is right now, so a click mid-animation reverses smoothly
+    const from=main.getBoundingClientRect().left-8;
+    if(sbAnim){sbAnim.cancel();sbAnim=null;}
+    const shift=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sidebar'))-8;
+    sbSetClasses(h,true);
+    if(h){
+      // Panel widens at once, then flows left from where it stood
+      sbAnim=main.animate([{transform:`translateX(${from}px)`},{transform:'none'}],SB_FLOW);
+    }else{
+      // Sidebar flows back in while the full-width panel slides right; its left edge settles at the end
+      const a=sbAnim=main.animate([{transform:`translateX(${from}px)`},{transform:`translateX(${shift}px)`}],{...SB_FLOW,fill:'forwards'});
+      a.finished.then(()=>{sbSetClasses(false,false);a.cancel();if(sbAnim===a)sbAnim=null;},()=>{});
+    }
   };
   const lbl=hidden?tr('Show sidebar'):tr('Hide sidebar');
   return <button type="button" className="sb-toggle" onClick={flip} aria-pressed={hidden} aria-label={lbl} title={lbl}><Ico n="sidebar" size={16}/></button>;
