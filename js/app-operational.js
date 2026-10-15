@@ -22,7 +22,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Approximate costs: purchase prices collected per item, then freight / customs / margin rates on top (see CE logic)
   const[costEsts,setCostEsts]=useState([]);
   const[purchasePrices,setPurchasePrices]=useState({});
-  const[poolHidden,setPoolHidden]=useState({}); // Product Pool rows removed by hand: {poolId: date}
+  // Product Pool lines removed by hand: {lineId: 'YYYY-MM-DD'} while in Deleted items, {purged: date} once deleted from there
+  const[poolHidden,setPoolHidden]=useState({});
   const[expenses,setExpenses]=useState([]);
   const[expCats,setExpCats]=useState([]);
   const[documents,setDocuments]=useState([]);
@@ -138,7 +139,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sSRI=d=>save('srci',setSrcInvoices,d);
   const sCE=d=>save('ce',setCostEsts,d);
   // Purchase price entered by hand in the Product Pool: {price, currency}; an empty price removes it
-  const hidePoolRows=ids=>{const next={...poolHidden};ids.forEach(id=>{next[id]=td();});setPoolHidden(next);LS.set(ns+'poolhide',next);};
+  const setPoolRows=(ids,val)=>{const next={...poolHidden};ids.forEach(id=>{if(val===undefined)delete next[id];else next[id]=val;});setPoolHidden(next);LS.set(ns+'poolhide',next);};
+  const hidePoolRows=ids=>setPoolRows(ids,td());
+  const restorePoolRows=ids=>setPoolRows(ids,undefined);
+  const purgePoolRows=ids=>setPoolRows(ids,{purged:td()});
   const sPP=(id,val)=>{const next={...purchasePrices};if(val&&+val.price>0)next[id]=val;else delete next[id];setPurchasePrices(next);LS.set(ns+'pp',next);};
   const sExp=d=>save('exp',setExpenses,d);
   const sExpCats=d=>save('expcat',setExpCats,d);
@@ -391,7 +395,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     if(typeof v==='object')return +v.price>0?{price:+v.price,currency:v.currency||'GBP',date:v.date||''}:null;
     return +v>0?{price:+v,currency:'GBP',date:''}:null; // prices saved before currencies were added were shown in £
   };
-  const poolItems=(()=>{
+  const{active:poolItems,trash:poolTrash}=(()=>{
     const groups={};
     salesQuotes.forEach(q=>{const b=sqBaseOf(q);(groups[b]=groups[b]||[]).push(q);});
     const rows=Object.entries(groups).filter(([,revs])=>revs.some(q=>q.status!=='draft')).flatMap(([base,revs])=>{
@@ -414,28 +418,33 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // Supplier lines matched by hand to a quotation line belong to its product
     const byMatch={};
     priceRecords.forEach(x=>{if(x.side==='buy'&&x.sqBase&&x.sqKey)(byMatch[x.sqBase+'|'+x.sqKey]=byMatch[x.sqBase+'|'+x.sqKey]||[]).push(x);});
-    // Lines removed from the pool by hand stay out; the others are joined into products through shared codes / descriptions
-    const lines=rows.filter(r=>!poolHidden[r.id]);
-    const parent=lines.map((_,i)=>i);
-    const find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
-    const first={};
-    lines.forEach((r,i)=>[r.codeKey&&'c'+r.codeKey,r.nameKey&&'n'+r.nameKey].filter(Boolean).forEach(k=>{
-      if(k in first)parent[find(i)]=find(first[k]);else first[k]=i;
-    }));
-    const products={};
-    lines.forEach((r,i)=>{const g=find(i);(products[g]=products[g]||[]).push(r);});
-    return Object.values(products).map(ls=>{
-      ls.sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.quoteNum||'').localeCompare(a.quoteNum||''));
-      const head=ls[0];
-      const records=[...new Set(ls.flatMap(l=>[...sameRecords(l),...(byMatch[l.id]||[])]))].sort(newestFirst);
-      const sale=records.find(x=>x.side==='sale'),buy=records.find(x=>x.side==='buy');
-      const pick=f=>(ls.find(l=>l[f])||{})[f]||'';
-      return{id:head.id,lineIds:ls.map(l=>l.id),keys:new Set(ls.flatMap(l=>[l.codeKey&&'c'+l.codeKey,l.nameKey&&'n'+l.nameKey]).filter(Boolean)),code:pick('code'),name:head.name,brand:pick('brand'),model:pick('model'),unit:pick('unit'),
-        manual:head.manual,currency:head.currency,date:head.date,dates:ls.map(l=>l.date||''),quoteCount:new Set(ls.map(l=>l.base)).size,
-        search:[head.name,...ls.flatMap(l=>[l.code,l.name,l.projectId,l.customer,l.quoteNum])].join('\n').toLowerCase(),records,
-        salePrice:sale?sale.price:'',saleCurrency:sale?sale.currency:'',saleRef:sale?sale.number:'',saleDate:sale?sale.date:'',
-        purchasePrice:buy?buy.price:'',purchaseCurrency:buy?buy.currency:'',purchaseSrc:buy?buy.kind:'',purchaseRef:buy?buy.number:'',purchaseDate:buy?buy.date:''};
-    });
+    // Lines are joined into products through shared codes / descriptions. Lines removed from the pool by hand stay out
+    // of it; those still in Deleted items are grouped the same way there
+    const group=lines=>{
+      const parent=lines.map((_,i)=>i);
+      const find=i=>parent[i]===i?i:(parent[i]=find(parent[i]));
+      const first={};
+      lines.forEach((r,i)=>[r.codeKey&&'c'+r.codeKey,r.nameKey&&'n'+r.nameKey].filter(Boolean).forEach(k=>{
+        if(k in first)parent[find(i)]=find(first[k]);else first[k]=i;
+      }));
+      const products={};
+      lines.forEach((r,i)=>{const g=find(i);(products[g]=products[g]||[]).push(r);});
+      return Object.values(products).map(ls=>{
+        ls.sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.quoteNum||'').localeCompare(a.quoteNum||''));
+        const head=ls[0];
+        const records=[...new Set(ls.flatMap(l=>[...sameRecords(l),...(byMatch[l.id]||[])]))].sort(newestFirst);
+        const sale=records.find(x=>x.side==='sale'),buy=records.find(x=>x.side==='buy');
+        const pick=f=>(ls.find(l=>l[f])||{})[f]||'';
+        return{id:head.id,lineIds:ls.map(l=>l.id),keys:new Set(ls.flatMap(l=>[l.codeKey&&'c'+l.codeKey,l.nameKey&&'n'+l.nameKey]).filter(Boolean)),code:pick('code'),name:head.name,brand:pick('brand'),model:pick('model'),unit:pick('unit'),
+          manual:head.manual,currency:head.currency,date:head.date,dates:ls.map(l=>l.date||''),quoteCount:new Set(ls.map(l=>l.base)).size,
+          search:[head.name,...ls.flatMap(l=>[l.code,l.name,l.projectId,l.customer,l.quoteNum])].join('\n').toLowerCase(),records,
+          salePrice:sale?sale.price:'',saleCurrency:sale?sale.currency:'',saleRef:sale?sale.number:'',saleDate:sale?sale.date:'',
+          purchasePrice:buy?buy.price:'',purchaseCurrency:buy?buy.currency:'',purchaseSrc:buy?buy.kind:'',purchaseRef:buy?buy.number:'',purchaseDate:buy?buy.date:''};
+      });
+    };
+    const trash=group(rows.filter(r=>typeof poolHidden[r.id]==='string'))
+      .map(p=>({...p,deletedOn:p.lineIds.map(id=>poolHidden[id]).sort().pop()}));
+    return{active:group(rows.filter(r=>!poolHidden[r.id])),trash};
   })();
   const poolSimilar=row=>{
     const own=new Set(row.records);
@@ -2792,6 +2801,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   }
 
   function ProductPoolView(){
+    const[trash,setTrash]=useState(false); // Deleted items: products removed from the pool, to restore or delete for good
     const[q,setQ]=useState('');
     const[dateFrom,setDateFrom]=useState('');
     const[dateTo,setDateTo]=useState('');
@@ -2799,8 +2809,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const[historyId,setHistoryId]=useState(null);
     const[temp,setTemp]=useState({price:'',currency:'GBP'});
     const{sort,onSort}=useSort();
-    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo,sort}));
-    const historyRow=historyId&&poolItems.find(p=>p.id===historyId||p.lineIds.includes(historyId));
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({q,dateFrom,dateTo,sort,trash}));
+    const shown=trash?poolTrash:poolItems;
+    const historyRow=historyId&&shown.find(p=>p.id===historyId||p.lineIds.includes(historyId));
 
     const openPriceModal=(item)=>{setEditingItem(item);setTemp(item.manual?{price:String(item.manual.price),currency:item.manual.currency}:{price:'',currency:item.currency||'GBP'});};
     const closeModal=()=>{setEditingItem(null);};
@@ -2814,7 +2825,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     };
 
     // A product is in the date range when any of its quotations is
-    const filtered=poolItems.filter(p=>{
+    const filtered=shown.filter(p=>{
       if(q&&!p.search.includes(q.toLowerCase()))return false;
       if((dateFrom||dateTo)&&!p.dates.some(d=>(!dateFrom||d>=dateFrom)&&(!dateTo||d<=dateTo)))return false;
       return true;
@@ -2824,18 +2835,24 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // Pool rows are built from sent quotations; deleting a product only removes its lines from the pool, the quotations stay
     const bulk=useBulkSelect(sorted.map(p=>p.id));
     const picked=sorted.filter(p=>bulk.has(p.id));
+    const toggleTrash=()=>{bulk.clear();setHistoryId(null);setTrash(t=>!t);};
+    const bulkAct=(msg,label,act,done)=>askGlobalConfirm(msg,{confirmLabel:label,cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;act(picked.flatMap(p=>p.lineIds));showToast(done);bulk.clear();});
     return(<div className="content">
-      <ListTools q={q} onQ={setQ} placeholder={tr("Search item, customer, project...")} active={[dateFrom,dateTo].filter(Boolean).length} onClear={()=>{setDateFrom('');setDateTo('');}} extra={<><span className="lt-note">{tr("{0} products", filtered.length)}</span></>}>
+      <ListTools q={q} onQ={setQ} placeholder={tr("Search item, customer, project...")} active={[dateFrom,dateTo].filter(Boolean).length} onClear={()=>{setDateFrom('');setDateTo('');}} extra={<><span className="lt-note">{tr("{0} products", filtered.length)}</span>
+        <button className={'lt-btn'+(trash?' on':'')} onClick={toggleTrash} aria-pressed={trash}><Ico n="trash" size={13}/>{tr('Deleted items')}{poolTrash.length>0&&<span className="cnt-badge">{poolTrash.length}</span>}</button></>}>
         <FilterField label={tr("From")}><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></FilterField>
         <FilterField label={tr("To")}><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></FilterField>
       </ListTools>
       <BulkBar bulk={bulk}>
         <BulkBtn onClick={()=>exportExcel(poolExport(picked),'product-pool')}>{tr("Export selected")}</BulkBtn>
-        <BulkBtn icon="trash" danger badge={picked.length} onClick={()=>askGlobalConfirm(tr('Remove {0} items from the Product Pool? The quotations are not changed.',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
-          if(!ok)return;hidePoolRows(picked.flatMap(p=>p.lineIds));showToast(tr('{0} deleted',picked.length));bulk.clear();})}>{tr("Delete")}</BulkBtn>
+        {trash?<>
+          <BulkBtn badge={picked.length} onClick={()=>bulkAct(tr('Put {0} items back in the Product Pool?',picked.length),tr('Restore'),restorePoolRows,tr('{0} restored',picked.length))}>{tr("Restore")}</BulkBtn>
+          <BulkBtn icon="trash" danger badge={picked.length} onClick={()=>bulkAct(tr('Delete {0} items for good? They will no longer appear in Deleted items. The quotations are not changed.',picked.length),tr('Delete'),purgePoolRows,tr('{0} deleted',picked.length))}>{tr("Delete permanently")}</BulkBtn>
+        </>:<BulkBtn icon="trash" danger badge={picked.length} onClick={()=>bulkAct(tr('Remove {0} items from the Product Pool? They go to Deleted items, where they can be restored. The quotations are not changed.',picked.length),tr('Delete'),hidePoolRows,tr('{0} deleted',picked.length))}>{tr("Delete")}</BulkBtn>}
       </BulkBar>
-      <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{tr("Every product from sent quotations appears once.")} {tr("Click a row to see all its sale and purchase prices.")}</div>
-      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">{tr("Pool is empty")}</div><div className="empty-s">{tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
+      <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{trash?tr("Items removed from the pool. Select them to restore them or to delete them for good."):<>{tr("Every product from sent quotations appears once.")} {tr("Click a row to see all its sale and purchase prices.")}</>}</div>
+      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={trash?'trash':'pool'} size={38}/><div className="empty-t">{trash?tr("No deleted items"):tr("Pool is empty")}</div><div className="empty-s">{trash?tr("Items deleted from the pool appear here"):tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
         <div className="tcard"><table className="dt">
           <Cg w={[0.32,1,3,0.9,1.3,1.3,1.05,0.7]}/>
           <thead><tr>
@@ -2846,7 +2863,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="price" sort={sort} onSort={onSort} className="tar">{tr("Last Sale Price")}</SortTh>
             <SortTh k="purchasePrice" sort={sort} onSort={onSort} className="tar">{tr("Last Purchase Price")}</SortTh>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Last Quoted")}</SortTh>
-            <th>{tr("Actions")}</th>
+            <th>{trash?tr("Deleted"):tr("Actions")}</th>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(p=>
             <tr key={p.id} className={bulk.has(p.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setHistoryId(p.id)}>
@@ -2857,7 +2874,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td className="tar" style={{fontWeight:p.salePrice?600:400,color:p.salePrice?'var(--g900)':'var(--g400)'}}>{p.salePrice?money(p.salePrice,p.saleCurrency):'—'}</td>
               <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>{p.purchasePrice?money(p.purchasePrice,p.purchaseCurrency):'—'}</td>
               <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{p.date||'—'}</td>
-              <td><button className="ab" onClick={e=>{e.stopPropagation();openPriceModal(p);}} title={tr("Set Purchase Price")}><Ico n="edit"/></button></td>
+              <td>{trash?<span style={{fontSize:12,color:'var(--g500)',whiteSpace:'nowrap'}}>{p.deletedOn}</span>:<button className="ab" onClick={e=>{e.stopPropagation();openPriceModal(p);}} title={tr("Set Purchase Price")}><Ico n="edit"/></button>}</td>
             </tr>
           )}</tbody>
         </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
