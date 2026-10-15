@@ -975,6 +975,23 @@ table.dt.dt-fit .fit-grow{white-space:normal;width:100%;min-width:180px}
 .ph-note{font-size:12px;color:var(--g500);margin:0 0 10px}
 .ph-empty{font-size:12.5px;color:var(--g400);padding:18px 4px}
 .ph-kind{display:block;font-size:10.5px;color:var(--g500)}
+/* Price hint under a quotation line: earlier prices of the same or a similar product */
+.pw{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;margin:4px 0 8px;font-size:12px}
+.pw-h{display:flex;align-items:center;gap:6px;margin-bottom:6px;color:#d97706;font-weight:600}
+.pw-h svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pw-row{display:grid;grid-template-columns:78px minmax(90px,auto) minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:4px 0 4px 20px;border-top:1px solid rgba(217,119,6,.12)}
+.pw-date{color:#78716c;font-size:11px;font-variant-numeric:tabular-nums}
+.pw-no{font-size:11.5px;text-align:left}
+.pw-party{display:flex;align-items:center;gap:6px;min-width:0;color:var(--g700)}
+.pw-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pw-info{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:16px;height:16px;border-radius:50%;background:#e2e8f0;color:#64748b;font-size:10px;font-weight:700;cursor:default}
+.pw-price{font-weight:600;color:#0f172a;text-align:right;white-space:nowrap}
+.pw-prev{display:block;font-size:10.5px;font-weight:400;color:#a8a29e}
+.pw-use{background:#fbbf24;border:1px solid #f59e0b;color:#78350f;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s,transform .15s}
+.pw-use:hover{background:#f59e0b}
+.pw-use:focus-visible{outline:2px solid #d97706;outline-offset:2px}
+.pw-use:active{transform:scale(.97)}
+@media (max-width:720px){.pw-row{display:flex;flex-wrap:wrap;gap:6px 10px;padding-left:0}.pw-party{flex:1 1 100%;order:3}}
 .ph-prev{font-size:10.5px;font-weight:400;color:var(--g400);white-space:nowrap}
 .ph-doc{background:none;border:0;padding:0;font:inherit;font-weight:500;color:var(--gm-500);cursor:pointer;border-radius:4px;transition:color .15s,transform .15s}
 .ph-doc:hover{color:var(--gm-600);text-decoration:underline}
