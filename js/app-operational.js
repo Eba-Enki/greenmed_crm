@@ -2813,7 +2813,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // Pool rows are built from sent quotations; deleting a product only removes its lines from the pool, the quotations stay
     const bulk=useBulkSelect(sorted.map(p=>p.id));
     const picked=sorted.filter(p=>bulk.has(p.id));
-    const sub=(...parts)=><div style={{fontSize:10.5,color:'var(--g500)',marginTop:1,whiteSpace:'nowrap'}}>{parts.filter(Boolean).join(' · ')}</div>;
     return(<div className="content">
       <ListTools q={q} onQ={setQ} placeholder={tr("Search item, customer, project...")} active={[dateFrom,dateTo].filter(Boolean).length} onClear={()=>{setDateFrom('');setDateTo('');}} extra={<><span className="lt-note">{tr("{0} products", filtered.length)}</span></>}>
         <FilterField label={tr("From")}><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></FilterField>
@@ -2844,12 +2843,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td style={{fontFamily:'monospace',fontSize:11,whiteSpace:'nowrap'}}>{p.code||'—'}</td>
               <td style={{wordBreak:'break-word',whiteSpace:'normal',lineHeight:1.4}}>{p.name||'—'}</td>
               <td className="tar">{p.quoteCount}</td>
-              <td className="tar" style={{color:p.salePrice?'var(--g900)':'var(--g400)'}}>
-                {p.salePrice?<><div style={{fontWeight:600}}>{money(p.salePrice,p.saleCurrency)}</div>{sub(p.saleRef,p.saleDate)}</>:'—'}
-              </td>
-              <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>
-                {p.purchasePrice?<><div>{money(p.purchasePrice,p.purchaseCurrency)}</div>{sub(p.purchaseSrc==='manual'?tr("Manual"):p.purchaseRef,p.purchaseDate)}</>:'—'}
-              </td>
+              <td className="tar" style={{fontWeight:p.salePrice?600:400,color:p.salePrice?'var(--g900)':'var(--g400)'}}>{p.salePrice?money(p.salePrice,p.saleCurrency):'—'}</td>
+              <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>{p.purchasePrice?money(p.purchasePrice,p.purchaseCurrency):'—'}</td>
               <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{p.date||'—'}</td>
               <td><button className="ab" onClick={e=>{e.stopPropagation();openPriceModal(p);}} title={tr("Set Purchase Price")}><Ico n="edit"/></button></td>
             </tr>
