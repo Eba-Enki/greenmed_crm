@@ -204,7 +204,7 @@ const I18N_TR={
   'Manual':'Elle','Last Purchase Price':'Son Alış Fiyatı','Edit Manual Price':'Elle Fiyatı Düzenle','Entered by hand':'Elle girildi',
   'The pool shows the newest purchase price among the documents and the prices entered by hand; a price entered here is dated today.':'Havuzda belgeler ve elle girilen fiyatlar arasından en son tarihli alış fiyatı gösterilir; buraya girilen fiyat bugünün tarihini alır.',
   'Click a row to see all its sale and purchase prices.':'Tüm satış ve alış fiyatlarını görmek için satıra tıklayın.',
-  'Purchase prices':'Alış fiyatları','{0} products':'{0} ürün','products':'ürün','Last Sale Price':'Son Satış Fiyatı','Last Quoted':'Son Teklif Tarihi',
+  'Purchase prices':'Alış fiyatları','Orders':'Siparişler','Search project, customer...':'Proje, müşteri ara...','{0} products':'{0} ürün','products':'ürün','Last Sale Price':'Son Satış Fiyatı','Last Quoted':'Son Teklif Tarihi',
   'Every product from sent quotations appears once.':'Gönderilen tekliflerdeki her ürün bir kez görünür.','similar':'benzer','Times Quoted':'Teklif Sayısı','Sale prices':'Satış fiyatları',
   'Similar products':'Benzer ürünler','No purchase price yet':'Henüz alış fiyatı yok','No sale price yet':'Henüz satış fiyatı yok','No product code':'Ürün kodu yok',
   'Product':'Ürün','Purchase':'Alış','Customer / Supplier':'Müşteri / Tedarikçi','previous: {0}':'önceki: {0}',

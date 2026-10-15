@@ -2388,42 +2388,53 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // Projects with detail view
   function ProjectsList(){
-    const[pg,setPg]=useState(1);const[ps,setPs]=useState(25);
+    const[fs,setFs]=useState({q:'',s:''});
+    const{sort,onSort}=useSort('number','asc');
+    const {pg,ps,setPg,setPs}=usePagination(JSON.stringify({fs,sort}));
+    const rows=projects.map(p=>{
+      const inv=salesInvoices.filter(d=>d.project===p.name);
+      return{p,inv:inv.length,revenue:curTotals(inv.map(d=>[d.currency,dt(d.items)])),
+        pos:purchaseOrders.filter(d=>d.project===p.name).length,exps:expenses.filter(d=>d.project===p.name).length};
+    });
+    const ql=fs.q.toLowerCase();
+    const f=rows.filter(({p})=>(!ql||[p.number,p.name,p.client].some(x=>(x||'').toLowerCase().includes(ql)))&&(!fs.s||(p.status||'active')===fs.s));
+    const sorted=sortRows(f,sort,{number:r=>r.p.number,name:r=>r.p.name,client:r=>r.p.client,status:r=>r.p.status||'active',inv:r=>r.inv,pos:r=>r.pos,exps:r=>r.exps});
+    const open=p=>{setCur(p);go('proj_detail');};
     return(<div className="content">
-      {projects.length===0?<div className="tcard"><div className="empty"><Ico n="project" size={38}/><div className="empty-t">{tr("No projects yet")}</div></div></div>:(
-        <React.Fragment>
-        <div style={{display:'grid',gap:12}}>
-          {projects.slice((pg-1)*ps,pg*ps).map(p=>{
-            const pInv=salesInvoices.filter(d=>d.project===p.name);
-            const pPO=purchaseOrders.filter(d=>d.project===p.name);
-            const pExp=expenses.filter(d=>d.project===p.name);
-            const revenue=curTotals(pInv.map(d=>[d.currency,dt(d.items)]));
-            return(<div key={p.id} className="proj-card">
-              <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:10}}>
-                <div>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-                    {p.number&&<span className="dn">{p.number}</span>}
-                    <span style={{fontSize:15,fontWeight:700,color:'var(--g900)'}}>{p.name}</span>
-                    <Badge s={p.status||'active'}/>
-                  </div>
-                  {p.client&&<div style={{fontSize:12.5,color:'var(--g500)',marginBottom:8}}>{tr("Client: {0}", p.client)}</div>}
-                  <div style={{display:'flex',gap:16,fontSize:12}}>
-                    <span style={{color:'var(--green)',fontWeight:600}}>{tr("{0} invoices · {1}", pInv.length, fmtCurTotals(revenue,(CURR.GBP)+fmt(0)))}</span>
-                    <span style={{color:'var(--amber)',fontWeight:600}}>{tr("{0} POs", pPO.length)}</span>
-                    <span style={{color:'var(--purple)',fontWeight:600}}>{tr("{0} expenses", pExp.length)}</span>
-                  </div>
-                </div>
-                <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                  <button className="ab" onClick={()=>{setCur(p);go('proj_detail');}}>{tr("View →")}</button>
-                  <button className="ab" onClick={()=>{setCur(p);go('proj_form');}}><Ico n="edit"/></button>
-                  <button className="ab danger" onClick={()=>askConfirm(tr("Delete \"{0}\"?", p.name),()=>{sProj(projects.filter(x=>x.id!==p.id));showToast(tr('Deleted'));})}><Ico n="trash"/></button>
-                </div>
-              </div>
-            </div>);
-          })}
-        </div>
-        <Pagination total={projects.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/>
-        </React.Fragment>
+      <ListTools q={fs.q} onQ={v=>setFs(x=>({...x,q:v}))} placeholder={tr("Search project, customer...")} active={fs.s?1:0} onClear={()=>setFs(x=>({...x,s:''}))}>
+        <FilterField label={tr("Status")}><select value={fs.s} onChange={e=>setFs(x=>({...x,s:e.target.value}))}>
+          <option value="">{tr("All Statuses")}</option>
+          {['active','completed','on-hold','cancelled'].map(s=><option key={s} value={s}>{SM[s].l}</option>)}
+        </select></FilterField>
+      </ListTools>
+      {f.length===0?<div className="tcard"><div className="empty"><Ico n="project" size={38}/><div className="empty-t">{tr("No projects yet")}</div></div></div>:(
+        <div className="tcard"><table className="dt dt-fit">
+          <thead><tr>
+            <SortTh k="number" sort={sort} onSort={onSort}>{tr("Project No")}</SortTh>
+            <SortTh k="name" sort={sort} onSort={onSort} className="fit-grow">{tr("Project Name")}</SortTh>
+            <SortTh k="client" sort={sort} onSort={onSort}>{tr("Client")}</SortTh>
+            <SortTh k="status" sort={sort} onSort={onSort}>{tr("Status")}</SortTh>
+            <SortTh k="inv" sort={sort} onSort={onSort} className="tar">{tr("Invoices")}</SortTh>
+            <SortTh k="pos" sort={sort} onSort={onSort} className="tar">{tr("Orders")}</SortTh>
+            <SortTh k="exps" sort={sort} onSort={onSort} className="tar">{tr("Expenses")}</SortTh>
+            <th>{tr("Actions")}</th>
+          </tr></thead>
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(({p,inv,revenue,pos,exps})=>
+            <tr key={p.id} style={{cursor:'pointer'}} onClick={()=>open(p)}>
+              <td>{p.number?<span className="dn">{p.number}</span>:'—'}</td>
+              <td className="fit-grow" style={{fontWeight:600,color:'var(--g900)'}}>{p.name||'—'}</td>
+              <td><div className="fit-box fb-md">{p.client||'—'}</div></td>
+              <td><Badge s={p.status||'active'}/></td>
+              <td className="tar">{inv?<>{inv} · <span style={{fontWeight:600,color:'var(--g900)'}}>{fmtCurTotals(revenue,'')}</span></>:<span style={{color:'var(--g400)'}}>0</span>}</td>
+              <td className="tar" style={{color:pos?'var(--g800)':'var(--g400)'}}>{pos}</td>
+              <td className="tar" style={{color:exps?'var(--g800)':'var(--g400)'}}>{exps}</td>
+              <td><div className="aw">
+                <button className="ab" onClick={e=>{e.stopPropagation();setCur(p);go('proj_form');}} title={tr("Edit")}><Ico n="edit"/></button>
+                <button className="ab danger" onClick={e=>{e.stopPropagation();askConfirm(tr("Delete \"{0}\"?", p.name),()=>{sProj(projects.filter(x=>x.id!==p.id));showToast(tr('Deleted'));});}} title={tr("Delete")}><Ico n="trash"/></button>
+              </div></td>
+            </tr>
+          )}</tbody>
+        </table><Pagination total={sorted.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
     </div>);
   }
