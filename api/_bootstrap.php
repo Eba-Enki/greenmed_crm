@@ -16,7 +16,7 @@ const RECORD_KEYS = [
     'ops_srcq', 'ops_srci', // source quotes / invoices the group company collects from its own suppliers
     'ops_ce', // approximate costs: price research and cost / margin build-up before a sales quotation
 ];
-const SETTING_KEYS = ['off_co', 'off_cnt', 'ops_co', 'ops_cnt', 'ops_pp'];
+const SETTING_KEYS = ['off_co', 'off_cnt', 'ops_co', 'ops_cnt', 'ops_pp', 'ops_poolhide']; // ops_poolhide: Product Pool rows removed by hand
 const RAW_KEYS = ['gm_logo', 'gm_signature'];
 // Counter settings only ever grow, so concurrent saves are merged (highest value wins) instead of conflicting.
 const COUNTER_KEYS = ['off_cnt', 'ops_cnt'];

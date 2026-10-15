@@ -22,6 +22,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Approximate costs: purchase prices collected per item, then freight / customs / margin rates on top (see CE logic)
   const[costEsts,setCostEsts]=useState([]);
   const[purchasePrices,setPurchasePrices]=useState({});
+  const[poolHidden,setPoolHidden]=useState({}); // Product Pool rows removed by hand: {poolId: date}
   const[expenses,setExpenses]=useState([]);
   const[expCats,setExpCats]=useState([]);
   const[documents,setDocuments]=useState([]);
@@ -81,6 +82,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     if(ri&&migratedRI.some((r,i)=>r!==ri[i]))LS.set(ns+'ri',migratedRI);
     // Pool purchase prices were keyed by quotation id + line id (lost on every revision); they move to
     // quote group + line key, the latest revision's price winning, and keep the £ they were shown in
+    const ph=load('poolhide');if(ph&&typeof ph==='object'&&!Array.isArray(ph))setPoolHidden(ph);
     const pp=load('pp');
     if(pp&&!Array.isArray(pp)){
       const next={},rev={};let moved=false;
@@ -136,6 +138,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sSRI=d=>save('srci',setSrcInvoices,d);
   const sCE=d=>save('ce',setCostEsts,d);
   // Purchase price entered by hand in the Product Pool: {price, currency}; an empty price removes it
+  const hidePoolRows=ids=>{const next={...poolHidden};ids.forEach(id=>{next[id]=td();});setPoolHidden(next);LS.set(ns+'poolhide',next);};
   const sPP=(id,val)=>{const next={...purchasePrices};if(val&&+val.price>0)next[id]=val;else delete next[id];setPurchasePrices(next);LS.set(ns+'pp',next);};
   const sExp=d=>save('exp',setExpenses,d);
   const sExpCats=d=>save('expcat',setExpCats,d);
@@ -413,7 +416,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const byMatch={};
     priceRecords.forEach(x=>{if(x.side==='buy'&&x.sqBase&&x.sqKey)(byMatch[x.sqBase+'|'+x.sqKey]=byMatch[x.sqBase+'|'+x.sqKey]||[]).push(x);});
     const matched=r=>byMatch[r.id]||[];
-    return rows.map(r=>{
+    return rows.filter(r=>!poolHidden[r.id]).map(r=>{
       const own=new Set([...sameRecords(r),...[r,...sameRows(r)].flatMap(matched)]);
       const records=[...own].sort(newestFirst);
       const buy=records.find(x=>x.side==='buy');
@@ -2771,7 +2774,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     });
     const sorted=sortRows(filtered,sort,{date:p=>p.date,no:p=>p.quoteNum,code:p=>p.code,name:p=>p.name,qty:p=>+(p.qty||0),price:p=>+(p.price||0),
       purchasePrice:p=>+(p.purchasePrice||0),project:p=>p.projectId,customer:p=>p.customer});
-    // Pool rows are built from sent quotations, so the only bulk action is exporting them
+    // Pool rows are built from sent quotations; deleting one only removes it from the pool, the quotation stays
     const bulk=useBulkSelect(sorted.map(p=>p.id));
     const picked=sorted.filter(p=>bulk.has(p.id));
     const exportPicked=()=>exportExcel([['Code','Description','Qty','Unit','Sale Price','Purchase Price','Quote No','Date','Project','Customer'],...picked.map(p=>[p.code||'',p.name||'',p.qty||'',p.unit||'',p.price||'',p.purchasePrice||'',p.quoteNum||'',p.date||'',p.projectId||'',p.customer||''])],'product-pool');
@@ -2782,6 +2785,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </ListTools>
       <BulkBar bulk={bulk}>
         <BulkBtn onClick={exportPicked}>{tr("Export selected")}</BulkBtn>
+        <BulkBtn icon="trash" danger badge={picked.length} onClick={()=>askGlobalConfirm(tr('Remove {0} items from the Product Pool? The quotations are not changed.',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+          if(!ok)return;hidePoolRows(picked.map(p=>p.id));showToast(tr('{0} deleted',picked.length));bulk.clear();})}>{tr("Delete")}</BulkBtn>
       </BulkBar>
       <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{tr("All items from Sent quotations appear automatically. Amber rows = same item quoted to same customer more than once.")} {tr("Click a row to see all its sale and purchase prices.")}</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="pool" size={38}/><div className="empty-t">{tr("Pool is empty")}</div><div className="empty-s">{tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
@@ -3235,7 +3240,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <td style={{color:'var(--g600)',fontSize:12}}>{typeLabel(c)}{c.groupCompany&&(c.type==='supplier'||c.type==='both')&&<span className="mt-tag ok" style={{marginLeft:6}}>{tr("Group")}</span>}</td>
             <td><div className="aw">
               <button className="ab" onClick={()=>{setCur(c);go('cust_form');}}><Ico n="edit"/></button>
-              <button className="ab danger" onClick={()=>askConfirm(tr("Delete \"{0}\"?", c.company||c.contact),()=>{sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));})}><Ico n="trash"/></button>
+              <button className="ab danger" onClick={()=>inUse(c)?uiAlert(tr('"{0}" appears on documents, so it cannot be deleted.',c.company||c.contact)):askConfirm(tr("Delete \"{0}\"?", c.company||c.contact),()=>{sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));})}><Ico n="trash"/></button>
             </div></td>
           </tr>)}</tbody>
         </table><Pagination total={f.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>

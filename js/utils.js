@@ -4,8 +4,9 @@ const LOGO='brand_assets/logo/logo_fl.svg';
 // Mark above the wordmark; the file has wide empty margins, .login-logo crops them.
 const LOGO_VERTICAL='brand_assets/logo/logo_vertical.svg';
 const CURR={GBP:'£',USD:'$',EUR:'€',TRY:'₺'};
-const td=()=>new Date().toISOString().slice(0,10);
-const addD=(n,f=td())=>{const d=new Date(f);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
+// Dates are 'YYYY-MM-DD' on the user's own calendar (UTC would still be yesterday in Türkiye until 03:00)
+const td=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());};
+const addD=(n,f=td())=>{const[y,m,d]=String(f).slice(0,10).split('-').map(Number);return new Date(Date.UTC(y,m-1,d+n)).toISOString().slice(0,10);};
 const uid=()=>Math.random().toString(36).slice(2,9);
 const lt=i=>+(+(i.qty||0))*(+(i.price||0));
 const dt=items=>(items||[]).reduce((s,i)=>s+lt(i),0);
@@ -88,9 +89,9 @@ const genProjNum=n=>`PRJ-${padN(n)}`;
 const API_BASE='api/';
 const SYNC_JSON_KEYS=['gm_users',
   'off_i','off_q','off_p','off_r','off_pr','off_cust','off_banktx','off_expcat','off_incomecat','off_co','off_cnt',
-  'ops_cust','ops_proj','ops_sq','ops_si','ops_pq','ops_po','ops_ri','ops_srcq','ops_srci','ops_ce','ops_exp','ops_expcat','ops_docs','ops_co','ops_cnt','ops_pp'];
+  'ops_cust','ops_proj','ops_sq','ops_si','ops_pq','ops_po','ops_ri','ops_srcq','ops_srci','ops_ce','ops_exp','ops_expcat','ops_docs','ops_co','ops_cnt','ops_pp','ops_poolhide'];
 const SYNC_RAW_KEYS=['gm_logo','gm_signature'];
-const SYNC_SETTING_KEYS=['off_co','off_cnt','ops_co','ops_cnt','ops_pp',...SYNC_RAW_KEYS];
+const SYNC_SETTING_KEYS=['off_co','off_cnt','ops_co','ops_cnt','ops_pp','ops_poolhide',...SYNC_RAW_KEYS];
 const isSyncKey=k=>SYNC_JSON_KEYS.includes(k)||SYNC_RAW_KEYS.includes(k);
 const isRecordKey=k=>SYNC_JSON_KEYS.includes(k)&&!SYNC_SETTING_KEYS.includes(k);
 const SYNC_BASE_KEY='gm_sync_base',SYNC_PENDING_KEY='gm_sync_pending';
@@ -105,7 +106,7 @@ const apiCall=async(path,opts={})=>{
 // bulletin before the date (weekends, holidays). Resolves {rate, date: the bulletin used}. Bulletins are kept per day.
 const tcmbBulletins={};
 const tcmbRate=async(date,from,to)=>{
-  const day=date||new Date().toISOString().slice(0,10);
+  const day=date||td();
   const b=tcmbBulletins[day]||(tcmbBulletins[day]=apiCall('rates.php?date='+encodeURIComponent(day)).catch(e=>{delete tcmbBulletins[day];throw e;}));
   const r=await b;
   const lira=c=>{if(c==='TRY')return 1;const x=r.rates&&r.rates[c];return x&&x.banknoteBuying?x.banknoteBuying/(x.unit||1):null;};

@@ -271,23 +271,34 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     showToast(tr('Saved ✓'));
     go(doc.type==='invoice'?'off_invoices':doc.type==='po'?'off_pos':doc.type==='received'?'off_received':'off_quotes');
   };
+  // Payments allocated to documents of one type, summed per document id
+  const paidOn=(type,ids)=>{const m=allocatedByDoc(bankTx),out={};ids.forEach(id=>{const v=r2(m[docKey(type,id)]||0);if(v>0.005)out[id]=v;});return out;};
   const handleDel=async doc=>{
-    if(!(await askGlobalConfirm(tr("Delete {0}?", doc.number||doc.supplier),{confirmLabel:tr('Delete')})))return false;
-    if(doc.type==='invoice')si(inv.filter(d=>d.id!==doc.id));
-    else if(doc.type==='quote')sq(quo.filter(d=>d.id!==doc.id));
-    else if(doc.type==='po')sp(pos.filter(d=>d.id!==doc.id));
-    else sr(rec.filter(d=>d.id!==doc.id));
-    if(doc.type==='invoice'||doc.type==='received')sBankTx(bankTx.map(t=>{const al=txAllocs(t);if(!al.some(x=>x.type===doc.type&&x.id===doc.id))return t;return{...t,linkedDoc:null,allocations:al.filter(x=>!(x.type===doc.type&&x.id===doc.id))};}));
+    const paid=(doc.type==='invoice'||doc.type==='received')?paidOn(doc.type,[doc.id])[doc.id]:0;
+    const msg=tr("Delete {0}?", doc.number||doc.supplier)+(paid?'\n\n'+tr('{0} has been paid against it. The payment stays in the bank account and on the contact\'s statement, no longer tied to this invoice.',curFmt(doc.currency||'GBP',paid)):'');
+    if(!(await askGlobalConfirm(msg,{confirmLabel:tr('Delete')})))return false;
+    deleteDocs(doc.type,new Set([doc.id]));
     showToast(tr('Deleted'));
     return true;
   };
-  // Several documents of one type at once: same as handleDel, bank links to them are removed too
+  // Removes documents of one type. Bank rows that paid them lose the link but keep the money; a row without a
+  // contact is tied to the document's customer / supplier, so the payment still shows on their statement
   const deleteDocs=(type,ids)=>{
+    const list=type==='invoice'?inv:type==='quote'?quo:type==='po'?pos:rec;
+    const gone=list.filter(d=>ids.has(d.id));
     if(type==='invoice')si(inv.filter(d=>!ids.has(d.id)));
     else if(type==='quote')sq(quo.filter(d=>!ids.has(d.id)));
     else if(type==='po')sp(pos.filter(d=>!ids.has(d.id)));
     else sr(rec.filter(d=>!ids.has(d.id)));
-    if(type==='invoice'||type==='received')sBankTx(bankTx.map(t=>{const al=txAllocs(t);if(!al.some(x=>x.type===type&&ids.has(x.id)))return t;return{...t,linkedDoc:null,allocations:al.filter(x=>!(x.type===type&&ids.has(x.id)))};}));
+    if(type!=='invoice'&&type!=='received')return;
+    const partyOf=id=>{const d=gone.find(x=>x.id===id);const n=d&&(type==='invoice'?d.client&&d.client.name:d.supplier);return n?customers.find(c=>contactName(c)===n):null;};
+    if(!bankTx.some(t=>txAllocs(t).some(x=>x.type===type&&ids.has(x.id))))return;
+    sBankTx(bankTx.map(t=>{
+      const al=txAllocs(t);const hit=al.filter(x=>x.type===type&&ids.has(x.id));if(!hit.length)return t;
+      const next={...t,linkedDoc:null,allocations:al.filter(x=>!(x.type===type&&ids.has(x.id)))};
+      if(!t.contactId){const c=hit.map(x=>partyOf(x.id)).find(Boolean);if(c)Object.assign(next,{contactId:c.id,contactName:contactName(c)});}
+      return next;
+    }));
   };
   const handleSavePrj=p=>{const fresh=!p.id;const saved=fresh?{...p,id:uid()}:p;spr(fresh?[...projects,saved]:projects.map(d=>d.id===saved.id?saved:d));showToast(tr('Saved ✓'));go('off_projects');};
   const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));
@@ -397,7 +408,8 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
       setZipBusy(false);
       if(done){showToast(tr('{0} PDFs downloaded',picked.length));bulk.clear();}
     };
-    const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected documents?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+    const paidCount=(type==='invoice'||isRec)?Object.keys(paidOn(type,picked.map(d=>d.id))).length:0;
+    const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected documents?',picked.length)+(paidCount?'\n\n'+tr('{0} of them have payments. The payments stay in the bank accounts and on the contacts\' statements.',paidCount):''),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
       if(!ok)return;
       deleteDocs(type,new Set(picked.map(d=>d.id)));
       showToast(tr('{0} deleted',picked.length));
@@ -510,7 +522,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
         {view==='off_pos'&&<S.OffListView type="po" items={pos}/>}
         {view==='off_received'&&<S.OffListView type="received" items={rec}/>}
         {view==='off_contact'&&customers.find(c=>c.id===selectedContactId)&&<OffContactStatement contact={customers.find(c=>c.id===selectedContactId)} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onBack={()=>go('off_customers')} onEdit={c=>{setCur(c);go('off_custform');}}/>}
-        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>askGlobalConfirm(tr("Delete \"{0}\"?", c.company||c.contact),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));})} onDeleteMany={ids=>{sCust(customers.filter(x=>!ids.has(x.id)));showToast(tr('{0} deleted',ids.size));}}/>}
+        {view==='off_customers'&&<OffCustomers customers={customers} inv={inv} rec={rec} bankTx={bankTx} banks={co.banks||[]} onOpen={c=>{setSelectedContactId(c.id);go('off_contact');}} onEdit={c=>{setCur(c);go('off_custform');}} onDelete={c=>contactInUse(c,{inv,rec,bankTx})?uiAlert(tr('"{0}" appears on documents or bank transactions, so it cannot be deleted.',contactName(c))):askGlobalConfirm(tr("Delete \"{0}\"?", c.company||c.contact),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;sCust(customers.filter(x=>x.id!==c.id));showToast(tr('Deleted'));})} onDeleteMany={ids=>{sCust(customers.filter(x=>!ids.has(x.id)));showToast(tr('{0} deleted',ids.size));}}/>}
         {view==='off_projects'&&<OffProjects projects={projects} onNew={()=>{setCur({id:null,name:'',client:'',startDate:td(),status:'active',desc:''});go('off_projform');}} onEdit={p=>{setCur(p);go('off_projform');}} onDelete={p=>askGlobalConfirm(tr("Delete \"{0}\"?", p.name),{confirmLabel:tr('Delete')}).then(ok=>{if(!ok)return;spr(projects.filter(d=>d.id!==p.id));showToast(tr('Deleted'));})} onDeleteMany={ids=>{spr(projects.filter(x=>!ids.has(x.id)));showToast(tr('{0} deleted',ids.size));}}/>}
         {view==='off_expenses'&&<CategoryList cats={expCats} direction="out" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:expCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'out',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'out'})} onDelete={(id,hasChildren)=>deleteCategory('out',id,hasChildren)}/>}
         {view==='off_incomes'&&<CategoryList cats={incomeCats} direction="in" bankTx={bankTx} banks={co.banks||[]} onOpen={item=>{const children=item.parentId?[]:incomeCats.filter(c=>c.parentId===item.id);setCategoryBrowse({direction:'in',mainName:item.name,names:[item.name,...children.map(c=>c.name)]});go('off_cat_detail');}} onEdit={item=>setEditingCategory({...item,direction:'in'})} onDelete={(id,hasChildren)=>deleteCategory('in',id,hasChildren)}/>}
@@ -540,6 +552,9 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
 const CONTACT_TYPES=[['customer','Customer'],['supplier','Supplier'],['both','Customer & Supplier'],['employee','Employee'],['owner','Owner'],['expense','Expense']];
 const contactTypeLabel=(t,en)=>{const l=(CONTACT_TYPES.find(([k])=>k===(t||'customer'))||[])[1]||'Customer';return en?l:tr(l);}; // en: for Excel exports
 const contactName=c=>c.company||c.contact||'';
+// A contact named on any invoice / received invoice (drafts too) or tied to a bank movement stays,
+// so no document or statement loses its counterparty
+const contactInUse=(c,{inv,rec,bankTx})=>{const n=contactName(c);return inv.some(d=>(d.client&&d.client.name)===n)||rec.some(d=>d.supplier===n)||bankTx.some(t=>t.contactId===c.id);};
 
 // ── Payment allocation ──
 // A bank transaction can settle several documents, fully or partly:
@@ -713,9 +728,7 @@ function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete,onD
   const exportList=list=>exportExcel([['Company','Contact','Relationship','Email','Phone','Receivable / Received','Payable / Paid'],...list.map(c=>{const p=pos(c);const txt=l=>l.map(([cur,v])=>curFmt(cur,v)).join(' · ');return[c.company||'',c.contact||'',contactTypeLabel(c.type,true),c.email||'',c.phone||'',txt(p.a),txt(p.b)];})],'contacts');
   const bulk=useBulkSelect(f.map(c=>c.id));
   const picked=f.filter(c=>bulk.has(c.id));
-  // A contact named on any invoice / received invoice (drafts too) or tied to a bank movement stays,
-  // so no document or statement loses its counterparty
-  const inUse=c=>{const n=contactName(c);return inv.some(d=>(d.client&&d.client.name)===n)||rec.some(d=>d.supplier===n)||bankTx.some(t=>t.contactId===c.id);};
+  const inUse=c=>contactInUse(c,{inv,rec,bankTx});
   const pickedFree=picked.filter(c=>!inUse(c));
   const bulkDelete=()=>{
     const kept=picked.length-pickedFree.length;
