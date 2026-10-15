@@ -441,7 +441,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // A received quote, its PO and the PO's received invoice are one supply; a match (and, for a group company, the
   // source supplier details) changed on any of them is copied to the others. Works on the given lists and returns
   // them (unchanged arrays when nothing moved).
-  const CHAIN_DOC_FIELDS=['sqBase','srcCurrency','fxRate'];
+  const CHAIN_DOC_FIELDS=['sqBase','srcCurrency','fxRate','fxSource'];
   const CHAIN_LINE_FIELDS=['sqKey','srcSupplier','srcDocNo','srcDocDate','srcPrice'];
   const pickFields=(o,fields)=>fields.reduce((r,f)=>({...r,[f]:o[f]||''}),{});
   const syncMatchChain=(kind,saved,{pq,po,ri})=>{
@@ -1625,7 +1625,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             const counts=curs.reduce((m,c)=>({...m,[c]:(m[c]||0)+1}),{});
             const common=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
             const cur=items.some(i=>i.srcq)?(doc.srcCurrency||'TRY'):(common||doc.srcCurrency||'TRY');
-            setXfer({cur,rate:cur===doc.srcCurrency?doc.fxRate||'':'',markup:doc.markup||'',sel});}}><Ico n="convert"/>{tr("Transfer from sub-supplier quotes")}</Btn>}
+            setXfer({cur,rate:cur===doc.srcCurrency?doc.fxRate||'':'',src:cur===doc.srcCurrency?doc.fxSource||null:null,markup:doc.markup||'',sel});}}><Ico n="convert"/>{tr("Transfer from sub-supplier quotes")}</Btn>}
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
         {isPQ&&isGroupDoc(doc)&&!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the project and sales quotation to transfer the collected sub-supplier quotes.")}</div>}
@@ -1639,6 +1639,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           // only offers in the chosen currency are transferred: their prices are converted with this currency's rate
           const chosen=rows.filter(r=>xfer.sel[r.key]&&r.offers.some(o=>o.it.id===xfer.sel[r.key]&&(o.s.currency||'TRY')===xfer.cur));
           const needRate=xfer.cur!==dc&&!(+xfer.rate>0);
+          const pickedDates=chosen.map(r=>(r.offers.find(o=>o.it.id===xfer.sel[r.key])||{}).s).filter(Boolean).map(q=>q.date).filter(Boolean).sort();
+          const xferRateDate=pickedDates.length?pickedDates[pickedDates.length-1]:doc.date;
           const apply=()=>{
             const prev=Object.fromEntries(items.filter(i=>i.srcq).map(i=>[i.srcq.lineId,i]));
             const picked=chosen.map(r=>{const o=r.offers.find(x=>x.it.id===xfer.sel[r.key]);const p=prev[o.it.id];
@@ -1646,7 +1648,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 sqKey:r.key,srcSupplier:o.s.supplierCompany||'',srcDocNo:o.s.number||'',srcDocDate:o.s.date||'',srcPrice:o.it.price||'',srcq:{qid:o.s.id,lineId:o.it.id}};});
             const manual=items.filter(i=>!i.srcq&&(i.desc||i.item||+i.price));
             setItems(picked.length||manual.length?[...picked,...manual]:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
-            setDoc(d=>({...d,srcCurrency:xfer.cur,fxRate:xfer.rate,markup:xfer.markup}));
+            setDoc(d=>({...d,srcCurrency:xfer.cur,fxRate:xfer.rate,fxSource:xfer.src||null,markup:xfer.markup}));
             setXfer(null);
           };
           return(<div className="mt-overlay" onClick={()=>setXfer(null)}>
@@ -1659,8 +1661,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 <div className="fg g3">
                   <Fld label={tr("Sub-supplier Currency")}><select className="fi" value={xfer.cur} onChange={e=>{const c=e.target.value;
                     // picks in another currency are dropped; the rate is the one saved for that currency, else empty
-                    setXfer(x=>({...x,cur:c,rate:c===doc.srcCurrency?doc.fxRate||'':'',sel:Object.fromEntries(Object.entries(x.sel).filter(([,id])=>open.some(o=>o.it.id===id&&(o.s.currency||'TRY')===c)))}));}}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
-                  {xfer.cur!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,xfer.cur)}><input className="fi" type="number" min="0" step="0.0001" value={xfer.rate} onChange={e=>setXfer(x=>({...x,rate:e.target.value}))} placeholder="0.0000"/></Fld>:<div/>}
+                    setXfer(x=>({...x,cur:c,rate:c===doc.srcCurrency?doc.fxRate||'':'',src:c===doc.srcCurrency?doc.fxSource||null:null,sel:Object.fromEntries(Object.entries(x.sel).filter(([,id])=>open.some(o=>o.it.id===id&&(o.s.currency||'TRY')===c)))}));}}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+                  {xfer.cur!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,xfer.cur)}><div className="rate-row">
+                    <input className="fi" type="number" min="0" step="0.0001" value={xfer.rate} onChange={e=>setXfer(x=>({...x,rate:e.target.value,src:null}))} placeholder="0.0000"/>
+                    <TcmbButton date={xferRateDate} from={dc} to={xfer.cur} onRate={r=>setXfer(x=>({...x,rate:String(r.rate),src:{date:r.date,kind:'banknoteBuying'}}))}/>
+                  </div><TcmbNote src={xfer.src}/></Fld>:<div/>}
                   <Fld label={tr("Markup %")}><input className="fi" type="number" step="0.01" value={xfer.markup} onChange={e=>setXfer(x=>({...x,markup:e.target.value}))} placeholder="0"/></Fld>
                 </div>
                 <div style={{fontSize:12,color:'var(--g500)',margin:'4px 0 2px'}}>{tr('Pick one offer per customer item; the others become "Not used". Items left empty stay open for a later quote.')}</div>
@@ -1695,6 +1700,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const setLine=(id,f,v)=>setItems(its=>its.map(i=>i.id===id?{...i,[f]:v}:i));
         const srcNames=customers.filter(c=>c.type==='source').map(c=>c.company||c.contact).filter(Boolean);
         const anyXfer=items.some(i=>i.srcq);
+        // The rate is taken on the sub-supplier documents' date when there is one (the latest), else on this document's
+        const srcDates=items.map(i=>i.srcDocDate).filter(Boolean).sort();
+        const rateDate=srcDates.length?srcDates[srcDates.length-1]:doc.date;
         return(<div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Sub-supplier")}<span className="mt-internal">{tr("internal — not printed")}</span></div>
           {/* Lines transferred from source quotes take their source data from there (read-only here); typed lines stay editable */}
           <div style={{fontSize:12,color:'var(--g500)',marginBottom:12}}>{anyXfer
@@ -1703,7 +1711,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="fg g3">
             <Fld label={tr("Sub-supplier Currency")}>{anyXfer?<input className="fi" value={`${sc} (${CURR[sc]||''})`} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/>
               :<select value={sc} onChange={e=>set('srcCurrency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select>}</Fld>
-            {sc!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,sc)}><input type="number" min="0" step="0.0001" value={doc.fxRate||''} onChange={e=>set('fxRate',e.target.value)} className="fi" placeholder="0.0000"/></Fld>:<div/>}
+            {sc!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,sc)}><div className="rate-row">
+              <input type="number" min="0" step="0.0001" value={doc.fxRate||''} onChange={e=>{set('fxRate',e.target.value);set('fxSource',null);}} className="fi" placeholder="0.0000"/>
+              <TcmbButton date={rateDate} from={dc} to={sc} onRate={r=>{set('fxRate',String(r.rate));set('fxSource',{date:r.date,kind:'banknoteBuying'});}}/>
+            </div><TcmbNote src={doc.fxSource}/></Fld>:<div/>}
             {anyXfer&&doc.markup?<Fld label={tr("Markup % (at transfer)")}><input className="fi" value={doc.markup} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/></Fld>:<div/>}
           </div>
           <datalist id="src-suppliers">{srcNames.map(n=><option key={n} value={n}/>)}</datalist>

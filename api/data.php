@@ -32,7 +32,8 @@ try {
         }
         if (is_array($out->gm_users)) $out->gm_users = public_users($out->gm_users);
 
-        foreach (db()->query('SELECT setting_key, value, is_raw, version FROM settings')->fetchAll() as $r) {
+        // tcmb:* rows are the exchange-rate cache of rates.php, not app data
+        foreach (db()->query("SELECT setting_key, value, is_raw, version FROM settings WHERE setting_key NOT LIKE 'tcmb:%'")->fetchAll() as $r) {
             $k = $r['setting_key'];
             if (!in_array($k, SETTING_KEYS, true) && !in_array($k, RAW_KEYS, true)) continue;
             $out->$k = $r['is_raw'] ? $r['value'] : json_decode($r['value']);

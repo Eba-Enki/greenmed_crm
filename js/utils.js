@@ -100,6 +100,33 @@ const apiCall=async(path,opts={})=>{
   if(!r.ok){const e=new Error(j.error||('HTTP '+r.status));e.status=r.status;throw e;}
   return j;
 };
+// TCMB banknote buying rate ("efektif alış") on a date, as 1 `from` = ? `to` (Sales & Procurement portal only).
+// TCMB quotes everything in lira, so a cross rate is from's lira ÷ to's lira; api/rates.php falls back to the latest
+// bulletin before the date (weekends, holidays). Resolves {rate, date: the bulletin used}. Bulletins are kept per day.
+const tcmbBulletins={};
+const tcmbRate=async(date,from,to)=>{
+  const day=date||new Date().toISOString().slice(0,10);
+  const b=tcmbBulletins[day]||(tcmbBulletins[day]=apiCall('rates.php?date='+encodeURIComponent(day)).catch(e=>{delete tcmbBulletins[day];throw e;}));
+  const r=await b;
+  const lira=c=>{if(c==='TRY')return 1;const x=r.rates&&r.rates[c];return x&&x.banknoteBuying?x.banknoteBuying/(x.unit||1):null;};
+  const a=lira(from),z=lira(to);
+  if(a==null||z==null)throw new Error(tr('TCMB has no banknote buying rate for {0}',a==null?from:to));
+  return{rate:Math.round(a/z*10000)/10000,date:r.date};
+};
+const isoToDots=iso=>iso?iso.split('-').reverse().join('.'):'';
+// Button next to a rate field: fills it with the TCMB rate of `date`; onRate({rate,date})
+function TcmbButton({date,from,to,onRate}){
+  const[busy,setBusy]=useState(false);
+  const get=async()=>{
+    setBusy(true);
+    try{onRate(await tcmbRate(date,from,to));}
+    catch(e){uiAlert(tr('Could not get the TCMB rate: {0}',e.message));}
+    setBusy(false);
+  };
+  return <Btn v="bgh bsm" type="button" onClick={get} disabled={busy} title={tr('TCMB banknote buying rate of {0}',isoToDots(date))}>{busy?tr('Fetching…'):tr('TCMB rate')}</Btn>;
+}
+// Where a rate came from, under its field ({date} of the TCMB bulletin); nothing for a rate typed by hand
+const TcmbNote=({src})=>src&&src.date?<div className="tcmb-note">{tr('TCMB · {0} · banknote buying',isoToDots(src.date))}</div>:null;
 // Short content fingerprint (cyrb53) — tells which records changed since the last sync
 const hashStr=str=>{
   let h1=0xdeadbeef,h2=0x41c6ce57;

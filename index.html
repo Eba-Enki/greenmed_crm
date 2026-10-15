@@ -1142,6 +1142,11 @@ table.ie th{background:#fafaf9;text-transform:none;letter-spacing:0;font-size:12
 .crumb-link:hover{background:var(--bz-hover);color:var(--bz-ink)}
 .crumb-link:active{background:var(--bz-press)}
 .crumb-link:focus-visible{outline:2px solid var(--gm-400);outline-offset:1px}
+/* Exchange-rate field with its "TCMB rate" button, and the source note under it */
+.rate-row{display:flex;gap:8px;align-items:center}
+.rate-row .fi{flex:1;min-width:0}
+.rate-row .btn{flex-shrink:0;height:38px}
+.tcmb-note{margin-top:5px;font-size:11.5px;color:var(--bz-mute)}
 /* Full-page preview: a light row with the standard buttons (was a dark bar with small ghost buttons) */
 .pvbar{background:transparent;padding:16px 22px 0;gap:8px}
 /* Quick view: header and footer stay put, the body scrolls */
