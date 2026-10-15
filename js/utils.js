@@ -835,6 +835,11 @@ const findCaseInsensitiveDup=(list,field,value,excludeId)=>{
   if(!v)return null;
   return list.find(x=>x.id!==excludeId&&(x[field]||'').trim().toLowerCase()===v)||null;
 };
+// A received invoice whose supplier already has an invoice with this number (another record, case and spaces ignored)
+const isDupSupplierInvoice=(list,doc,supplier)=>{
+  const n=(doc.number||'').trim().toLowerCase(),s=(supplier||'').trim().toLowerCase();
+  return!!n&&!!s&&list.some(d=>d.id!==doc.id&&(d.number||'').trim().toLowerCase()===n&&(d.supplierCompany||d.supplier||'').trim().toLowerCase()===s);
+};
 const askDuplicateOk=(kind,name)=>askGlobalConfirm(tr("A {0} named \"{1}\" already exists. Save anyway?", kind, name),{confirmLabel:tr('Save Anyway')});
 
 // Name/company casing, applied on save (not while typing) so "acme ltd" and "ACME LTD" both

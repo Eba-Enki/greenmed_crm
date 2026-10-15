@@ -102,10 +102,23 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     setCo(newCo);LS.set(ns+'co',newCo);
   };
   const deleteBank=async(id)=>{
-    if(!(await askGlobalConfirm(tr('Delete this bank account? Its transactions will also be deleted.'),{confirmLabel:tr('Delete')})))return;
+    // A currency exchange goes as a whole, so the other account is not left with half of it; the payments
+    // that go with the account give their documents back their unpaid amount
+    const fxIds=new Set(bankTx.filter(t=>t.fx&&(t.accountId===id||t.fx.fromAccountId===id||t.fx.toAccountId===id)).map(t=>t.fx.id));
+    const gone=t=>t.accountId===id||(t.fx&&fxIds.has(t.fx.id));
+    const removed=bankTx.filter(gone);
+    const refs=removed.flatMap(txAllocs).filter(a=>a.type==='invoice'||a.type==='received');
+    const paidDocs=new Set(refs.map(a=>docKey(a.type,a.id))).size;
+    const otherFx=new Set(removed.filter(t=>t.fx&&t.accountId!==id).map(t=>t.fx.id)).size;
+    const msg=[tr('Delete this bank account? Its transactions will also be deleted.'),
+      paidDocs&&tr('{0} invoice(s) paid through this account will show as unpaid again.',paidDocs),
+      otherFx&&tr('{0} currency exchange(s) with other accounts will also be removed from those accounts.',otherFx)].filter(Boolean).join('\n\n');
+    if(!(await askGlobalConfirm(msg,{confirmLabel:tr('Delete')})))return;
     const newCo={...co,banks:(co.banks||[]).filter(b=>b.id!==id)};
     setCo(newCo);LS.set(ns+'co',newCo);
-    sBankTx(bankTx.filter(t=>t.accountId!==id));
+    const next=bankTx.filter(t=>!gone(t));
+    sBankTx(next);
+    syncDocStatuses(next,refs);
     showToast(tr('Deleted'));
   };
   const setDefaultBank=(id)=>{
@@ -232,12 +245,21 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
 
   const mkDoc=(type)=>({id:null,type,number:autoNumber?genN(type):'',date:td(),dueDate:type==='invoice'?td():addD(30),terms:type==='invoice'?'Due on Receipt':'Valid for 30 days',currency:'GBP',status:'draft',project:'',client:{name:'',address:'',email:'',ref:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:'Thanks for your business.'});
   const mkRec=()=>({id:null,type:'received',number:'',supplier:'',supplierAddress:'',email:'',ref:'',date:td(),dueDate:addD(30),terms:'Due on Receipt',currency:'GBP',status:'pending',project:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
-  const handleSave=docIn=>{
-    const doc={...docIn,number:(docIn.number||'').trim()};
+  const handleSave=async docIn=>{
+    let doc={...docIn,number:(docIn.number||'').trim()};
     if(doc.type!=='received'){
       if(!doc.number){uiAlert(tr('Enter a document number.'));return;}
       const dup=docsOfType(doc.type).find(d=>d.id!==doc.id&&(d.number||'').trim().toLowerCase()===doc.number.toLowerCase());
       if(dup){uiAlert(tr("Number \"{0}\" is already used by another {1}. Enter a different number.", doc.number, doc.type==='po'?tr('purchase order'):doc.type));return;}
+    }else if(doc.number&&isDupSupplierInvoice(rec,doc,doc.supplier)){
+      // Two suppliers can use the same number; the same supplier's number twice is almost always a double entry
+      if(!(await askGlobalConfirm(tr('{0} already has an invoice numbered {1}. Save anyway?',doc.supplier,doc.number),{confirmLabel:tr('Save Anyway')})))return;
+    }
+    // Paid / partially paid follow the payments when the total changes; a status set by hand on a document without
+    // payments is left as it is
+    if(doc.type==='invoice'||doc.type==='received'){
+      const paid=doc.id?(allocatedByDoc(bankTx)[docKey(doc.type,doc.id)]||0):0;
+      if(paid>0.005)doc={...doc,status:paid>=docTotal(doc)-0.005?'paid':'partial'};
     }
     const fresh=!doc.id;const saved=fresh?{...doc,id:uid()}:doc;
     if(doc.type==='invoice')si(fresh?[...inv,saved]:inv.map(d=>d.id===saved.id?saved:d));
@@ -268,7 +290,20 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
     if(type==='invoice'||type==='received')sBankTx(bankTx.map(t=>{const al=txAllocs(t);if(!al.some(x=>x.type===type&&ids.has(x.id)))return t;return{...t,linkedDoc:null,allocations:al.filter(x=>!(x.type===type&&ids.has(x.id)))};}));
   };
   const handleSavePrj=p=>{const fresh=!p.id;const saved=fresh?{...p,id:uid()}:p;spr(fresh?[...projects,saved]:projects.map(d=>d.id===saved.id?saved:d));showToast(tr('Saved ✓'));go('off_projects');};
-  const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));showToast(tr('Saved ✓'));go('off_customers');};
+  const handleSaveCust=c=>{const fresh=!c.id;const saved=fresh?{...c,id:uid()}:c;sCust(fresh?[...customers,saved]:customers.map(x=>x.id===saved.id?saved:x));
+    // Documents name their customer / supplier rather than pointing at the contact, so a rename carries over to them
+    const old=!fresh&&customers.find(x=>x.id===saved.id);
+    const from=old&&contactName(old),to=contactName(saved);
+    if(from&&to&&from!==to){
+      const onClient=list=>list.some(d=>d.client&&d.client.name===from)?list.map(d=>d.client&&d.client.name===from?{...d,client:{...d.client,name:to}}:d):null;
+      const onSupplier=list=>list.some(d=>d.supplier===from)?list.map(d=>d.supplier===from?{...d,supplier:to}:d):null;
+      [[onClient(inv),si],[onClient(quo),sq],[onSupplier(pos),sp],[onSupplier(rec),sr]].forEach(([next,set])=>{if(next)set(next);});
+      const projNext=projects.some(p=>p.client===from)?projects.map(p=>p.client===from?{...p,client:to}:p):null;
+      if(projNext)spr(projNext);
+      if(bankTx.some(t=>t.contactName===from&&(!t.contactId||t.contactId===saved.id)))
+        sBankTx(bankTx.map(t=>t.contactName===from&&(!t.contactId||t.contactId===saved.id)?{...t,contactName:to}:t));
+    }
+    showToast(tr('Saved ✓'));go('off_customers');};
 
   // Simple generic form
   function SimpleDocForm({doc:init,onSave,onCancel,onPreview}){

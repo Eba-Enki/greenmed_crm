@@ -616,8 +616,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     setCur({...ri,_pendingPOId:po.id});
     go('received_invoice_form');
   };
-  const handleSaveRIFromPO=ri0=>{
+  // Same supplier, same invoice number: almost always the same invoice entered twice
+  const confirmNewSupplierInvoice=async ri=>!isDupSupplierInvoice(receivedInvoices,ri,ri.supplierCompany)
+    ||askGlobalConfirm(tr('{0} already has an invoice numbered {1}. Save anyway?',ri.supplierCompany,(ri.number||'').trim()),{confirmLabel:tr('Save Anyway')});
+  const handleSaveRIFromPO=async ri0=>{
     const ri=addrCaseDoc(ri0);
+    if(!(await confirmNewSupplierInvoice(ri)))return;
     const saved={...ri,id:ri.id||uid()};
     const pendingPOId=ri._pendingPOId;
     const {_pendingPOId:_,...cleanRI}=saved;
@@ -625,8 +629,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     commitProc(syncMatchChain('ri',cleanRI,{pq:purchaseQuotes,po,ri:upsert(receivedInvoices,cleanRI)}));
     showToast(tr('Saved ✓'));go('received_invoices');
   };
-  const handleSaveRI=ri0=>{
+  const handleSaveRI=async ri0=>{
     const ri=addrCaseDoc(ri0);
+    if(!(await confirmNewSupplierInvoice(ri)))return;
     const saved={...ri,id:ri.id||uid()};
     commitProc(syncMatchChain('ri',saved,{pq:purchaseQuotes,po:purchaseOrders,ri:upsert(receivedInvoices,saved)}));
     showToast(tr('Saved ✓'));go('received_invoices');
