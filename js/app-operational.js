@@ -1619,7 +1619,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:10}}>{tr("Line Items")}<div style={{flex:1}}/>
           {isPQ&&isGroupDoc(doc)&&doc.sqBase&&<Btn v="bgh bsm" onClick={()=>{
             const sel={};items.forEach(i=>{if(i.srcq&&i.sqKey)sel[i.sqKey]=i.srcq.lineId;});
-            setXfer({cur:doc.srcCurrency||'TRY',rate:doc.fxRate||'',markup:doc.markup||'',sel});}}><Ico n="convert"/>{tr("Transfer from sub-supplier quotes")}</Btn>}
+            // Start in the currency the sub-supplier quotes for this quotation are in (the most common one), unless lines
+            // were already transferred in another; the saved rate only applies to the saved currency
+            const curs=srcQuotes.filter(q=>q.sqBase===doc.sqBase&&(q.items||[]).some(it=>it.sqKey)).map(q=>q.currency||'TRY');
+            const counts=curs.reduce((m,c)=>({...m,[c]:(m[c]||0)+1}),{});
+            const common=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+            const cur=items.some(i=>i.srcq)?(doc.srcCurrency||'TRY'):(common||doc.srcCurrency||'TRY');
+            setXfer({cur,rate:cur===doc.srcCurrency?doc.fxRate||'':'',markup:doc.markup||'',sel});}}><Ico n="convert"/>{tr("Transfer from sub-supplier quotes")}</Btn>}
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
         {isPQ&&isGroupDoc(doc)&&!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the project and sales quotation to transfer the collected sub-supplier quotes.")}</div>}
@@ -1630,7 +1636,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           const rows=q?(q.items||[]).map((ci,i)=>({ci,i,key:sqItemKey(ci),offers:open.filter(o=>o.it.sqKey===sqItemKey(ci))})):[];
           const conv=p=>{const v=+p||0;if(!v)return null;const c=xfer.cur===dc?v:(+xfer.rate>0?v/+xfer.rate:null);return c==null?null:Math.round(c*(1+(+xfer.markup||0)/100)*100)/100;};
           const pick=(key,id)=>setXfer(x=>({...x,sel:{...x.sel,[key]:id}}));
-          const chosen=rows.filter(r=>xfer.sel[r.key]&&r.offers.some(o=>o.it.id===xfer.sel[r.key]));
+          // only offers in the chosen currency are transferred: their prices are converted with this currency's rate
+          const chosen=rows.filter(r=>xfer.sel[r.key]&&r.offers.some(o=>o.it.id===xfer.sel[r.key]&&(o.s.currency||'TRY')===xfer.cur));
           const needRate=xfer.cur!==dc&&!(+xfer.rate>0);
           const apply=()=>{
             const prev=Object.fromEntries(items.filter(i=>i.srcq).map(i=>[i.srcq.lineId,i]));
@@ -1650,7 +1657,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               </div>
               <div className="mt-dialog-b">
                 <div className="fg g3">
-                  <Fld label={tr("Sub-supplier Currency")}><select className="fi" value={xfer.cur} onChange={e=>setXfer(x=>({...x,cur:e.target.value}))}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
+                  <Fld label={tr("Sub-supplier Currency")}><select className="fi" value={xfer.cur} onChange={e=>{const c=e.target.value;
+                    // picks in another currency are dropped; the rate is the one saved for that currency, else empty
+                    setXfer(x=>({...x,cur:c,rate:c===doc.srcCurrency?doc.fxRate||'':'',sel:Object.fromEntries(Object.entries(x.sel).filter(([,id])=>open.some(o=>o.it.id===id&&(o.s.currency||'TRY')===c)))}));}}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
                   {xfer.cur!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,xfer.cur)}><input className="fi" type="number" min="0" step="0.0001" value={xfer.rate} onChange={e=>setXfer(x=>({...x,rate:e.target.value}))} placeholder="0.0000"/></Fld>:<div/>}
                   <Fld label={tr("Markup %")}><input className="fi" type="number" step="0.01" value={xfer.markup} onChange={e=>setXfer(x=>({...x,markup:e.target.value}))} placeholder="0"/></Fld>
                 </div>
@@ -1659,7 +1668,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <div className="xf-cust"><span style={{color:'var(--g400)'}}>#{r.i+1}</span> {sqLineText(r.ci)} <span style={{color:'var(--g400)',fontWeight:400}}>· {r.ci.qty} {r.ci.unit||''}</span></div>
                   {r.offers.length===0?<div className="xf-none">{tr("No open sub-supplier quote for this item")}</div>:<>
                     <label className={'mt-cand'+(!xfer.sel[r.key]?' on':'')}><input type="radio" name={'xf-'+r.key} checked={!xfer.sel[r.key]} onChange={()=>pick(r.key,'')}/><div style={{color:'var(--g500)'}}>{tr("Don't transfer now")}</div></label>
-                    {r.offers.map(({s,it})=>{const other=s.currency!==xfer.cur;const v=conv(it.price);return(
+                    {r.offers.map(({s,it})=>{const other=(s.currency||'TRY')!==xfer.cur;const v=conv(it.price);return(
                       <label key={it.id} className={'mt-cand'+(xfer.sel[r.key]===it.id?' on':'')+(other?' dis':'')}>
                         <input type="radio" name={'xf-'+r.key} disabled={other} checked={xfer.sel[r.key]===it.id} onChange={()=>pick(r.key,it.id)}/>
                         <div style={{flex:1,minWidth:0}}>
@@ -1674,7 +1683,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <div className="mt-dialog-f">
                 {needRate&&<span className="mt-none" style={{marginRight:'auto'}}>{tr("Enter the exchange rate")}</span>}
                 <Btn v="bgh bsm" onClick={()=>setXfer(null)}>{tr("Cancel")}</Btn>
-                <Btn v="bp bsm" disabled={needRate} onClick={apply}>{tr("Transfer {0} item(s)",chosen.length)}</Btn>
+                <Btn v="bp bsm" disabled={needRate||(!chosen.length&&!items.some(i=>i.srcq))} onClick={apply}>{tr("Transfer {0} item(s)",chosen.length)}</Btn>
               </div>
             </div>
           </div>);
