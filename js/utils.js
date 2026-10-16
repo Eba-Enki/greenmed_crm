@@ -10,6 +10,14 @@ const addD=(n,f=td())=>{const[y,m,d]=String(f).slice(0,10).split('-').map(Number
 const uid=()=>Math.random().toString(36).slice(2,9);
 const lt=i=>+(+(i.qty||0))*(+(i.price||0));
 const dt=items=>(items||[]).reduce((s,i)=>s+lt(i),0);
+// Subtotal, VAT and total of a document. VAT is optional per document (vatOn + a hand-typed vatRate %) and is added
+// on top of the subtotal, rounded to the cent. Documents without vatOn total the same as dt(items).
+const docTotals=(doc,items=doc&&doc.items)=>{
+  const sub=dt(items);
+  const rate=doc&&doc.vatOn?(+String(doc.vatRate||'').replace(',','.')||0):0;
+  const vat=Math.round(sub*rate)/100;
+  return{sub,rate,vat,total:sub+vat};
+};
 const fmt=n=>n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 // Amounts in different currencies are never added together: totals are kept per currency ({GBP:…, USD:…})
 // and shown side by side ("£1,200.00 · $350.00"); a record without a currency counts as GBP, as it is shown.

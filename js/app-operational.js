@@ -505,7 +505,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // quote uses it ("quoted", quotedIn) or uses another offer for the same customer line ("unused", unusedBy).
   const mkSrcQuote=()=>({id:null,number:'',date:td(),supplierId:'',supplierCompany:'',currency:'TRY',project:'',projectNumber:'',sqBase:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkSrcInvoice=q=>({id:null,number:'',date:td(),supplierId:(q&&q.supplierId)||'',supplierCompany:(q&&q.supplierCompany)||'',currency:(q&&q.currency)||'TRY',
-    project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',
+    project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',vatOn:!!(q&&q.vatOn),vatRate:(q&&q.vatRate)||'',
     items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const srcLineState=it=>it.status||'pending';
   const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>i.desc||i.item).map(srcLineState);
@@ -1839,12 +1839,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       return true;
     });
     const sqNum=d=>{const q=latestSQ(d.sqBase);return q?q.number:'';};
-    const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,supplier:d=>d.supplierCompany,project:d=>d.project,sq:sqNum,src:d=>d.srcqNumber,total:d=>dt(d.items||[]),state:srcQuoteState});
+    const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,supplier:d=>d.supplierCompany,project:d=>d.project,sq:sqNum,src:d=>d.srcqNumber,total:d=>docTotals(d).total,state:srcQuoteState});
     const lbl=isQ?tr('Sub-supplier Quote'):tr('Sub-supplier Invoice');
     const projNames=[...new Set(docs.map(d=>d.project).filter(Boolean))];
     const inQuote=d=>isQ&&(d.items||[]).some(i=>srcLineState(i)==='quoted');
-    const exportRows=list=>exportExcel([isQ?['Date','Quote No','Sub-supplier','Project','Sales Quotation','Currency','Total','Status']:['Date','Invoice No','Sub-supplier','Sub-supplier Quote','Project','Currency','Total'],
-      ...list.map(d=>isQ?[d.date,d.number,d.supplierCompany,d.project,sqNum(d),d.currency,dt(d.items||[]),SRC_STATE[srcQuoteState(d)][0]]:[d.date,d.number,d.supplierCompany,d.srcqNumber||'',d.project,d.currency,dt(d.items||[])])],isQ?'source-quotes':'source-invoices');
+    const money=d=>{const t=docTotals(d);return[t.sub,t.rate||'',t.vat,t.total];};
+    const exportRows=list=>exportExcel([isQ?['Date','Quote No','Sub-supplier','Project','Sales Quotation','Currency','Sub Total','VAT %','VAT','Total','Status']:['Date','Invoice No','Sub-supplier','Sub-supplier Quote','Project','Currency','Sub Total','VAT %','VAT','Total'],
+      ...list.map(d=>isQ?[d.date,d.number,d.supplierCompany,d.project,sqNum(d),d.currency,...money(d),SRC_STATE[srcQuoteState(d)][0]]:[d.date,d.number,d.supplierCompany,d.srcqNumber||'',d.project,d.currency,...money(d)])],isQ?'source-quotes':'source-invoices');
     const bulk=useBulkSelect(sorted.map(d=>d.id));
     const picked=sorted.filter(d=>bulk.has(d.id));
     // Same rule as deleting one: a quote whose lines are used in a group company quote stays
@@ -1911,7 +1912,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               {!isQ&&<td>{d.srcqNumber?<span className="mt-chip">{d.srcqNumber}</span>:<span style={{color:'var(--g300)'}}>—</span>}</td>}
               <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
               {isQ&&<td style={{color:'var(--g500)',fontSize:12}}>{sqNum(d)||'—'}</td>}
-              <td className="tar">{CURR[d.currency]||''}{fmt(dt(d.items||[]))}</td>
+              <td className="tar">{CURR[d.currency]||''}{fmt(docTotals(d).total)}</td>
               {isQ&&<td className="tac"><SrcBadge s={srcQuoteState(d)}/></td>}
             </tr>
           ))}</tbody>
@@ -1971,7 +1972,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       <div className="fc"><div className="fct">{tr("Line Items")}</div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined}/>
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)}/>
+        <div className="vat-row">
+          <label className="st-check"><input type="checkbox" checked={!!doc.vatOn} onChange={e=>set('vatOn',e.target.checked)}/><span>{tr("Apply VAT")}</span></label>
+          {doc.vatOn&&<label className="vat-rate"><span>{tr("VAT rate")}</span><input value={doc.vatRate||''} onChange={e=>set('vatRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
+        </div>
       </div>
       <div className="fc"><div className="fct">{tr("Notes")}</div>
         <Fld label={tr("Notes")}><textarea value={doc.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi"/></Fld>

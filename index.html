@@ -305,6 +305,12 @@ table.ie td input[readonly]{background:transparent;color:var(--g500)}
 .dlb:hover{color:var(--red);background:var(--redl);transform:scale(1.1)}
 .totbox{background:linear-gradient(135deg,var(--dk),var(--dk2));border-radius:10px;padding:12px 20px;display:inline-flex;align-items:center;gap:14px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
 .totlbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.5)}
+.totbox-vat{gap:10px 14px}
+.totsub{font-size:13.5px;font-weight:600;color:rgba(255,255,255,.85);margin-right:6px}
+.vat-row{display:flex;align-items:center;justify-content:flex-end;gap:18px;flex-wrap:wrap;margin-top:12px}
+.vat-rate{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--g700)}
+.vat-rate .fi{width:80px;text-align:right}
+.pv2-vat{display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-right:14px;font-size:12.5px;color:var(--g600)}
 .totamt{font-size:19px;font-weight:800;color:#fff;letter-spacing:-.3px}
 .fact{display:flex;justify-content:flex-end;gap:10px;padding-top:6px}
 
@@ -1306,17 +1312,17 @@ table.ie td input.ce-empty{border:1.5px dashed rgba(176,90,16,.5)}
 <body>
 <div id="root"><div class="splash" role="status" aria-label="Loading"><img class="splash-logo" src="brand_assets/logo/logo_fl.svg" alt=""><span class="splash-ring"></span></div></div>
 <!-- Loaded on first use, not on page load (see ensureXLSX / ensurePDF in js/utils.js) -->
-<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261012b","jszip":"https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"}</script>
+<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261016a","jszip":"https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"}</script>
 <script>window.onerror=function(msg,src,line,col,err){document.getElementById('root').innerHTML='<pre style="color:red;background:#fff;padding:20px;font-size:13px">'+msg+'\n'+src+':'+line+'</pre>';return false;};</script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.22.5/babel.min.js"></script>
-<script src="js/i18n.js?v=20261012b"></script>
-<script type="text/babel" src="js/utils.js?v=20261012b"></script>
-<script type="text/babel" src="js/document-templates.js?v=20261012b"></script>
-<script type="text/babel" src="js/app-official.js?v=20261012b"></script>
-<script type="text/babel" src="js/app-operational.js?v=20261012b"></script>
-<script type="text/babel" src="js/app-system.js?v=20261012b"></script>
-<script type="text/babel" src="js/app-shell.js?v=20261012b"></script>
+<script src="js/i18n.js?v=20261016a"></script>
+<script type="text/babel" src="js/utils.js?v=20261016a"></script>
+<script type="text/babel" src="js/document-templates.js?v=20261016a"></script>
+<script type="text/babel" src="js/app-official.js?v=20261016a"></script>
+<script type="text/babel" src="js/app-operational.js?v=20261016a"></script>
+<script type="text/babel" src="js/app-system.js?v=20261016a"></script>
+<script type="text/babel" src="js/app-shell.js?v=20261016a"></script>
 </body>
 </html>

@@ -944,7 +944,8 @@ function DocPage({doc,co,docType}){
 function DocSummaryBody({doc,co,docType,itemNote}){
   const isSrc=docType==='src_quote'||docType==='src_invoice'; // group company's source quote / invoice (supplier side, no ship-to)
   const sym=CURR[doc.currency]||'£';
-  const total=dt(doc.items||[]);
+  const totals=docTotals(doc);
+  const total=totals.total;
   const isInv=docType==='invoice';
   const isPO=docType==='po';
   const isPQ=docType==='quote';
@@ -1032,6 +1033,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
               </table>
             </div>
             <div className="pv2-totals">
+              {totals.rate>0&&<div className="pv2-vat"><span>{tr('Sub Total')} {sym}{fmt(totals.sub)}</span><span>{tr('VAT ({0}%)',totals.rate)} {sym}{fmt(totals.vat)}</span></div>}
               <div className="pv2-totbox">
                 <span className="pv2-totlbl">{tr('Total')}</span>
                 <span className="pv2-totamt">{sym}{fmt(total)}</span>
@@ -1093,7 +1095,8 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
 // Generic line items editor
 // match (optional): {options:[{key,label}]} adds a "Customer Item" column whose select stores the chosen key
 // in item.sqKey; a key already picked on another line is disabled so each customer item is matched once.
-function ItemsEditor({items,setItems,currency,readOnly,match}){
+// totals: docTotals(...) of the document, to show Sub Total / VAT / Total when VAT applies
+function ItemsEditor({items,setItems,currency,readOnly,match,totals}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
   const addL=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
@@ -1127,7 +1130,13 @@ function ItemsEditor({items,setItems,currency,readOnly,match}){
     </div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       {!readOnly?<Btn v="bgh bsm" onClick={addL}><Ico n="plus"/>{tr("Add Line")}</Btn>:<div/>}
-      <div className="totbox"><span className="totlbl">{tr("Total")}</span><span className="totamt">{sym}{fmt(total)}</span></div>
+      {totals&&totals.rate>0
+        ?<div className="totbox totbox-vat">
+          <span className="totlbl">{tr("Sub Total")}</span><span className="totsub">{sym}{fmt(totals.sub)}</span>
+          <span className="totlbl">{tr("VAT ({0}%)",totals.rate)}</span><span className="totsub">{sym}{fmt(totals.vat)}</span>
+          <span className="totlbl">{tr("Total")}</span><span className="totamt">{sym}{fmt(totals.total)}</span>
+        </div>
+        :<div className="totbox"><span className="totlbl">{tr("Total")}</span><span className="totamt">{sym}{fmt(total)}</span></div>}
     </div>
   </>);
 }
