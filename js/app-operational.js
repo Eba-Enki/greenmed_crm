@@ -415,9 +415,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const byCode={},byName={};
     [...priceRecords,...manuals].forEach(r=>{if(r.codeKey)(byCode[r.codeKey]=byCode[r.codeKey]||[]).push(r);if(r.nameKey)(byName[r.nameKey]=byName[r.nameKey]||[]).push(r);});
     const sameRecords=r=>[...(r.codeKey&&byCode[r.codeKey]||[]),...(r.nameKey&&byName[r.nameKey]||[])];
-    // Supplier lines matched by hand to a quotation line belong to its product
-    const byMatch={};
-    priceRecords.forEach(x=>{if(x.side==='buy'&&x.sqBase&&x.sqKey)(byMatch[x.sqBase+'|'+x.sqKey]=byMatch[x.sqBase+'|'+x.sqKey]||[]).push(x);});
+    // Supplier lines matched by hand to a quotation line belong to its product. Several lines of one document matched
+    // to the same customer line are the parts of a set (A = X + Y + Z) and give one record: what the parts cost per
+    // unit of the customer line
+    const byMatch={},parts={};
+    priceRecords.forEach(x=>{if(x.side==='buy'&&x.sqBase&&x.sqKey)(parts[x.docId+'|'+x.sqBase+'|'+x.sqKey]=parts[x.docId+'|'+x.sqBase+'|'+x.sqKey]||[]).push(x);});
+    Object.values(parts).forEach(ls=>{
+      let r=ls[0];
+      if(ls.length>1){
+        const q=latestSQ(r.sqBase),line=q&&(q.items||[]).find(i=>sqItemKey(i)===r.sqKey);
+        const cost=ls.reduce((s,x)=>s+(+x.qty||0)*x.price,0),per=+(line&&line.qty)||1;
+        r={...r,qty:line?line.qty:'1',unit:line?line.unit||'':'',price:cost/per,code:line?line.item||'':'',name:line?line.desc||r.name:r.name,codeKey:'',nameKey:'',set:ls.length};
+      }
+      (byMatch[r.sqBase+'|'+r.sqKey]=byMatch[r.sqBase+'|'+r.sqKey]||[]).push(r);
+    });
     // Lines are joined into products through shared codes / descriptions. Lines removed from the pool by hand stay out
     // of it; those still in Deleted items are grouped the same way there
     const group=lines=>{
@@ -2462,13 +2473,26 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     receivedInvoices.filter(r=>r.project===projName&&!chains.some(c=>c.ri&&c.ri.id===r.id)).forEach(r=>chains.push({pq:null,po:null,ri:r}));
     return chains.map(c=>({...c,lead:c.ri||c.po||c.pq,kind:c.ri?'ri':c.po?'po':'pq'}));
   };
-  // Matches (key) or unmatches ('') one supplier line; a customer line is matched once per document
-  const setLineMatch=(chain,itemId,base,key)=>{
-    const lead={...chain.lead,sqBase:base,items:(chain.lead.items||[]).map(x=>x.id===itemId?{...x,sqKey:key}:(key&&x.sqKey===key?{...x,sqKey:''}:x))};
-    const lists={pq:purchaseQuotes,po:purchaseOrders,ri:receivedInvoices};
-    lists[chain.kind]=upsert(lists[chain.kind],lead);
-    commitProc(syncMatchChain(chain.kind,lead,lists));
-    showToast(tr(key?'Matched ✓':'Match removed'));
+  // Unmatches one supplier line; the other parts matched to its customer line stay
+  const unmatchLine=(chain,itemId,base)=>{
+    const key=((chain.lead.items||[]).find(x=>x.id===itemId)||{}).sqKey;
+    if(key)setCustomerLineMatches([chain],base,key,
+      new Set((chain.lead.items||[]).filter(x=>x.id!==itemId&&x.sqKey===key).map(x=>chain.lead.id+'|'+x.id)),'Match removed');
+  };
+  // Points exactly the chosen supplier lines ('docId|itemId') at one customer line; several lines of a document may
+  // point at the same customer line (the parts of a set). Lines left out that pointed at it are unmatched.
+  const setCustomerLineMatches=(chains,base,key,chosen,msg)=>{
+    let lists={pq:purchaseQuotes,po:purchaseOrders,ri:receivedInvoices};
+    chains.forEach(c=>{
+      const mine=c.lead.sqBase===base;
+      const items=(c.lead.items||[]).map(x=>chosen.has(c.lead.id+'|'+x.id)?{...x,sqKey:key}:(mine&&x.sqKey===key?{...x,sqKey:''}:x));
+      if(items.every((x,i)=>x===c.lead.items[i]))return;
+      const lead={...c.lead,sqBase:base,items};
+      lists={...lists,[c.kind]:upsert(lists[c.kind],lead)};
+      lists=syncMatchChain(c.kind,lead,lists);
+    });
+    commitProc(lists);
+    showToast(tr(msg||(chosen.size?'Matched ✓':'Match removed')));
   };
   const chainDocs=c=>[c.pq&&[tr('RQ'),c.pq.number],c.po&&[tr('PO'),c.po.number],c.ri&&[tr('INV'),c.ri.number]].filter(Boolean);
   const DocChips=({c})=><span style={{display:'inline-flex',gap:4,flexWrap:'wrap'}}>{chainDocs(c).map(([k,n])=><span key={k} className="mt-chip">{n?`${k} ${n}`:k}</span>)}</span>;
@@ -2503,13 +2527,18 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Item Matching page of a project (opened from the project detail header)
   function ItemMatching({project}){
     const[pick,setPick]=useState(null); // customer line being matched: {base,key,label}
-    const[sel,setSel]=useState('');
+    const[sel,setSel]=useState(()=>new Set()); // supplier lines ('docId|itemId') ticked in the dialog
     const[f,setF]=useState(matchFilterRef.current);
     const tab=f.tab||'match';
     const setFilter=p=>{const n={...f,...p};matchFilterRef.current=n;setF(n);};
     useEscape(()=>setPick(null),!!pick);
     const{chains,groups,total,done}=projMatching(project.name);
     const cands=pick?chains.filter(c=>!c.lead.sqBase||c.lead.sqBase===pick.base).flatMap(c=>(c.lead.items||[]).map(it=>({c,it}))):[];
+    // The dialog opens with the lines already matched to the customer line ticked
+    const matchedNow=p=>new Set(chains.filter(c=>c.lead.sqBase===p.base).flatMap(c=>(c.lead.items||[]).filter(it=>it.sqKey===p.key).map(it=>c.lead.id+'|'+it.id)));
+    const openPick=p=>{setSel(matchedNow(p));setPick(p);};
+    const toggleSel=v=>setSel(s=>{const n=new Set(s);if(n.has(v))n.delete(v);else n.add(v);return n;});
+    const selChanged=pick?(()=>{const was=matchedNow(pick);return was.size!==sel.size||[...sel].some(v=>!was.has(v));})():false;
     const lineNo=(base,key)=>{const q=latestSQ(base);const i=q?(q.items||[]).findIndex(x=>sqItemKey(x)===key):-1;return i<0?null:'#'+(i+1);};
     const ql=f.q.trim().toLowerCase();
     // Excel of the open tab with the current search/filter: one row per supplier line (Matching) or per customer
@@ -2614,10 +2643,16 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             shown.flatMap(({it,i,key,lines})=>{
               // One row per matched supplier line; the customer's columns (#, item, qty, sale price) span them
               const n=Math.max(1,lines.length);
-              const matchBtn=<button className="ab" title={tr("Match")} aria-label={tr("Match")} onClick={()=>{setSel('');setPick({base,key,label:`#${i+1} ${sqLineText(it)}`});}}><Ico n="link"/></button>;
+              const matchBtn=<button className="ab" title={tr("Match")} aria-label={tr("Match")} onClick={()=>openPick({base,key,label:`#${i+1} ${sqLineText(it)}`})}><Ico n="link"/></button>;
               const dash=<span style={{color:'var(--g300)'}}>—</span>;
               const num=<td key="n" rowSpan={n} style={{color:'var(--g500)'}}>{i+1}</td>;
-              const item=<td key="d" rowSpan={n} style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(it)}</td>;
+              // Several supplier lines on one customer line are the parts of a set; the set's cost per customer unit
+              // is shown when they share a currency
+              const setCur=lines.length>1&&lines.every(({c})=>(c.lead.currency||'GBP')===(lines[0].c.lead.currency||'GBP'))?lines[0].c.lead.currency||'GBP':null;
+              const setUnit=setCur&&lines.reduce((s,{it:p})=>s+(+p.qty||0)*(+p.price||0),0)/(+it.qty||1);
+              const item=<td key="d" rowSpan={n} style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(it)}
+                {lines.length>1&&<div className="mt-set"><span className="mt-tag ok">{tr("Set · {0} parts",lines.length)}</span>
+                  {setCur&&<span>{tr("Set cost / unit: {0}",(CURR[setCur]||setCur+' ')+fmt(setUnit))}</span>}</div>}</td>;
               const qp=[<td key="q" rowSpan={n} className="tar">{it.qty} {it.unit||''}</td>,<td key="p" rowSpan={n} className="tar">{sym}{fmt(+(it.price||0))}</td>];
               if(!lines.length)return[<tr key={key}>{num}<td><span className="mt-none">{tr("Not matched")}</span></td>{item}<td>{dash}</td><td>{dash}</td>{qp}<td className="tar">{dash}</td><td>{dash}</td><td><div className="aw">{matchBtn}</div></td></tr>];
               return lines.map(({c,it:s},j)=><tr key={key+c.lead.id+s.id} className={j>0?'mt-sub':''}>
@@ -2629,7 +2664,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 {j===0&&qp}
                 <td className="tar">{CURR[c.lead.currency]||'£'}{fmt(+(s.price||0))}</td>
                 <td><DocChips c={c}/></td>
-                <td><div className="aw">{j===0&&matchBtn}<button className="ab danger" title={tr("Remove match")} aria-label={tr("Remove match")} onClick={()=>setLineMatch(c,s.id,base,'')}><Ico n="x"/></button></div></td>
+                <td><div className="aw">{j===0&&matchBtn}<button className="ab danger" title={tr("Remove match")} aria-label={tr("Remove match")} onClick={()=>unmatchLine(c,s.id,base)}><Ico n="x"/></button></div></td>
               </tr>);
             })}</tbody>
           </table></div>
@@ -2638,14 +2673,15 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {pick&&<div className="mt-overlay" onClick={()=>setPick(null)}>
         <div className="mt-dialog" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
           <div className="mt-dialog-h">
-            <div><div className="mt-dialog-k">{tr("Match supplier line to")}</div><div className="mt-dialog-t">{pick.label}</div></div>
+            <div><div className="mt-dialog-k">{tr("Match supplier lines to")}</div><div className="mt-dialog-t">{pick.label}</div>
+              <div className="mt-dialog-n">{tr("Tick every part when the item is supplied as a set (A = X + Y + Z).")}</div></div>
             <button className="ab" onClick={()=>setPick(null)} aria-label={tr("Close")}><Ico n="x"/></button>
           </div>
           <div className="mt-dialog-b">
             {cands.length===0?<div className="empty"><div className="empty-t">{tr("No supplier documents in this project")}</div><div className="empty-s">{tr("Enter the received quote with this project selected, then match its lines here or in the quote itself.")}</div></div>:
             cands.map(({c,it})=>{const v=c.lead.id+'|'+it.id;const other=it.sqKey&&it.sqKey!==pick.key&&c.lead.sqBase===pick.base?lineNo(pick.base,it.sqKey):null;return(
-              <label key={v} className={'mt-cand'+(sel===v?' on':'')}>
-                <input type="radio" name="mt-cand" checked={sel===v} onChange={()=>setSel(v)}/>
+              <label key={v} className={'mt-cand'+(sel.has(v)?' on':'')}>
+                <input type="checkbox" checked={sel.has(v)} onChange={()=>toggleSel(v)}/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:'var(--g900)'}}><b>{c.lead.supplierCompany||'—'}</b> · {it.desc||it.item||'—'}</div>
                   <div style={{display:'flex',gap:8,alignItems:'center',marginTop:3,flexWrap:'wrap'}}><DocChips c={c}/><span style={{fontSize:11,color:'var(--g500)'}}>{it.qty} {it.unit||''} · {CURR[c.lead.currency]||'£'}{fmt(+(it.price||0))}</span>
@@ -2656,7 +2692,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
           <div className="mt-dialog-f">
             <Btn v="bgh bsm" onClick={()=>setPick(null)}>{tr("Cancel")}</Btn>
-            <Btn v="bp bsm" disabled={!sel} onClick={()=>{const[docId,itemId]=sel.split('|');const ch=cands.find(x=>x.c.lead.id===docId).c;setPick(null);setLineMatch(ch,itemId,pick.base,pick.key);}}>{tr("Match")}</Btn>
+            <Btn v="bp bsm" disabled={!selChanged} onClick={()=>{const p=pick;setPick(null);setCustomerLineMatches([...new Set(cands.map(x=>x.c))],p.base,p.key,sel);}}>{sel.size>1?tr("Match {0} lines",sel.size):tr("Match")}</Btn>
           </div>
         </div>
       </div>}
@@ -2781,6 +2817,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <td>
                     <span className="ph-kind">{tab==='similar'&&(r.side==='sale'?tr('Sales'):tr('Purchase'))+' · '}{tr(PRICE_KIND[r.kind])}</span>
                     {r.kind==='manual'?<span style={{color:'var(--g500)'}}>—</span>:<button type="button" className="ph-doc" onClick={()=>openDoc(r)}>{r.number||'—'}</button>}
+                    {r.set&&<span className="ph-kind">{tr("Set · {0} parts",r.set)}</span>}
                   </td>
                   {tab==='similar'&&<td className="fit-grow">{r.name}{r.code&&<span className="ph-kind">{r.code}</span>}</td>}
                   <td className={tab==='similar'?'':'fit-grow'}>{r.party||'—'}</td>

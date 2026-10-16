@@ -287,7 +287,9 @@ const I18N_TR={
   'Customer Item':'Müşteri Kalemi','Supplier Item':'Tedarikçi Kalemi','— Not matched —':'— Eşleşmedi —','(item no longer in quotation)':'(kalem artık teklifte yok)',
   "Select the sales quotation above to match each line to the customer's item.":'Kalemleri müşteri kalemleriyle eşleştirmek için yukarıdan satış teklifini seçin.',
   'Item Matching':'Kalem Eşleştirme','{0} / {1} matched':'{0} / {1} eşleşti','Not matched':'Eşleşmedi','Match':'Eşleştir','Remove match':'Eşleşmeyi kaldır',
-  'Matched ✓':'Eşleştirildi ✓','Match removed':'Eşleşme kaldırıldı','Match supplier line to':'Tedarikçi kalemini eşleştir:',
+  'Matched ✓':'Eşleştirildi ✓','Match removed':'Eşleşme kaldırıldı','Match supplier lines to':'Tedarikçi kalemlerini eşleştir:',
+  'Tick every part when the item is supplied as a set (A = X + Y + Z).':'Kalem set olarak tedarik ediliyorsa tüm parçalarını işaretleyin (A = X + Y + Z).',
+  'Match {0} lines':'{0} kalemi eşleştir','Set · {0} parts':'Set · {0} parça','Set cost / unit: {0}':'Birim set maliyeti: {0}','+{0} line(s)':'+{0} kalem',
   'matched to this item':'bu kaleme eşleşmiş','matched to {0}':'{0} ile eşleşmiş','RQ':'AT','PO':'SİP','INV':'FAT',
   'All items':'Tüm kalemler','Matched':'Eşleşti','No items match the filter':'Filtreye uyan kalem yok','Search customer or supplier item...':'Müşteri veya tedarikçi kalemi ara...',
   // Group company supply, shipment and margins

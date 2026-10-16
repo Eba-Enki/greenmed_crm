@@ -1094,7 +1094,8 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
 
 // Generic line items editor
 // match (optional): {options:[{key,label}]} adds a "Customer Item" column whose select stores the chosen key
-// in item.sqKey; a key already picked on another line is disabled so each customer item is matched once.
+// in item.sqKey. Several lines may pick the same customer item (the parts of a set); each option says how many
+// other lines already point at it.
 // totals: docTotals(...) of the document, to show Sub Total / VAT / Total when VAT applies
 function ItemsEditor({items,setItems,currency,readOnly,match,totals}){
   const sym=CURR[currency]||'£';
@@ -1105,7 +1106,7 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals}){
   const heads=match
     ?[['Item','11%'],['Description','22%'],['Customer Item','20%'],['Qty','7%'],['Unit','7%'],['Unit Price','11%'],['Total','10%'],['','4%']]
     :[['Item','13%'],['Description','27%'],['Qty','8%'],['Unit','9%'],['Unit Price','12%'],['Total','11%'],['','4%']];
-  const usedKeys=it=>new Set(items.filter(x=>x.id!==it.id&&x.sqKey).map(x=>x.sqKey));
+  const usedKeys=it=>items.reduce((m,x)=>{if(x.id!==it.id&&x.sqKey)m[x.sqKey]=(m[x.sqKey]||0)+1;return m;},{});
   return(<>
     <div className="iw">
       <table className="ie">
@@ -1117,7 +1118,7 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals}){
             <select value={it.sqKey||''} onChange={e=>si(it.id,'sqKey',e.target.value)} disabled={readOnly} title={(match.options.find(o=>o.key===it.sqKey)||{}).label||''}
               style={{width:'100%',color:it.sqKey?'var(--g800)':'var(--g400)'}}>
               <option value="">{tr("— Not matched —")}</option>
-              {match.options.map(o=><option key={o.key} value={o.key} disabled={used.has(o.key)}>{o.label}</option>)}
+              {match.options.map(o=><option key={o.key} value={o.key}>{o.label}{used[o.key]?` (${tr("+{0} line(s)",used[o.key])})`:''}</option>)}
               {it.sqKey&&!match.options.some(o=>o.key===it.sqKey)&&<option value={it.sqKey}>{tr("(item no longer in quotation)")}</option>}
             </select>);})()}</td>}
           <td><input type="number" value={it.qty} onChange={e=>si(it.id,'qty',e.target.value)} min="0" step=".01" style={{textAlign:'right'}} readOnly={readOnly}/></td>
