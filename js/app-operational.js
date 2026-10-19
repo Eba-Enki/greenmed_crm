@@ -517,7 +517,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const mkSrcQuote=()=>({id:null,number:'',date:td(),supplierId:'',supplierCompany:'',currency:'TRY',project:'',projectNumber:'',sqBase:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkSrcInvoice=q=>({id:null,number:'',date:td(),supplierId:(q&&q.supplierId)||'',supplierCompany:(q&&q.supplierCompany)||'',currency:(q&&q.currency)||'TRY',
     project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',vatOn:!!(q&&q.vatOn),vatRate:(q&&q.vatRate)||'',
-    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
+    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',brand:i.brand||'',sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const srcLineState=it=>it.status||'pending';
   const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>i.desc||i.item).map(srcLineState);
     if(!s.length||s.every(x=>x==='pending'))return'pending';if(s.every(x=>x==='unused'))return'unused';if(s.includes('pending'))return'partial';return'quoted';};
@@ -1940,6 +1940,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const isQ=kind==='q';
     const[doc,setDoc]=useState(init);
     const[items,setItems]=useState(init.items||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
+    // Brand column: off by default, on when a line already has a brand
+    const[showBrand,setShowBrand]=useState(()=>(init.items||[]).some(i=>(i.brand||'').trim()));
     const set=(k,v)=>setDoc(d=>({...d,[k]:v}));
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
     const _isDirty=()=>JSON.stringify({...doc,items})!==_initStr.current;
@@ -1981,9 +1983,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {sqChoices.map(q=><option key={sqBaseOf(q)} value={sqBaseOf(q)}>{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</option>)}</select></Fld>
         </div>
       </div>
-      <div className="fc"><div className="fct">{tr("Line Items")}</div>
+      <div className="fc"><div className="st-fct-row"><div className="fct">{tr("Line Items")}</div>
+          <div className="col-toggles"><span>{tr("Columns:")}</span>
+            <label><input type="checkbox" checked={showBrand} onChange={e=>setShowBrand(e.target.checked)}/><span>{tr("Brand")}</span></label>
+          </div>
+        </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null}/>
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} brand={showBrand}/>
         <div className="vat-row">
           <label className="st-check"><input type="checkbox" checked={!!doc.vatOn} onChange={e=>set('vatOn',e.target.checked)}/><span>{tr("Apply VAT")}</span></label>
           {doc.vatOn&&<label className="vat-rate"><span>{tr("Default VAT rate")}</span><input value={doc.vatRate||''} onChange={e=>set('vatRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}

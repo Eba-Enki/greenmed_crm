@@ -1025,7 +1025,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
                 <tbody>{(doc.items||[]).map((it,i)=>(
                   <tr key={it.id||i}>
                     <td style={{fontFamily:'monospace',fontSize:11,color:'var(--g500)',whiteSpace:'nowrap'}}>{it.item||'—'}</td>
-                    <td style={{color:'var(--g800)'}}>{it.desc||'—'}{itemNote&&itemNote(it)&&<div className="pv2-itemnote">{itemNote(it)}</div>}</td>
+                    <td style={{color:'var(--g800)'}}>{it.desc||'—'}{isSrc&&it.brand&&<span className="it-brand"> · {it.brand}</span>}{itemNote&&itemNote(it)&&<div className="pv2-itemnote">{itemNote(it)}</div>}</td>
                     <td style={{textAlign:'right',color:'var(--g700)'}}>{it.qty||'1'}</td>
                     <td style={{fontSize:11,color:'var(--g400)'}}>{it.unit||''}</td>
                     <td style={{textAlign:'right',fontWeight:500,color:'var(--g800)',fontVariantNumeric:'tabular-nums'}}>{sym}{fmt(+(it.price||0))}</td>
@@ -1100,15 +1100,21 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
 // other lines already point at it.
 // totals: docTotals(...) of the document, to show Sub Total / VAT per rate / Total when VAT applies
 // vat: {def} adds a VAT % column (empty = the document's default rate, shown as the placeholder)
-function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat}){
+// brand: adds a Brand column after the description
+function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,brand}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
   const addL=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
   const rmL=id=>setItems(items.filter(i=>i.id!==id));
   const total=dt(items);
-  const heads=(match
+  // With the Brand column the optional columns take their width from the description
+  const extra=11+(match?18:0)+(vat?6:0);
+  const heads=brand
+    ?[['Item','12%'],['Description',(49-extra)+'%'],['Brand','11%'],...(match?[['Customer Item','18%']]:[]),
+      ['Qty','7%'],['Unit','7%'],['Unit Price','11%'],...(vat?[['VAT %','6%']]:[]),['Total','10%'],['','4%']]
+    :match
     ?[['Item','11%'],['Description',vat?'16%':'22%'],['Customer Item','20%'],['Qty','7%'],['Unit','7%'],['Unit Price','11%'],...(vat?[['VAT %','6%']]:[]),['Total','10%'],['','4%']]
-    :[['Item','13%'],['Description',vat?'21%':'27%'],['Qty','8%'],['Unit','9%'],['Unit Price','12%'],...(vat?[['VAT %','6%']]:[]),['Total','11%'],['','4%']]);
+    :[['Item','13%'],['Description',vat?'21%':'27%'],['Qty','8%'],['Unit','9%'],['Unit Price','12%'],...(vat?[['VAT %','6%']]:[]),['Total','11%'],['','4%']];
   const usedKeys=it=>items.reduce((m,x)=>{if(x.id!==it.id&&x.sqKey)m[x.sqKey]=(m[x.sqKey]||0)+1;return m;},{});
   return(<>
     <div className="iw">
@@ -1117,6 +1123,7 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat}){
         <tbody onKeyDown={readOnly?undefined:onLineEnter(items,setItems,()=>({id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}))}>{items.map(it=><tr key={it.id} data-line={it.id}>
           <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Product...")} readOnly={readOnly}/></td>
           <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/></td>
+          {brand&&<td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder={tr("Brand...")} readOnly={readOnly}/></td>}
           {match&&<td>{(()=>{const used=usedKeys(it);return(
             <select value={it.sqKey||''} onChange={e=>si(it.id,'sqKey',e.target.value)} disabled={readOnly} title={(match.options.find(o=>o.key===it.sqKey)||{}).label||''}
               style={{width:'100%',color:it.sqKey?'var(--g800)':'var(--g400)'}}>
