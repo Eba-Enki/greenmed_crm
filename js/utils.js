@@ -764,9 +764,11 @@ function LineText({value,...rest}){
   React.useLayoutEffect(fit,[value]);
   useEffect(()=>{
     const t=ref.current;if(!t||!window.ResizeObserver)return;
-    let w=t.clientWidth;
-    const ro=new ResizeObserver(()=>{if(t.clientWidth!==w){w=t.clientWidth;fit();}});
-    ro.observe(t);return()=>ro.disconnect();
+    // The height is set on the next frame: changing it inside the observer callback makes the browser report a
+    // "ResizeObserver loop" error
+    let w=t.clientWidth,raf=0;
+    const ro=new ResizeObserver(()=>{if(t.clientWidth!==w){w=t.clientWidth;cancelAnimationFrame(raf);raf=requestAnimationFrame(fit);}});
+    ro.observe(t);return()=>{ro.disconnect();cancelAnimationFrame(raf);};
   },[]);
   return <textarea ref={ref} rows={1} className="lt-text" value={value} {...rest}/>;
 }
