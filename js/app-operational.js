@@ -367,11 +367,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Expense category for a description that reads like a charge ('' when its category is missing), undefined otherwise
   const guessCharge=desc=>{const g=CHARGE_GUESS.find(([re])=>re.test(desc||''));if(!g)return undefined;const c=expCats.find(x=>(x.name||'').toLocaleLowerCase('tr')===g[1].toLocaleLowerCase('tr'));return c?c.id:'';};
   const chargeCats=()=>expCatTree(expCats).map(({c,depth})=>({id:c.id,label:(depth?'\u00a0\u00a0\u00a0':'')+expCatLabel(c)}));
-  // The charge lines of the received invoices as expense rows, listed with the expenses entered by hand. They live on
-  // the invoice, so they are changed there (fromInvoice)
-  const invoiceCharges=receivedInvoices.flatMap(d=>(d.items||[]).filter(isCharge).map(i=>({id:'ri:'+d.id+':'+i.id,riId:d.id,fromInvoice:true,
-    date:d.date||'',currency:d.currency||'GBP',amount:lineGross(d,i),description:i.desc||i.item||'',categoryId:i.expCatId||'',category:i.expCatId?'':tr('Charge'),
-    project:d.project||'',employee:'',reference:d.number||'',src:tr('Received invoice')+' '+(d.number||'')+(d.supplierCompany?' · '+d.supplierCompany:'')})));
+  // The charge lines of the received invoices and of the sub-supplier invoices as expense rows, listed with the
+  // expenses entered by hand. They live on the invoice, so they are changed there (fromInvoice; riId or srcInvId).
+  // Sub-supplier charges are booked here only: the group company does not bill them on to us, so they are never
+  // transferred into a received quote.
+  const chargeRows=(docs,key,label,cur)=>docs.flatMap(d=>(d.items||[]).filter(isCharge).map(i=>({id:key+':'+d.id+':'+i.id,[key==='ri'?'riId':'srcInvId']:d.id,fromInvoice:true,
+    date:d.date||'',currency:d.currency||cur,amount:lineGross(d,i),description:i.desc||i.item||'',categoryId:i.expCatId||'',category:i.expCatId?'':tr('Charge'),
+    project:d.project||'',employee:'',reference:d.number||'',src:label+' '+(d.number||'')+(d.supplierCompany?' · '+d.supplierCompany:'')})));
+  const invoiceCharges=[...chargeRows(receivedInvoices,'ri',tr('Received invoice'),'GBP'),...chargeRows(srcInvoices,'si',tr('Sub-supplier Invoice'),'TRY')];
 
   // ── PRICE RECORDS ──
   // Every priced quotation line, for a product's price history: sent quotations, once each with their current
@@ -551,7 +554,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',vatOn:!!(q&&q.vatOn),vatRate:(q&&q.vatRate)||'',discOn:!!(q&&q.discOn),discRate:(q&&q.discRate)||'',
     items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',discRate:i.discRate||'',brand:i.brand||'',...(i.kind?{kind:i.kind,kindAuto:!!i.kindAuto,expCatId:i.expCatId||''}:{}),sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const srcLineState=it=>it.status||'pending';
-  const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>i.desc||i.item).map(srcLineState);
+  const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>(i.desc||i.item)&&!isCharge(i)).map(srcLineState);
     if(!s.length||s.every(x=>x==='pending'))return'pending';if(s.every(x=>x==='unused'))return'unused';if(s.includes('pending'))return'partial';return'quoted';};
   const SRC_STATE={pending:['To be quoted',''],partial:['Partly quoted',''],quoted:['Quoted','ok'],unused:['Not used','off']};
   const SrcBadge=({s})=><span className={'mt-state '+SRC_STATE[s][1]}>{tr(SRC_STATE[s][0])}</span>;
@@ -1655,7 +1658,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // unless typed, kept on its lines.
     const xferIds=new Set(items.filter(i=>i.srcq).map(i=>i.srcq.lineId));
     const usedHere=it=>xferIds.has(it.id)||(!!doc.id&&((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id)));
-    const xferOpen=it=>!!(it.desc||it.item)&&(srcLineState(it)==='pending'||usedHere(it));
+    const xferOpen=it=>!!(it.desc||it.item)&&!isCharge(it)&&(srcLineState(it)==='pending'||usedHere(it));
     const xferQuotes=srcQuotes.filter(s=>(doc.sqBase?s.sqBase===doc.sqBase||(!s.sqBase&&!!doc.project&&s.project===doc.project):!doc.project||s.project===doc.project)
       &&(s.items||[]).some(xferOpen)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.number||'').localeCompare(a.number||''));
     const srcNet=(s,it)=>{const r=s.discOn?lineRate(it,'discRate',s.discRate):0;return Math.round(+(it.price||0)*(1-r/100)*10000)/10000;};
@@ -1711,7 +1714,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <div className="xf-note">{tr("Tick the sub-supplier quotes to transfer from.")}</div>
               <table className="xf-tbl">
                 <thead><tr><th style={{width:32}}/><th>{tr("Date")}</th><th>{tr("Quote No")}</th><th>{tr("Sub-supplier")}</th><th className="tar">{tr("Open lines")}</th><th className="tar">{tr("Total")}</th><th>{tr("Status")}</th></tr></thead>
-                <tbody>{xferQuotes.map(s=>{const why=blocked(s),on=x.quotes.has(s.id),named=(s.items||[]).filter(it=>it.desc||it.item);return(
+                <tbody>{xferQuotes.map(s=>{const why=blocked(s),on=x.quotes.has(s.id),named=(s.items||[]).filter(it=>(it.desc||it.item)&&!isCharge(it));return(
                   <tr key={s.id} className={'xf-pick'+(on?' on':'')+(why&&!on?' off':'')} onClick={()=>(!why||on)&&toggleQ(s)}>
                     <td><input type="checkbox" checked={on} disabled={!!why&&!on} onChange={()=>toggleQ(s)} onClick={e=>e.stopPropagation()} aria-label={s.number||s.supplierCompany}/></td>
                     <td style={{color:'var(--g500)',whiteSpace:'nowrap'}}>{fmtD(s.date)||'—'}</td>
@@ -1736,7 +1739,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const rateOf=s=>((x.rates||{})[s.id]||{}).rate;
       const conv=(s,v)=>convAt(v,rateOf(s));
       const str=v=>v==null?'':String(v);
-      const groups=chosenQ.map(s=>({s,lines:(s.items||[]).filter(it=>it.desc||it.item)}));
+      const groups=chosenQ.map(s=>({s,lines:(s.items||[]).filter(it=>(it.desc||it.item)&&!isCharge(it))}));
       const pickable=groups.flatMap(g=>g.lines.filter(xferOpen).map(it=>({s:g.s,it})));
       const ticked=pickable.filter(o=>x.sel.has(o.it.id));
       const setSel=(ids,on)=>setXfer(v=>{const n=new Set(v.sel);ids.forEach(id=>on?n.add(id):n.delete(id));return{...v,sel:n};});
@@ -1760,7 +1763,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="xf-rate-n">{busy?tr('Fetching…'):err?<span className="xf-why">{err}</span>:r.src&&r.src.date?tr('TCMB · {0} · banknote buying',fmtD(r.src.date)):r.rate?tr('Typed'):''}</div>
         </div>);};
       const apply=()=>{
-        const mk=(s,it,p)=>{const net=srcNet(s,it);return{...(p||{}),id:(p&&p.id)||uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),...(it.kind==='charge'?{kind:'charge',kindAuto:false,expCatId:it.expCatId||''}:{}),qty:it.qty,unit:it.unit||'',
+        const mk=(s,it,p)=>{const net=srcNet(s,it);return{...(p||{}),id:(p&&p.id)||uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty:it.qty,unit:it.unit||'',
           price:str(conv(s,net)),fxRate:x.cur===dc?'':String(rateOf(s)||''),fxSource:x.cur===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
         const byId=Object.fromEntries(pickable.map(o=>[o.it.id,o]));
         const next=[];
@@ -2024,6 +2027,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const lineNote=d=>it=>{
       const base=sqItemNote(d)(it);
       if(!isQ)return base;
+      if(isCharge(it))return base;
       const st=srcLineState(it);
       const s=st==='quoted'?tr('Quoted in {0}',(it.quotedIn&&it.quotedIn.number)||'—'):st==='unused'?tr('Not used ({0})',(it.unusedBy&&it.unusedBy.number)||'—'):tr('To be quoted');
       const inv=srcInvoiceOf(it.id);
@@ -3245,7 +3249,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <th>{tr("Actions")}</th>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id} className={bulk.has(e.id)?'is-sel':''}>
-            {e.fromInvoice?<td title={tr('Comes from the received invoice — change it there')}/>:<SelTd bulk={bulk} id={e.id}/>}
+            {e.fromInvoice?<td title={e.srcInvId?tr('Comes from the sub-supplier invoice — change it there'):tr('Comes from the received invoice — change it there')}/>:<SelTd bulk={bulk} id={e.id}/>}
             <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(e.date)}</td>
             <td style={{color:'var(--g700)'}}><div className="fit-box fb-sm">{e.employee||'—'}</div></td>
             <td className="fit-grow" style={{color:'var(--g700)'}}>{expCatText(expCats,e)||'—'}</td>
@@ -3254,7 +3258,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <td style={{color:'var(--g500)',fontSize:12}}><div className="fit-box fb-sm">{e.project||'—'}</div></td>
             <td className="tar" style={{fontWeight:700}}>{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td>
             <td><div className="aw">{e.fromInvoice
-              ?<button className="ab" title={tr('Open the invoice')} aria-label={tr('Open the invoice')} onClick={()=>{const d=receivedInvoices.find(x=>x.id===e.riId);if(d){setCur(d);go('ri_form');}}}><Ico n="edit"/></button>
+              ?<button className="ab" title={tr('Open the invoice')} aria-label={tr('Open the invoice')} onClick={()=>{if(e.srcInvId){const d=srcInvoices.find(x=>x.id===e.srcInvId);if(d){setCur(d);go('source_invoices_form');}return;}const d=receivedInvoices.find(x=>x.id===e.riId);if(d){setCur(d);go('ri_form');}}}><Ico n="edit"/></button>
               :<>
               <button className="ab" onClick={()=>{setCur(e);go('exp_form');}}><Ico n="edit"/></button>
               <button className="ab danger" onClick={()=>askConfirm(tr('Delete this expense?'),()=>{sExp(expenses.filter(x=>x.id!==e.id));showToast(tr('Deleted'));})}><Ico n="trash"/></button>
