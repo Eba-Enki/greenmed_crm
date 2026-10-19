@@ -1035,7 +1035,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
               </table>
             </div>
             <div className="pv2-totals">
-              {totals.rate>0&&<div className="pv2-vat"><span>{tr('Sub Total')} {sym}{fmt(totals.sub)}</span><span>{tr('VAT ({0}%)',totals.rate)} {sym}{fmt(totals.vat)}</span></div>}
+              {totals.groups.length>0&&<div className="pv2-vat"><span>{tr('Sub Total')} {sym}{fmt(totals.sub)}</span>{totals.groups.map(g=><span key={g.rate}>{tr('VAT ({0}%)',g.rate)} {sym}{fmt(g.vat)}</span>)}</div>}
               <div className="pv2-totbox">
                 <span className="pv2-totlbl">{tr('Total')}</span>
                 <span className="pv2-totamt">{sym}{fmt(total)}</span>
@@ -1098,21 +1098,22 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
 // match (optional): {options:[{key,label}]} adds a "Customer Item" column whose select stores the chosen key
 // in item.sqKey. Several lines may pick the same customer item (the parts of a set); each option says how many
 // other lines already point at it.
-// totals: docTotals(...) of the document, to show Sub Total / VAT / Total when VAT applies
-function ItemsEditor({items,setItems,currency,readOnly,match,totals}){
+// totals: docTotals(...) of the document, to show Sub Total / VAT per rate / Total when VAT applies
+// vat: {def} adds a VAT % column (empty = the document's default rate, shown as the placeholder)
+function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
   const addL=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
   const rmL=id=>setItems(items.filter(i=>i.id!==id));
   const total=dt(items);
-  const heads=match
-    ?[['Item','11%'],['Description','22%'],['Customer Item','20%'],['Qty','7%'],['Unit','7%'],['Unit Price','11%'],['Total','10%'],['','4%']]
-    :[['Item','13%'],['Description','27%'],['Qty','8%'],['Unit','9%'],['Unit Price','12%'],['Total','11%'],['','4%']];
+  const heads=(match
+    ?[['Item','11%'],['Description',vat?'16%':'22%'],['Customer Item','20%'],['Qty','7%'],['Unit','7%'],['Unit Price','11%'],...(vat?[['VAT %','6%']]:[]),['Total','10%'],['','4%']]
+    :[['Item','13%'],['Description',vat?'21%':'27%'],['Qty','8%'],['Unit','9%'],['Unit Price','12%'],...(vat?[['VAT %','6%']]:[]),['Total','11%'],['','4%']]);
   const usedKeys=it=>items.reduce((m,x)=>{if(x.id!==it.id&&x.sqKey)m[x.sqKey]=(m[x.sqKey]||0)+1;return m;},{});
   return(<>
     <div className="iw">
       <table className="ie">
-        <thead><tr>{heads.map(([h,w],i)=><th key={i} style={{textAlign:['Qty','Unit Price','Total'].includes(h)?'right':'left',width:w}}>{h&&tr(h)}</th>)}</tr></thead>
+        <thead><tr>{heads.map(([h,w],i)=><th key={i} style={{textAlign:['Qty','Unit Price','VAT %','Total'].includes(h)?'right':'left',width:w}}>{h&&tr(h)}</th>)}</tr></thead>
         <tbody onKeyDown={readOnly?undefined:onLineEnter(items,setItems,()=>({id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}))}>{items.map(it=><tr key={it.id} data-line={it.id}>
           <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Product...")} readOnly={readOnly}/></td>
           <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/></td>
@@ -1126,6 +1127,7 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals}){
           <td><input type="number" value={it.qty} onChange={e=>si(it.id,'qty',e.target.value)} min="0" step=".01" style={{textAlign:'right'}} readOnly={readOnly}/></td>
           <td><input value={it.unit||''} onChange={e=>si(it.id,'unit',e.target.value)} placeholder="pcs" readOnly={readOnly}/></td>
           <td><input type="number" value={it.price} onChange={e=>si(it.id,'price',e.target.value)} min="0" step=".01" placeholder="0.00" style={{textAlign:'right'}} readOnly={readOnly}/></td>
+          {vat&&<td><input value={it.vatRate||''} onChange={e=>si(it.id,'vatRate',e.target.value.replace(/[^\d.,]/g,''))} placeholder={vat.def||'0'} inputMode="decimal" style={{textAlign:'right'}} readOnly={readOnly} aria-label={tr("VAT %")}/></td>}
           <td className="lt">{sym}{fmt(lt(it))}</td>
           {!readOnly&&<td style={{textAlign:'center'}}>{items.length>1&&<button className="dlb" onClick={()=>rmL(it.id)}>×</button>}</td>}
         </tr>)}</tbody>
@@ -1133,10 +1135,10 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals}){
     </div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       {!readOnly?<Btn v="bgh bsm" onClick={addL}><Ico n="plus"/>{tr("Add Line")}</Btn>:<div/>}
-      {totals&&totals.rate>0
+      {totals&&totals.groups.length>0
         ?<div className="totbox totbox-vat">
           <span className="totlbl">{tr("Sub Total")}</span><span className="totsub">{sym}{fmt(totals.sub)}</span>
-          <span className="totlbl">{tr("VAT ({0}%)",totals.rate)}</span><span className="totsub">{sym}{fmt(totals.vat)}</span>
+          {totals.groups.map(g=><React.Fragment key={g.rate}><span className="totlbl">{tr("VAT ({0}%)",g.rate)}</span><span className="totsub">{sym}{fmt(g.vat)}</span></React.Fragment>)}
           <span className="totlbl">{tr("Total")}</span><span className="totamt">{sym}{fmt(totals.total)}</span>
         </div>
         :<div className="totbox"><span className="totlbl">{tr("Total")}</span><span className="totamt">{sym}{fmt(total)}</span></div>}
