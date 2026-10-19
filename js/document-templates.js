@@ -1120,9 +1120,10 @@ const discLabel=t=>typeof t.discRate==='number'&&t.discRate>0?tr("Discount ({0}%
 // brand: adds a Brand column after the description
 // multi: the description takes several lines (Shift+Enter), see LineText
 // charge (optional): {cats:[{id,label}], guess:desc=>category id ('' for none) or undefined} lets a line be a charge
-// (packing, freight…) instead of a product: kind 'charge' with an expense category (expCatId), picked in the Customer
-// Item column. A charge is never matched to a customer line. A line whose description reads like a charge becomes one
-// by itself (kindAuto) until a choice is made in that column.
+// (packing, freight…) instead of a product: kind 'charge' with an expense category (expCatId). "Add Charge" adds one;
+// its Customer Item column then lists the expense categories instead of the customer items, since a charge is never
+// matched to a customer line. A line whose description reads like a charge becomes one by itself (kindAuto) until a
+// choice is made in that column.
 function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand,multi,charge}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
@@ -1147,8 +1148,11 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
     const g=charge.guess(v);
     return g===undefined?(i.kindAuto?{...n,kind:'',kindAuto:false,expCatId:''}:n):{...n,kind:'charge',kindAuto:true,expCatId:g};
   }));
-  const pickLine=(it,v)=>setItems(items.map(i=>i.id!==it.id?i:v.startsWith('c:')?{...i,kind:'charge',kindAuto:false,expCatId:v.slice(2),sqKey:''}
-    :{...i,kind:i.kind==='charge'?'product':i.kind||'',kindAuto:false,expCatId:'',sqKey:v}));
+  const pickLine=(it,v)=>setItems(items.map(i=>i.id!==it.id?i:{...i,kind:i.kind||'',kindAuto:false,sqKey:v}));
+  // A charge's category; PRODUCT turns it back into a product line
+  const PRODUCT='__product__';
+  const pickCat=(it,v)=>setItems(items.map(i=>i.id!==it.id?i:v===PRODUCT?{...i,kind:'product',kindAuto:false,expCatId:''}:{...i,kind:'charge',kindAuto:false,expCatId:v}));
+  const addCharge=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:'',kind:'charge',expCatId:''}]);
   return(<>
     <div className="iw">
       <table className="ie">
@@ -1159,18 +1163,23 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
             ?<LineText value={it.desc||''} onChange={e=>setDesc(it,e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>
             :<input value={it.desc||''} onChange={e=>setDesc(it,e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>}</td>
           {brand&&<td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder={tr("Brand...")} readOnly={readOnly}/></td>}
-          {mcol&&<td>{(()=>{const used=usedKeys(it),isC=it.kind==='charge',opts=match?match.options:[],cat=isC&&charge&&charge.cats.find(c=>c.id===it.expCatId);return(
-            <select value={isC?'c:'+(it.expCatId||''):it.sqKey||''} onChange={e=>pickLine(it,e.target.value)} disabled={readOnly}
-              title={isC?tr('Charge')+(cat?' · '+cat.label.trim():''):(opts.find(o=>o.key===it.sqKey)||{}).label||''}
-              style={{width:'100%',color:it.sqKey||isC?'var(--g800)':'var(--g400)'}}>
-              <option value="">{match?tr("— Not matched —"):tr("— Product —")}</option>
+          {mcol&&<td>{(()=>{const used=usedKeys(it),opts=match?match.options:[];
+            if(charge&&it.kind==='charge'){const cat=charge.cats.find(c=>c.id===it.expCatId);return(
+              <div className="ie-charge"><span className="ie-charge-tag">{tr("Charge")}</span>
+                <select value={it.expCatId||''} onChange={e=>pickCat(it,e.target.value)} disabled={readOnly} title={cat?cat.label.trim():tr("Expense category")}
+                  style={{color:it.expCatId?'var(--g800)':'var(--g400)'}} aria-label={tr("Expense category")}>
+                  <option value="">{tr("— Category —")}</option>
+                  {charge.cats.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+                  {it.expCatId&&!cat&&<option value={it.expCatId}>{tr("(category deleted)")}</option>}
+                  {!readOnly&&<option value={PRODUCT}>{tr("↩ Make it a product line")}</option>}
+                </select></div>);}
+            if(!match)return <span style={{color:'var(--g300)',padding:'0 8px'}}>—</span>;
+            return(
+            <select value={it.sqKey||''} onChange={e=>pickLine(it,e.target.value)} disabled={readOnly} title={(opts.find(o=>o.key===it.sqKey)||{}).label||''}
+              style={{width:'100%',color:it.sqKey?'var(--g800)':'var(--g400)'}}>
+              <option value="">{tr("— Not matched —")}</option>
               {opts.map(o=><option key={o.key} value={o.key}>{o.label}{used[o.key]?` (${tr("+{0} line(s)",used[o.key])})`:''}</option>)}
-              {it.sqKey&&match&&!opts.some(o=>o.key===it.sqKey)&&<option value={it.sqKey}>{tr("(item no longer in quotation)")}</option>}
-              {charge&&<optgroup label={tr("Charge — not matched to a customer item")}>
-                <option value="c:">{tr("Charge (no category)")}</option>
-                {charge.cats.map(c=><option key={c.id} value={'c:'+c.id}>{c.label}</option>)}
-                {isC&&it.expCatId&&!cat&&<option value={'c:'+it.expCatId}>{tr("(category deleted)")}</option>}
-              </optgroup>}
+              {it.sqKey&&!opts.some(o=>o.key===it.sqKey)&&<option value={it.sqKey}>{tr("(item no longer in quotation)")}</option>}
             </select>);})()}</td>}
           <td><input type="number" value={it.qty} onChange={e=>si(it.id,'qty',e.target.value)} min="0" step=".01" style={{textAlign:'right'}} readOnly={readOnly}/></td>
           <td><input value={it.unit||''} onChange={e=>si(it.id,'unit',e.target.value)} placeholder="pcs" readOnly={readOnly}/></td>
@@ -1183,7 +1192,8 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
       </table>
     </div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-      {!readOnly?<Btn v="bgh bsm" onClick={addL}><Ico n="plus"/>{tr("Add Line")}</Btn>:<div/>}
+      {!readOnly?<div style={{display:'flex',gap:8}}><Btn v="bgh bsm" onClick={addL}><Ico n="plus"/>{tr("Add Line")}</Btn>
+        {charge&&<Btn v="bgh bsm" onClick={addCharge}><Ico n="plus"/>{tr("Add Charge")}</Btn>}</div>:<div/>}
       {totals&&(totals.groups.length>0||totals.disc>0)
         ?<div className="totbox totbox-vat">
           <span className="totlbl">{tr("Sub Total")}</span><span className="totsub">{sym}{fmt(totals.sub)}</span>

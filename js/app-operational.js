@@ -367,6 +367,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Expense category for a description that reads like a charge ('' when its category is missing), undefined otherwise
   const guessCharge=desc=>{const g=CHARGE_GUESS.find(([re])=>re.test(desc||''));if(!g)return undefined;const c=expCats.find(x=>(x.name||'').toLocaleLowerCase('tr')===g[1].toLocaleLowerCase('tr'));return c?c.id:'';};
   const chargeCats=()=>expCatTree(expCats).map(({c,depth})=>({id:c.id,label:(depth?'\u00a0\u00a0\u00a0':'')+expCatLabel(c)}));
+  // The charge lines of the received invoices as expense rows, listed with the expenses entered by hand. They live on
+  // the invoice, so they are changed there (fromInvoice)
+  const invoiceCharges=receivedInvoices.flatMap(d=>(d.items||[]).filter(isCharge).map(i=>({id:'ri:'+d.id+':'+i.id,riId:d.id,fromInvoice:true,
+    date:d.date||'',currency:d.currency||'GBP',amount:lineGross(d,i),description:i.desc||i.item||'',categoryId:i.expCatId||'',category:i.expCatId?'':tr('Charge'),
+    project:d.project||'',employee:'',reference:d.number||'',src:tr('Received invoice')+' '+(d.number||'')+(d.supplierCompany?' · '+d.supplierCompany:'')})));
 
   // ── PRICE RECORDS ──
   // Every priced quotation line, for a product's price history: sent quotations, once each with their current
@@ -2570,7 +2575,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const rows=projects.map(p=>{
       const inv=salesInvoices.filter(d=>d.project===p.name);
       return{p,inv:inv.length,revenue:curTotals(inv.map(d=>[d.currency,dt(d.items)])),
-        pos:purchaseOrders.filter(d=>d.project===p.name).length,exps:expenses.filter(d=>d.project===p.name).length};
+        pos:purchaseOrders.filter(d=>d.project===p.name).length,exps:[...expenses,...invoiceCharges].filter(d=>d.project===p.name).length};
     });
     const ql=fs.q.toLowerCase();
     const f=rows.filter(({p})=>(!ql||[p.number,p.name,p.client].some(x=>(x||'').toLowerCase().includes(ql)))&&(!fs.s||(p.status||'active')===fs.s));
@@ -2877,11 +2882,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const toPc=(cur,date,v)=>{if((cur||'GBP')===pc)return +v||0;const r=fx[fxKey(cur,date)];return!r?null:r.err?NaN:(+v||0)*r.rate;};
     const sumPc=rows=>rows.reduce((t,[c,d,v])=>{const x=toPc(c,d,v);return{v:t.v+(x>0||x<0?x:0),wait:t.wait||x===null,miss:t.miss+(Number.isNaN(x)?1:0)};},{v:0,wait:false,miss:0});
     const revRows=pI.map(d=>{const t=docTotals(d);return[d.currency,d.date,t.sub-t.disc];});
-    const charges=pRI.flatMap(d=>(d.items||[]).filter(isCharge).map(i=>({d,i,amt:lineGross(d,i)})));
+    const charges=invoiceCharges.filter(e=>e.project===project.name);
     const costRows=pRI.map(d=>[d.currency,d.date,docTotals(d).total-(d.items||[]).filter(isCharge).reduce((t,i)=>t+lineGross(d,i),0)]);
     // Expense rows for the table: the expenses entered, then the invoice charges with the invoice they come from
-    const expList=[...pExp.map(e=>({...e,amount:+(e.amount||0),src:''})),...charges.map(({d,i,amt})=>({id:d.id+'|'+i.id,date:d.date,currency:d.currency,amount:amt,
-      description:i.desc||i.item||'',categoryId:i.expCatId||'',category:i.expCatId?'':tr('Charge'),src:tr('Received invoice')+' '+(d.number||'')}))];
+    const expList=[...pExp.map(e=>({...e,amount:+(e.amount||0),src:''})),...charges];
     const expRows=expList.map(e=>[e.currency,e.date,e.amount]);
     const rev=sumPc(revRows),cost=sumPc(costRows),exp=sumPc(expRows);
     const net=rev.v-cost.v-exp.v,wait=rev.wait||cost.wait||exp.wait,miss=rev.miss+cost.miss+exp.miss;
@@ -3148,11 +3152,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // Expenses
   function ExpensesView(){
-    const[fs,setFs]=useState({q:'',cat:'',p:'',dateFrom:'',dateTo:''});
+    const[fs,setFs]=useState({q:'',cat:'',p:'',dateFrom:'',dateTo:'',src:''});
     const{sort,onSort}=useSort();
     const {pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
-    const filtered=expenses.filter(e=>{
-      if(fs.q&&![e.description,e.employee].some(x=>(x||'').toLowerCase().includes(fs.q.toLowerCase())))return false;
+    // Expenses entered by hand and the charge lines of the received invoices (read-only here)
+    const filtered=[...expenses,...invoiceCharges].filter(e=>{
+      if(fs.src&&(fs.src==='invoice')!==!!e.fromInvoice)return false;
+      if(fs.q&&![e.description,e.employee,e.src].some(x=>(x||'').toLowerCase().includes(fs.q.toLowerCase())))return false;
       // A main category also shows the expenses of its sub-categories
       if(fs.cat){const c=expCatOf(expCats,e);if(!c||(c.id!==fs.cat&&c.parentId!==fs.cat))return false;}
       if(fs.p&&e.project!==fs.p)return false;
@@ -3161,9 +3167,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       return true;
     });
     // Fed newest-first so expenses with the same date and no reference keep their newest-added-first order
-    const sorted=sortRows([...filtered].reverse(),sort,{date:e=>e.date,no:e=>e.reference,employee:e=>e.employee,category:e=>expCatText(expCats,e),desc:e=>e.description,project:e=>e.project,amount:e=>+(e.amount||0)});
+    const sorted=sortRows([...filtered].reverse(),sort,{date:e=>e.date,no:e=>e.reference,employee:e=>e.employee,category:e=>expCatText(expCats,e),desc:e=>e.description,src:e=>e.src||'',project:e=>e.project,amount:e=>+(e.amount||0)});
     const total=curTotals(filtered.map(e=>[e.currency,e.amount])); // per currency
-    const bulk=useBulkSelect(sorted.map(e=>e.id));
+    const bulk=useBulkSelect(sorted.filter(e=>!e.fromInvoice).map(e=>e.id));
     const picked=sorted.filter(e=>bulk.has(e.id));
     // Sets one field (category / project) on every selected expense
     const bulkSet=(field,value)=>{
@@ -3174,7 +3180,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       showToast(tr('{0} updated',ids.size));
       bulk.clear();
     };
-    const exportRows=rows=>exportExcel([['Date','Employee','Category','Description','Reference','Amount','Currency','Project'],...rows.map(e=>[e.date,e.employee,expCatText(expCats,e),e.description,e.reference,e.amount,e.currency,e.project])],'expenses');
+    const exportRows=rows=>exportExcel([['Date','Employee','Category','Description','Source','Reference','Amount','Currency','Project'],...rows.map(e=>[e.date,e.employee,expCatText(expCats,e),e.description,e.src||'Entered manually',e.reference,+(e.amount||0),e.currency,e.project])],'expenses');
     const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected expenses?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
       if(!ok)return;
       const ids=new Set(picked.map(e=>e.id));
@@ -3183,9 +3189,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       bulk.clear();
     });
     return(<div className="content">
-      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.cat,fs.p,fs.dateFrom,fs.dateTo].filter(Boolean).length} onClear={()=>setFs(f=>({...f,cat:'',p:'',dateFrom:'',dateTo:''}))} extra={<>{filtered.length>0&&<span className="lt-note">{tr("Total: {0}", fmtCurTotals(total))}</span>} <button className="lt-btn" onClick={()=>go('exp_import')}>{tr("Import Excel")}</button></>}>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.cat,fs.p,fs.dateFrom,fs.dateTo,fs.src].filter(Boolean).length} onClear={()=>setFs(f=>({...f,cat:'',p:'',dateFrom:'',dateTo:'',src:''}))} extra={<>{filtered.length>0&&<span className="lt-note">{tr("Total: {0}", fmtCurTotals(total))}</span>} <button className="lt-btn" onClick={()=>go('exp_import')}>{tr("Import Excel")}</button></>}>
         <FilterField label={tr("Category")}><select value={fs.cat} onChange={e=>setFs(f=>({...f,cat:e.target.value}))}>
           <option value="">{tr("All Categories")}</option><ExpCatOptions cats={expCats}/>
+        </select></FilterField>
+        <FilterField label={tr("Source")}><select value={fs.src} onChange={e=>setFs(f=>({...f,src:e.target.value}))}>
+          <option value="">{tr("All sources")}</option><option value="manual">{tr("Entered manually")}</option><option value="invoice">{tr("Invoice charges")}</option>
         </select></FilterField>
         <FilterField label={tr("Project")}><select value={fs.p} onChange={e=>setFs(f=>({...f,p:e.target.value}))}>
           <option value="">{tr("All Projects")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
@@ -3211,21 +3220,26 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <SortTh k="employee" sort={sort} onSort={onSort}>{tr("Employee")}</SortTh>
             <SortTh k="category" sort={sort} onSort={onSort} className="fit-grow">{tr("Category")}</SortTh>
             <SortTh k="desc" sort={sort} onSort={onSort}>{tr("Description")}</SortTh>
+            <SortTh k="src" sort={sort} onSort={onSort}>{tr("Source")}</SortTh>
             <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
             <SortTh k="amount" sort={sort} onSort={onSort} className="tar">{tr("Amount")}</SortTh>
             <th>{tr("Actions")}</th>
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id} className={bulk.has(e.id)?'is-sel':''}>
-            <SelTd bulk={bulk} id={e.id}/>
+            {e.fromInvoice?<td title={tr('Comes from the received invoice — change it there')}/>:<SelTd bulk={bulk} id={e.id}/>}
             <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(e.date)}</td>
             <td style={{color:'var(--g700)'}}><div className="fit-box fb-sm">{e.employee||'—'}</div></td>
             <td className="fit-grow" style={{color:'var(--g700)'}}>{expCatText(expCats,e)||'—'}</td>
             <td style={{fontWeight:500,color:'var(--g800)'}}><div className="fit-box fb-md">{e.description||'—'}</div></td>
+            <td className="exp-src"><div className="fit-box fb-sm">{e.src||'—'}</div></td>
             <td style={{color:'var(--g500)',fontSize:12}}><div className="fit-box fb-sm">{e.project||'—'}</div></td>
             <td className="tar" style={{fontWeight:700}}>{CURR[e.currency]||'£'}{fmt(+(e.amount||0))}</td>
-            <td><div className="aw">
+            <td><div className="aw">{e.fromInvoice
+              ?<button className="ab" title={tr('Open the invoice')} aria-label={tr('Open the invoice')} onClick={()=>{const d=receivedInvoices.find(x=>x.id===e.riId);if(d){setCur(d);go('ri_form');}}}><Ico n="edit"/></button>
+              :<>
               <button className="ab" onClick={()=>{setCur(e);go('exp_form');}}><Ico n="edit"/></button>
               <button className="ab danger" onClick={()=>askConfirm(tr('Delete this expense?'),()=>{sExp(expenses.filter(x=>x.id!==e.id));showToast(tr('Deleted'));})}><Ico n="trash"/></button>
+              </>}
             </div></td>
           </tr>)}</tbody>
         </table><Pagination total={filtered.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
@@ -3413,7 +3427,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     useEscape(()=>setDlg(null),!!dlg);
     const tree=expCatTree(expCats);
     const mains=tree.filter(r=>r.depth===0).map(r=>r.c);
-    const used=id=>expenses.filter(e=>e.categoryId===id).length;
+    const used=id=>[...expenses,...invoiceCharges].filter(e=>e.categoryId===id).length;
     const subsOf=id=>expCats.filter(c=>c.parentId===id);
     const save=()=>{
       const code=(dlg.code||'').trim(),name=toTitleCase(dlg.name||'');
@@ -3976,7 +3990,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     {group:tr('Project Management')},
     {k:'projects',ico:'project',lbl:tr('Projects'),cnt:projects.length,col:'ops_proj'},
     {k:'product_pool',ico:'pool',lbl:tr('Product Pool'),cnt:poolItems.length},
-    {k:'expenses',ico:'expense',lbl:tr('Expenses'),cnt:expenses.length,col:'ops_exp'},
+    {k:'expenses',ico:'expense',lbl:tr('Expenses'),cnt:expenses.length+invoiceCharges.length,col:'ops_exp'},
     {div:true},
     {group:tr('CRM')},
     {k:'customers',ico:'customers',lbl:tr('Customers'),cnt:customers.length,col:'ops_cust'},
