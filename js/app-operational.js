@@ -124,6 +124,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     }
     const docs=load('docs');if(docs)setDocuments(docs);
     const cn=load('cnt');if(cn)setCnt(cn);
+    // Once: starter categories for charges on supplier documents. The flag sits in the counters (merged, never lost),
+    // so categories deleted afterwards do not come back
+    if(!(cn&&cn.chargeCats)){
+      const has=n=>cats.some(c=>(c.name||'').toLocaleLowerCase('tr')===n.toLocaleLowerCase('tr'));
+      let main=cats.find(c=>(c.name||'').toLocaleLowerCase('tr')==='tedarik masrafları');
+      const add=[];
+      if(!main){main={id:uid(),code:'',name:'Tedarik Masrafları',parentId:null};add.push(main);}
+      ['Ambalaj','Navlun','Gümrük','Sigorta','Banka Masrafları'].filter(n=>!has(n)).forEach(n=>add.push({id:uid(),code:'',name:n,parentId:main.id}));
+      if(add.length){const next=[...cats,...add];setExpCats(next);LS.set(ns+'expcat',next);}
+      const c2={...(cn||{sq:0,si:0,po:0,prj:0}),chargeCats:1};setCnt(c2);LS.set(ns+'cnt',c2);
+    }
     setView('home');setCur(null);
   },[]);
 
@@ -344,6 +355,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     return shorter.length>0&&shorter.filter(t=>longer.includes(t)).length/shorter.length>=0.6;
   };
 
+  // ── CHARGES ON SUPPLIER DOCUMENTS ──
+  // A line marked kind 'charge' (packing, freight, customs, insurance, bank charges…) is not a product: it carries an
+  // expense category (expCatId), is never matched to a customer line and stays out of the Product Pool; the project
+  // shows it under Expenses. Its cost is what the supplier billed for it: after the discount, VAT included.
+  const isCharge=it=>!!it&&it.kind==='charge';
+  const lineGross=(d,i)=>lt(i)*(1-(d.discOn?lineRate(i,'discRate',d.discRate):0)/100)*(1+(d.vatOn?lineRate(i,'vatRate',d.vatRate):0)/100);
+  const CHARGE_GUESS=[[/\b(packing|packaging|crating|ambalaj)\b/i,'Ambalaj'],[/\b(freight|shipping|courier|carriage|navlun|nakliye|kargo)\b/i,'Navlun'],
+    [/\b(customs|clearance|duty|duties|gümrük)\b/i,'Gümrük'],[/\b(insurance|sigorta)\b/i,'Sigorta'],[/\b(bank|swift|havale)\b/i,'Banka Masrafları'],
+    [/\b(handling|charges?|fees?|surcharge)\b/i,'Tedarik Masrafları']];
+  // Expense category for a description that reads like a charge ('' when its category is missing), undefined otherwise
+  const guessCharge=desc=>{const g=CHARGE_GUESS.find(([re])=>re.test(desc||''));if(!g)return undefined;const c=expCats.find(x=>(x.name||'').toLocaleLowerCase('tr')===g[1].toLocaleLowerCase('tr'));return c?c.id:'';};
+  const chargeCats=()=>expCatTree(expCats).map(({c,depth})=>({id:c.id,label:(depth?'\u00a0\u00a0\u00a0':'')+expCatLabel(c)}));
+
   // ── PRICE RECORDS ──
   // Every priced quotation line, for a product's price history: sent quotations, once each with their current
   // revision (the prices of the revisions it replaced ride along in prev), and received quotes. Orders and invoices
@@ -375,7 +399,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         add('sale','sq',q,it,{party:client(q),prev,base:sqBaseOf(q)});
       });
     });
-    purchaseQuotes.forEach(d=>(d.items||[])
+    purchaseQuotes.forEach(d=>(d.items||[]).filter(it=>!isCharge(it)) // charges (packing, freight…) are not products
       .forEach(it=>add('buy','pq',d,it,{party:d.supplierCompany||d.supplier||'',sqBase:d.sqBase||'',sqKey:it.sqKey||''})));
     return out;
   })();
@@ -482,7 +506,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // source supplier details) changed on any of them is copied to the others. Works on the given lists and returns
   // them (unchanged arrays when nothing moved).
   const CHAIN_DOC_FIELDS=['sqBase','srcCurrency','fxRate','fxSource'];
-  const CHAIN_LINE_FIELDS=['sqKey','srcSupplier','srcDocNo','srcDocDate','srcPrice','fxRate','fxSource'];
+  const CHAIN_LINE_FIELDS=['sqKey','srcSupplier','srcDocNo','srcDocDate','srcPrice','fxRate','fxSource','kind','expCatId'];
   const pickFields=(o,fields)=>fields.reduce((r,f)=>({...r,[f]:o[f]||''}),{});
   const syncMatchChain=(kind,saved,{pq,po,ri})=>{
     const put=(arr,d)=>{const old=arr.find(x=>x.id===d.id);return old&&JSON.stringify(old)===JSON.stringify(d)?arr:arr.map(x=>x.id===d.id?d:x);};
@@ -1868,7 +1892,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
         {xfer&&xferDialog()}
         <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} multi
-          totals={docTotals(doc,items)} disc={doc.discOn?{def:doc.discRate}:null}/>
+          charge={{cats:chargeCats(),guess:guessCharge}} totals={docTotals(doc,items)} disc={doc.discOn?{def:doc.discRate}:null}/>
         <div className="vat-row">
           <label className="st-check"><input type="checkbox" checked={!!doc.discOn} onChange={e=>set('discOn',e.target.checked)}/><span>{tr("Apply discount")}</span></label>
           {doc.discOn&&<label className="vat-rate"><span>{tr("Default discount rate")}</span><input value={doc.discRate||''} onChange={e=>set('discRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
@@ -2660,7 +2684,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const setFilter=p=>{const n={...f,...p};matchFilterRef.current=n;setF(n);};
     useEscape(()=>setPick(null),!!pick);
     const{chains,groups,total,done}=projMatching(project.name);
-    const cands=pick?chains.filter(c=>!c.lead.sqBase||c.lead.sqBase===pick.base).flatMap(c=>(c.lead.items||[]).map(it=>({c,it}))):[];
+    const cands=pick?chains.filter(c=>!c.lead.sqBase||c.lead.sqBase===pick.base).flatMap(c=>(c.lead.items||[]).filter(it=>!isCharge(it)).map(it=>({c,it}))):[];
     // The dialog opens with the lines already matched to the customer line ticked
     const matchedNow=p=>new Set(chains.filter(c=>c.lead.sqBase===p.base).flatMap(c=>(c.lead.items||[]).filter(it=>it.sqKey===p.key).map(it=>c.lead.id+'|'+it.id)));
     const openPick=p=>{setSel(matchedNow(p));setPick(p);};
@@ -2710,6 +2734,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <div key={l} className="mt-sum-c"><div className="mt-sum-l">{l}</div><div className="mt-sum-v" style={{color:m&&v<0?'var(--red)':m?'var(--gm-600)':undefined}}>{v<0?'-':''}{CURR[cur]||''}{fmt(Math.abs(v))}</div>{m?(t.saleDone>0&&<div className="mt-pct">{(v/t.saleDone*100).toFixed(1)}%</div>):(sub&&<div className="mt-pct">{sub}</div>)}</div>)}
           {t.open>0&&<div className="mt-sum-note">{tr("{0} line(s) left out: not matched, missing sub-supplier price/rate or invoiced in another currency",t.open)}</div>}
         </div>)}
+        {/* Charges on the supplier documents belong to no customer line, so the margins above leave them out */}
+        {(()=>{const t=curTotals(chains.flatMap(c=>(c.lead.items||[]).filter(isCharge).map(i=>[c.lead.currency,lineGross(c.lead,i)])));
+          return Object.keys(t).length>0&&<div className="mt-sum-note" style={{marginBottom:16}}>{tr("Supplier charges (packing, freight…), not included in the margins: {0}",fmtCurTotals(t))}</div>;})()}
         {groups.map(({q,base,rows})=>{const qc=q.currency||'GBP';const shown=rows.filter(visible);return(<div key={base} style={{marginBottom:16}}>
           <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}>
             <div className="tcard-hdr-t">{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
@@ -2835,7 +2862,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const pExp=expenses.filter(d=>d.project===project.name);
     // Everything is also shown in the project currency (its budget currency): each document at the TCMB banknote buying
     // rate of its own date (cross rates through the lira). Revenue is invoiced net of discount and VAT; costs are the
-    // received invoices as billed, VAT included (VAT paid to a Turkish supplier is a cost for Green Med); expenses as entered.
+    // received invoices as billed, VAT included (VAT paid to a Turkish supplier is a cost for Green Med); expenses as entered,
+    // plus the charge lines of the received invoices (packing, freight…), which leave the costs for the expenses.
     const pc=project.currency||'GBP';
     const[fx,setFx]=useState({}); // 'date|currency' → {rate,date} or {err}
     const fxKey=(cur,date)=>(date||td())+'|'+(cur||'GBP');
@@ -2849,17 +2877,24 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const toPc=(cur,date,v)=>{if((cur||'GBP')===pc)return +v||0;const r=fx[fxKey(cur,date)];return!r?null:r.err?NaN:(+v||0)*r.rate;};
     const sumPc=rows=>rows.reduce((t,[c,d,v])=>{const x=toPc(c,d,v);return{v:t.v+(x>0||x<0?x:0),wait:t.wait||x===null,miss:t.miss+(Number.isNaN(x)?1:0)};},{v:0,wait:false,miss:0});
     const revRows=pI.map(d=>{const t=docTotals(d);return[d.currency,d.date,t.sub-t.disc];});
-    const costRows=pRI.map(d=>[d.currency,d.date,docTotals(d).total]);
-    const expRows=pExp.map(e=>[e.currency,e.date,+(e.amount||0)]);
+    const charges=pRI.flatMap(d=>(d.items||[]).filter(isCharge).map(i=>({d,i,amt:lineGross(d,i)})));
+    const costRows=pRI.map(d=>[d.currency,d.date,docTotals(d).total-(d.items||[]).filter(isCharge).reduce((t,i)=>t+lineGross(d,i),0)]);
+    // Expense rows for the table: the expenses entered, then the invoice charges with the invoice they come from
+    const expList=[...pExp.map(e=>({...e,amount:+(e.amount||0),src:''})),...charges.map(({d,i,amt})=>({id:d.id+'|'+i.id,date:d.date,currency:d.currency,amount:amt,
+      description:i.desc||i.item||'',categoryId:i.expCatId||'',category:i.expCatId?'':tr('Charge'),src:tr('Received invoice')+' '+(d.number||'')}))];
+    const expRows=expList.map(e=>[e.currency,e.date,e.amount]);
     const rev=sumPc(revRows),cost=sumPc(costRows),exp=sumPc(expRows);
     const net=rev.v-cost.v-exp.v,wait=rev.wait||cost.wait||exp.wait,miss=rev.miss+cost.miss+exp.miss;
     const P=v=>(v<0?'-':'')+(CURR[pc]||pc+' ')+fmt(Math.abs(v));
     const byCur=rows=>Object.keys(curTotals(rows.map(([c,,v])=>[c,v]))).length>1||rows.some(([c])=>(c||'GBP')!==pc)?fmtCurTotals(curTotals(rows.map(([c,,v])=>[c,v]))):null;
     const awaiting=pPO.filter(o=>!receivedInvoices.some(r=>r.poId===o.id)).length;
+    // Expenses per category, in the project currency
+    const byCat=(()=>{const m={};expList.forEach(e=>{const x=toPc(e.currency,e.date,e.amount);if(x>0||x<0){const k=expCatText(expCats,e)||tr('Uncategorised');m[k]=(m[k]||0)+x;}});
+      const l=Object.entries(m).sort((a,b)=>b[1]-a[1]);return l.length>1||charges.length?l.map(([k,v])=>k+' '+P(v)).join(' · '):null;})();
     const cards=[
       {lbl:tr('Revenue'),s:rev,rows:revRows,sub:tr("{0} invoices",pI.length),cls:'sc-green'},
       {lbl:tr('Costs'),s:cost,rows:costRows,sub:tr("{0} received invoices",pRI.length)+(awaiting?' · '+tr("{0} order(s) awaiting invoice",awaiting):''),cls:'sc-blue'},
-      {lbl:tr('Expenses'),s:exp,rows:expRows,sub:tr("{0} items",pExp.length),cls:'sc-purple'},
+      {lbl:tr('Expenses'),s:exp,rows:expRows,sub:charges.length?tr("{0} expenses · {1} invoice charges",pExp.length,charges.length):tr("{0} items",pExp.length),extra:byCat,cls:'sc-purple'},
       {lbl:tr('Net'),s:{v:net,wait,miss:0},rows:[],sub:rev.v>0&&!wait?tr("{0}% margin",(net/rev.v*100).toFixed(1)):tr('revenue - costs'),cls:net>=0?'sc-teal':'sc-red'},
     ];
     // "Amount (USD)" next to a document's own total, with the rate used when it was converted
@@ -2880,10 +2915,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="stat-lbl">{c.lbl}</div>
           <div className="stat-sub">{c.sub}</div>
           {byCur(c.rows)&&<div className="stat-sub pd-cur">{byCur(c.rows)}</div>}
+          {c.extra&&<div className="stat-sub pd-cur">{c.extra}</div>}
           {c.s.miss>0&&<div className="stat-sub mt-none">{tr("{0} document(s) could not be converted",c.s.miss)}</div>}
         </div>)}
       </div>
-      <div className="pd-note">{tr("Amounts in {0}, each document at the TCMB banknote buying rate of its date. Revenue excludes VAT; costs are the received invoices as billed, VAT included.",pc)}{miss>0&&' '+tr("Documents without a rate are left out of the totals.")}</div>
+      <div className="pd-note">{tr("Amounts in {0}, each document at the TCMB banknote buying rate of its date. Revenue excludes VAT; costs are the received invoices as billed, VAT included; their charge lines (packing, freight…) count as expenses.",pc)}{miss>0&&' '+tr("Documents without a rate are left out of the totals.")}</div>
       {/* Sections */}
       {(()=>{
         const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>fmtD(d.date)};
@@ -2897,8 +2933,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           {title:tr('Sales Invoices'),items:pI,w:[0.8,1,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Invoice No')),totalCol,pcCol(docTotal),statusCol]},
           {title:tr('Purchase Orders'),items:pPO,w:[0.8,1,1.8,0.9,1.1,0.9],cols:[dateCol,noCol(tr('PO No')),supCol,totalCol,pcCol(docTotal),statusCol]},
           {title:tr('Received Invoices'),items:pRI,w:[0.8,1,1.8,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Invoice No')),supCol,totalCol,pcCol(docTotal),statusCol]},
-          {title:tr('Expenses'),items:pExp,w:[0.8,1,2,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
-            {k:'amount',l:tr('Amount'),get:e=>+(e.amount||0),show:e=>`${CURR[e.currency]||'£'}${fmt(+(e.amount||0))}`},pcCol(e=>+(e.amount||0))]},
+          {title:tr('Expenses'),items:expList,w:[0.8,1,1.7,1.1,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
+            {k:'src',l:tr('Source'),get:e=>e.src,show:e=>e.src||'—'},{k:'amount',l:tr('Amount'),get:e=>e.amount,show:e=>`${CURR[e.currency]||'£'}${fmt(e.amount)}`},pcCol(e=>e.amount)]},
         ].map(s=><ProjDocTable key={s.title} {...s}/>);
       })()}
     </div>);

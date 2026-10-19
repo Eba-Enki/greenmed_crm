@@ -1119,7 +1119,11 @@ const discLabel=t=>typeof t.discRate==='number'&&t.discRate>0?tr("Discount ({0}%
 // disc: {def} adds a Disc. % column the same way
 // brand: adds a Brand column after the description
 // multi: the description takes several lines (Shift+Enter), see LineText
-function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand,multi}){
+// charge (optional): {cats:[{id,label}], guess:desc=>category id ('' for none) or undefined} lets a line be a charge
+// (packing, freight…) instead of a product: kind 'charge' with an expense category (expCatId), picked in the Customer
+// Item column. A charge is never matched to a customer line. A line whose description reads like a charge becomes one
+// by itself (kindAuto) until a choice is made in that column.
+function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand,multi,charge}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
   const addL=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
@@ -1128,13 +1132,23 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
   // The optional columns (Brand, Disc. %, VAT %) take their width from the description
   const opt=(vat?6:0)+(disc?6:0);
   const rates=[...(disc?[['Disc. %','6%']]:[]),...(vat?[['VAT %','6%']]:[])];
+  const mcol=!!(match||charge),mHead=match?(charge?'Customer Item / Charge':'Customer Item'):'Charge';
   const heads=brand
-    ?[['Item','12%'],['Description',Math.max(49-11-(match?18:0)-opt,10)+'%'],['Brand','11%'],...(match?[['Customer Item','18%']]:[]),
+    ?[['Item','12%'],['Description',Math.max(49-11-(mcol?18:0)-opt,10)+'%'],['Brand','11%'],...(mcol?[[mHead,'18%']]:[]),
       ['Qty','7%'],['Unit','7%'],['Unit Price','11%'],...rates,['Total','10%'],['','4%']]
-    :match
-    ?[['Item','11%'],['Description',Math.max(22-opt,12)+'%'],['Customer Item','20%'],['Qty','7%'],['Unit','7%'],['Unit Price','11%'],...rates,['Total','10%'],['','4%']]
+    :mcol
+    ?[['Item','11%'],['Description',Math.max(22-opt,12)+'%'],[mHead,'20%'],['Qty','7%'],['Unit','7%'],['Unit Price','11%'],...rates,['Total','10%'],['','4%']]
     :[['Item','13%'],['Description',(27-opt)+'%'],['Qty','8%'],['Unit','9%'],['Unit Price','12%'],...rates,['Total','11%'],['','4%']];
   const usedKeys=it=>items.reduce((m,x)=>{if(x.id!==it.id&&x.sqKey)m[x.sqKey]=(m[x.sqKey]||0)+1;return m;},{});
+  const setDesc=(it,v)=>setItems(items.map(i=>{
+    if(i.id!==it.id)return i;
+    const n={...i,desc:v};
+    if(!charge||i.sqKey||(i.kind&&!i.kindAuto))return n;
+    const g=charge.guess(v);
+    return g===undefined?(i.kindAuto?{...n,kind:'',kindAuto:false,expCatId:''}:n):{...n,kind:'charge',kindAuto:true,expCatId:g};
+  }));
+  const pickLine=(it,v)=>setItems(items.map(i=>i.id!==it.id?i:v.startsWith('c:')?{...i,kind:'charge',kindAuto:false,expCatId:v.slice(2),sqKey:''}
+    :{...i,kind:i.kind==='charge'?'product':i.kind||'',kindAuto:false,expCatId:'',sqKey:v}));
   return(<>
     <div className="iw">
       <table className="ie">
@@ -1142,15 +1156,21 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
         <tbody onKeyDown={readOnly?undefined:onLineEnter(items,setItems,()=>({id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}))}>{items.map(it=><tr key={it.id} data-line={it.id}>
           <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Product...")} readOnly={readOnly}/></td>
           <td>{multi
-            ?<LineText value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>
-            :<input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>}</td>
+            ?<LineText value={it.desc||''} onChange={e=>setDesc(it,e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>
+            :<input value={it.desc||''} onChange={e=>setDesc(it,e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>}</td>
           {brand&&<td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder={tr("Brand...")} readOnly={readOnly}/></td>}
-          {match&&<td>{(()=>{const used=usedKeys(it);return(
-            <select value={it.sqKey||''} onChange={e=>si(it.id,'sqKey',e.target.value)} disabled={readOnly} title={(match.options.find(o=>o.key===it.sqKey)||{}).label||''}
-              style={{width:'100%',color:it.sqKey?'var(--g800)':'var(--g400)'}}>
-              <option value="">{tr("— Not matched —")}</option>
-              {match.options.map(o=><option key={o.key} value={o.key}>{o.label}{used[o.key]?` (${tr("+{0} line(s)",used[o.key])})`:''}</option>)}
-              {it.sqKey&&!match.options.some(o=>o.key===it.sqKey)&&<option value={it.sqKey}>{tr("(item no longer in quotation)")}</option>}
+          {mcol&&<td>{(()=>{const used=usedKeys(it),isC=it.kind==='charge',opts=match?match.options:[],cat=isC&&charge&&charge.cats.find(c=>c.id===it.expCatId);return(
+            <select value={isC?'c:'+(it.expCatId||''):it.sqKey||''} onChange={e=>pickLine(it,e.target.value)} disabled={readOnly}
+              title={isC?tr('Charge')+(cat?' · '+cat.label.trim():''):(opts.find(o=>o.key===it.sqKey)||{}).label||''}
+              style={{width:'100%',color:it.sqKey||isC?'var(--g800)':'var(--g400)'}}>
+              <option value="">{match?tr("— Not matched —"):tr("— Product —")}</option>
+              {opts.map(o=><option key={o.key} value={o.key}>{o.label}{used[o.key]?` (${tr("+{0} line(s)",used[o.key])})`:''}</option>)}
+              {it.sqKey&&match&&!opts.some(o=>o.key===it.sqKey)&&<option value={it.sqKey}>{tr("(item no longer in quotation)")}</option>}
+              {charge&&<optgroup label={tr("Charge — not matched to a customer item")}>
+                <option value="c:">{tr("Charge (no category)")}</option>
+                {charge.cats.map(c=><option key={c.id} value={'c:'+c.id}>{c.label}</option>)}
+                {isC&&it.expCatId&&!cat&&<option value={'c:'+it.expCatId}>{tr("(category deleted)")}</option>}
+              </optgroup>}
             </select>);})()}</td>}
           <td><input type="number" value={it.qty} onChange={e=>si(it.id,'qty',e.target.value)} min="0" step=".01" style={{textAlign:'right'}} readOnly={readOnly}/></td>
           <td><input value={it.unit||''} onChange={e=>si(it.id,'unit',e.target.value)} placeholder="pcs" readOnly={readOnly}/></td>
