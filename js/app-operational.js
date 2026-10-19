@@ -513,7 +513,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // ── SOURCE QUOTES / SOURCE INVOICES ──
   // The group company collects quotes from its own suppliers (one record each, matched to the customer's lines), then
   // quotes Green Med by transferring the chosen lines into a received quote. A source line is "pending" until a group
-  // quote uses it ("quoted", quotedIn) or uses another offer for the same customer line ("unused", unusedBy).
+  // quote uses it ("quoted", quotedIn) or uses another sub-supplier's offer for the same customer line ("unused", unusedBy).
   const mkSrcQuote=()=>({id:null,number:'',date:td(),supplierId:'',supplierCompany:'',currency:'TRY',project:'',projectNumber:'',sqBase:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkSrcInvoice=q=>({id:null,number:'',date:td(),supplierId:(q&&q.supplierId)||'',supplierCompany:(q&&q.supplierCompany)||'',currency:(q&&q.currency)||'TRY',
     project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',vatOn:!!(q&&q.vatOn),vatRate:(q&&q.vatRate)||'',discOn:!!(q&&q.discOn),discRate:(q&&q.discRate)||'',
@@ -529,7 +529,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const syncSrcStatus=(doc,removed)=>{
     const lines=removed?[]:(doc.items||[]).filter(i=>i.srcq);
     const used=new Set(lines.map(i=>i.srcq.lineId));
-    const usedKeys=new Set(lines.filter(i=>i.sqKey).map(i=>i.sqKey));
+    // Customer line → sub-supplier quotes used for it. Only offers of other quotes for a used customer line become
+    // "Not used"; the other lines of a quote used for it, e.g. the remaining parts of a set, stay open
+    const usedFor={};
+    lines.forEach(i=>{if(i.sqKey)(usedFor[i.sqKey]=usedFor[i.sqKey]||new Set()).add(i.srcq.qid);});
     const ref={id:doc.id,number:doc.number||''};
     let changed=false;
     const next=srcQuotes.map(q=>{
@@ -538,7 +541,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         let n=it;
         if((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id))n={...it,status:'pending',quotedIn:null,unusedBy:null};
         if(used.has(it.id))n={...n,status:'quoted',quotedIn:ref,unusedBy:null};
-        else if(!removed&&srcLineState(n)==='pending'&&q.sqBase&&q.sqBase===doc.sqBase&&n.sqKey&&usedKeys.has(n.sqKey))n={...n,status:'unused',unusedBy:ref};
+        else if(!removed&&srcLineState(n)==='pending'&&q.sqBase&&q.sqBase===doc.sqBase&&n.sqKey&&usedFor[n.sqKey]&&!usedFor[n.sqKey].has(q.id))n={...n,status:'unused',unusedBy:ref};
         if(JSON.stringify(n)!==JSON.stringify(it))qChanged=true;
         return n;
       });
@@ -1579,7 +1582,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function ProcurementForm({doc:init,docType,onSave,onCancel}){
     const[doc,setDoc]=useState(init);
     const[items,setItems]=useState(init.items||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
-    const[xfer,setXfer]=useState(null); // "Transfer from sub-supplier quotes" dialog: {cur,rate,markup,sel:{customer key: source line id}}
+    const[xfer,setXfer]=useState(null); // "Transfer from sub-supplier quotes" dialog: {step:'quotes'|'lines',quotes:Set of quote ids,sel:Set of line ids,cur,rate,src,markup}
     useEscape(()=>setXfer(null),!!xfer);
     const set=(p,v)=>setDoc(d=>{if(!p.includes('.'))return{...d,[p]:v};const[a,b]=p.split('.');return{...d,[a]:{...d[a],[b]:v}};});
     const _initStr=useRef(JSON.stringify({...init,items:init.items||[]}));
@@ -1612,6 +1615,159 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       <option value="">{tr("— None —")}</option>
       {sqChoices.map(q=><option key={sqBaseOf(q)} value={sqBaseOf(q)}>{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</option>)}
     </select></Fld>;
+    // ── Transfer from sub-supplier quotes (group company) ──
+    // Step 1 lists the sub-supplier quotes with lines still open for this quote, step 2 the lines of the chosen quotes
+    // to tick. A line comes matched to the customer line it was matched to when the sub-supplier quote was entered, at
+    // its price after the sub-supplier's discount. Ticked lines are added to this quote and unticking a line transferred
+    // before takes it out; lines of quotes not chosen stay. One currency, rate and markup per quote, so a transfer
+    // reprices every transferred line.
+    const xferIds=new Set(items.filter(i=>i.srcq).map(i=>i.srcq.lineId));
+    const usedHere=it=>xferIds.has(it.id)||(!!doc.id&&((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id)));
+    const xferOpen=it=>!!(it.desc||it.item)&&(srcLineState(it)==='pending'||usedHere(it));
+    const xferQuotes=srcQuotes.filter(s=>(doc.sqBase?s.sqBase===doc.sqBase||(!s.sqBase&&!!doc.project&&s.project===doc.project):!doc.project||s.project===doc.project)
+      &&(s.items||[]).some(xferOpen)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.number||'').localeCompare(a.number||''));
+    const srcNet=(s,it)=>{const r=s.discOn?lineRate(it,'discRate',s.discRate):0;return Math.round(+(it.price||0)*(1-r/100)*10000)/10000;};
+    const openXfer=()=>{
+      const used=new Set(items.filter(i=>i.srcq).map(i=>i.srcq.qid));
+      setXfer({step:'quotes',quotes:new Set(xferQuotes.filter(s=>used.has(s.id)).map(s=>s.id)),sel:new Set(),markup:doc.markup||''});
+    };
+    const xferDialog=()=>{
+      const x=xfer,dc=doc.currency||'GBP';
+      const chosenQ=xferQuotes.filter(s=>x.quotes.has(s.id));
+      // Quotes that can join the transfer: the currency of what is already transferred (or of the first quote ticked)
+      // and the sales quotation of this quote (or of the first quote ticked)
+      const lockCur=items.some(i=>i.srcq)?srcCur(doc):chosenQ[0]&&(chosenQ[0].currency||'TRY');
+      const base=doc.sqBase||(chosenQ.find(s=>s.sqBase)||{}).sqBase||'';
+      const blocked=s=>lockCur&&(s.currency||'TRY')!==lockCur?tr("In {0} — one currency per transfer",s.currency||'TRY')
+        :base&&s.sqBase&&s.sqBase!==base?tr("For another sales quotation"):null;
+      const sq=latestSQ(base);
+      const close=()=>setXfer(null);
+      const head=<div className="mt-dialog-h">
+        <div><div className="mt-dialog-k">{tr("Transfer from sub-supplier quotes")}</div><div className="mt-dialog-t">{sq?sq.number+' · ':''}{doc.supplierCompany}</div></div>
+        <button className="ab" onClick={close} aria-label={tr("Close")}><Ico n="x"/></button>
+      </div>;
+      if(x.step==='quotes'){
+        const toggleQ=s=>setXfer(v=>{const n=new Set(v.quotes);if(n.has(s.id))n.delete(s.id);else n.add(s.id);return{...v,quotes:n};});
+        const next=()=>{
+          // Lines already in this quote stay ticked; a quote not used yet starts with all its open lines ticked
+          const cur=lockCur||'TRY';
+          const sel=new Set(chosenQ.flatMap(s=>{const open=(s.items||[]).filter(xferOpen);const prev=open.filter(it=>xferIds.has(it.id));return(prev.length?prev:open).map(it=>it.id);}));
+          // a rate typed earlier in this dialog is kept; else the one saved for this currency
+          setXfer(v=>({...v,step:'lines',sel,cur,...(v.cur===cur&&v.rate?{}:{rate:cur===srcCur(doc)?doc.fxRate||'':'',src:cur===srcCur(doc)?doc.fxSource||null:null})}));
+        };
+        return(<div className="mt-overlay" onClick={close}>
+          <div className="mt-dialog mt-dialog-lg" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+            {head}
+            <div className="mt-dialog-b">
+              {xferQuotes.length===0?<div className="empty"><div className="empty-t">{tr("No open sub-supplier quotes")}</div>
+                <div className="empty-s">{tr("Enter the sub-supplier quotes under Group Company with this project and sales quotation selected.")}</div></div>:<>
+              <div className="xf-note">{tr("Tick the sub-supplier quotes to transfer from.")}</div>
+              <table className="xf-tbl">
+                <thead><tr><th style={{width:32}}/><th>{tr("Date")}</th><th>{tr("Quote No")}</th><th>{tr("Sub-supplier")}</th><th className="tar">{tr("Open lines")}</th><th className="tar">{tr("Total")}</th><th>{tr("Status")}</th></tr></thead>
+                <tbody>{xferQuotes.map(s=>{const why=blocked(s),on=x.quotes.has(s.id),named=(s.items||[]).filter(it=>it.desc||it.item);return(
+                  <tr key={s.id} className={'xf-pick'+(on?' on':'')+(why&&!on?' off':'')} onClick={()=>(!why||on)&&toggleQ(s)}>
+                    <td><input type="checkbox" checked={on} disabled={!!why&&!on} onChange={()=>toggleQ(s)} onClick={e=>e.stopPropagation()} aria-label={s.number||s.supplierCompany}/></td>
+                    <td style={{color:'var(--g500)',whiteSpace:'nowrap'}}>{fmtD(s.date)||'—'}</td>
+                    <td><span className="mt-chip">{s.number||'—'}</span></td>
+                    <td><b style={{color:'var(--g900)'}}>{s.supplierCompany||'—'}</b>{why&&!on&&<div className="xf-why">{why}</div>}</td>
+                    <td className="tar">{named.filter(xferOpen).length} / {named.length}</td>
+                    <td className="tar" style={{whiteSpace:'nowrap'}}>{CURR[s.currency||'TRY']||s.currency}{fmt(docTotals(s).total)}</td>
+                    <td><SrcBadge s={srcQuoteState(s)}/></td>
+                  </tr>);})}</tbody>
+              </table></>}
+            </div>
+            <div className="mt-dialog-f">
+              <Btn v="bgh bsm" onClick={close}>{tr("Cancel")}</Btn>
+              <Btn v="bp bsm" disabled={!chosenQ.length} onClick={next}>{tr("Show lines")} →</Btn>
+            </div>
+          </div>
+        </div>);
+      }
+      // Step 2: lines of the chosen quotes
+      const conv=v=>{v=+v||0;if(!v)return null;const c=x.cur===dc?v:(+x.rate>0?v/+x.rate:null);return c==null?null:Math.round(c*(1+(+x.markup||0)/100)*100)/100;};
+      const str=v=>v==null?'':String(v);
+      const groups=chosenQ.map(s=>({s,lines:(s.items||[]).filter(it=>it.desc||it.item)}));
+      const pickable=groups.flatMap(g=>g.lines.filter(xferOpen).map(it=>({s:g.s,it})));
+      const ticked=pickable.filter(o=>x.sel.has(o.it.id));
+      const setSel=(ids,on)=>setXfer(v=>{const n=new Set(v.sel);ids.forEach(id=>on?n.add(id):n.delete(id));return{...v,sel:n};});
+      const allOn=pickable.length>0&&ticked.length===pickable.length;
+      // Customer line of a source line, and the open lines of other quotes offering the same customer line
+      const custNo=key=>{const i=sq?(sq.items||[]).findIndex(c=>sqItemKey(c)===key):-1;return i<0?null:{n:i+1,text:sqLineText(sq.items[i])};};
+      const rivals=(s,it)=>!it.sqKey||!base?[]:srcQuotes.filter(o=>o.id!==s.id&&o.sqBase===base&&(o.items||[]).some(l=>l.sqKey===it.sqKey&&xferOpen(l)))
+        .map(o=>({o,on:(o.items||[]).some(l=>l.sqKey===it.sqKey&&x.sel.has(l.id)&&x.quotes.has(o.id))}));
+      const needRate=x.cur!==dc&&!(+x.rate>0);
+      const dates=chosenQ.map(s=>s.date).filter(Boolean).sort();
+      const rateDate=dates.length?dates[dates.length-1]:doc.date;
+      const srcSum=ticked.reduce((t,o)=>t+(+o.it.qty||0)*srcNet(o.s,o.it),0);
+      const docSum=ticked.reduce((t,o)=>{const v=conv(srcNet(o.s,o.it));return t==null||v==null?null:t+(+o.it.qty||0)*v;},0);
+      const chosenIds=new Set(chosenQ.map(s=>s.id));
+      const removing=items.some(i=>i.srcq&&chosenIds.has(i.srcq.qid)&&!x.sel.has(i.srcq.lineId));
+      const apply=()=>{
+        const mk=(s,it,p)=>{const net=srcNet(s,it);return{...(p||{}),id:(p&&p.id)||uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty:it.qty,unit:it.unit||'',
+          price:str(conv(net)),sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
+        const byId=Object.fromEntries(pickable.map(o=>[o.it.id,o]));
+        const next=[];
+        items.forEach(i=>{
+          if(!i.srcq){if(i.desc||i.item||+i.price)next.push(i);return;}
+          if(chosenIds.has(i.srcq.qid)){const o=byId[i.srcq.lineId];if(!o)next.push(i);else if(x.sel.has(o.it.id))next.push(mk(o.s,o.it,i));return;}
+          next.push({...i,price:str(conv(i.srcPrice))}); // another quote's line: the new rate and markup
+        });
+        ticked.filter(o=>!xferIds.has(o.it.id)).forEach(o=>next.push(mk(o.s,o.it)));
+        setItems(next.length?next:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
+        const fromQ=chosenQ.find(s=>s.project);
+        const proj=fromQ&&projects.find(p=>p.name===fromQ.project);
+        setDoc(d=>({...d,srcCurrency:x.cur,fxRate:x.rate||'',fxSource:x.src||null,markup:x.markup,...(base&&!d.sqBase?{sqBase:base}:{}),
+          ...(!d.project&&fromQ?{project:fromQ.project,projectNumber:(proj&&proj.number)||fromQ.projectNumber||''}:{})}));
+        close();
+      };
+      return(<div className="mt-overlay" onClick={close}>
+        <div className="mt-dialog mt-dialog-lg" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+          {head}
+          <div className="mt-dialog-b">
+            <div className="fg g3">
+              <Fld label={tr("Sub-supplier Currency")}><input className="fi" value={`${x.cur} (${CURR[x.cur]||''})`} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/></Fld>
+              {x.cur!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,x.cur)}><div className="rate-row">
+                <input className="fi" type="number" min="0" step="0.0001" value={x.rate} onChange={e=>{const r=e.target.value;setXfer(v=>({...v,rate:r,src:null}));}} placeholder="0.0000"/>
+                <TcmbButton date={rateDate} from={dc} to={x.cur} onRate={r=>setXfer(v=>({...v,rate:String(r.rate),src:{date:r.date,kind:'banknoteBuying'}}))}/>
+              </div><TcmbNote src={x.src}/></Fld>:<div/>}
+              <Fld label={tr("Markup %")}><input className="fi" type="number" step="0.01" value={x.markup} onChange={e=>{const m=e.target.value;setXfer(v=>({...v,markup:m}));}} placeholder="0"/></Fld>
+            </div>
+            <div className="xf-note">{tr("The rate and markup apply to every transferred line of this quote.")}</div>
+            <table className="xf-tbl">
+              <thead><tr>
+                <th style={{width:32}}><input type="checkbox" checked={allOn} ref={el=>{if(el)el.indeterminate=!allOn&&ticked.length>0;}} disabled={!pickable.length} onChange={()=>setSel(pickable.map(o=>o.it.id),!allOn)} aria-label={tr("Select all")}/></th>
+                <th>{tr("Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Unit Price")}</th><th className="tar">→ {dc}</th><th>{tr("Customer Item")}</th>
+              </tr></thead>
+              {groups.map(({s,lines})=>{const open=lines.filter(xferOpen).map(it=>it.id),gOn=open.length>0&&open.every(id=>x.sel.has(id));return(<tbody key={s.id}>
+                <tr className="xf-grp" onClick={()=>open.length&&setSel(open,!gOn)}>
+                  <td><input type="checkbox" checked={gOn} ref={el=>{if(el)el.indeterminate=!gOn&&open.some(id=>x.sel.has(id));}} disabled={!open.length} onChange={()=>setSel(open,!gOn)} onClick={e=>e.stopPropagation()} aria-label={s.number||s.supplierCompany}/></td>
+                  <td colSpan={5}><span className="mt-chip">{s.number||'—'}</span> <b>{s.supplierCompany||'—'}</b> <span className="xf-sub">· {fmtD(s.date)} · {tr("{0} of {1} ticked",open.filter(id=>x.sel.has(id)).length,open.length)}</span></td>
+                </tr>
+                {lines.map(it=>{const ok=xferOpen(it),on=x.sel.has(it.id),net=srcNet(s,it),v=conv(net),c=it.sqKey&&base&&s.sqBase===base?custNo(it.sqKey):null,rv=ok?rivals(s,it):[];
+                  const disc=s.discOn?lineRate(it,'discRate',s.discRate):0;
+                  return(<tr key={it.id} className={'xf-pick'+(on?' on':'')+(ok?'':' off')} onClick={()=>ok&&setSel([it.id],!on)}>
+                    <td><input type="checkbox" checked={on} disabled={!ok} onChange={()=>setSel([it.id],!on)} onClick={e=>e.stopPropagation()} aria-label={it.desc||it.item}/></td>
+                    <td><div style={{color:'var(--g900)'}}>{it.desc||it.item}</div>
+                      {(it.item&&it.desc||it.brand)&&<div className="xf-sub">{[it.desc&&it.item,it.brand].filter(Boolean).join(' · ')}</div>}
+                      {!ok&&<div className="xf-sub">{it.quotedIn?tr("Transferred to {0}",it.quotedIn.number||'—'):tr("Not used")}</div>}</td>
+                    <td className="tar" style={{whiteSpace:'nowrap'}}>{it.qty} {it.unit||''}</td>
+                    <td className="tar" style={{whiteSpace:'nowrap'}}>{CURR[s.currency||'TRY']||s.currency}{fmt(net)}{disc>0&&<div className="xf-sub">{tr("Discount {0}%",disc)}</div>}</td>
+                    <td className="tar" style={{whiteSpace:'nowrap',fontWeight:600,color:'var(--gm-600)'}}>{v==null?<span style={{color:'var(--g300)'}}>—</span>:(CURR[dc]||'')+fmt(v)}</td>
+                    <td>{c?<span>↳ #{c.n} {c.text}</span>:<span className="mt-none">{tr("Not matched")}</span>}
+                      {rv.map(({o,on:both})=><div key={o.id}><span className={'mt-tag'+(both&&on?'':' xf-soft')}>{tr("Also in {0}",o.number||o.supplierCompany)}</span></div>)}</td>
+                  </tr>);})}
+              </tbody>);})}
+            </table>
+          </div>
+          <div className="mt-dialog-f">
+            <span className="xf-sum">{needRate?<span className="mt-none">{tr("Enter the exchange rate")}</span>
+              :<>{tr("{0} line(s)",ticked.length)} · {CURR[x.cur]||''}{fmt(srcSum)}{docSum!=null&&x.cur!==dc&&<> → {CURR[dc]||''}{fmt(docSum)}</>}</>}</span>
+            <Btn v="bgh bsm" onClick={()=>setXfer(v=>({...v,step:'quotes'}))}>← {tr("Quotes")}</Btn>
+            <Btn v="bp bsm" disabled={needRate||(!ticked.length&&!removing)} onClick={apply}>{tr("Transfer {0} item(s)",ticked.length)}</Btn>
+          </div>
+        </div>
+      </div>);
+    };
     return(<div className="content"><div className="fw doc-fw">
       <FormHeader parent={isPO?'purchase_orders':isRI?'received_invoices':'purchase_quotes'} onBack={_handleCancel} title={<>{doc.id?tr("Edit {0}", lbl):tr("New {0}", lbl)}</>}>
         <Btn v="bgh bsm" onClick={()=>savePDF(savedDoc,co,isPO?'po':isRI?'invoice':'quote',SALES_PDF)}><Ico n="dl"/>{tr("PDF")}</Btn>
@@ -1681,82 +1837,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>
       </div>}
       <div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:10}}>{tr("Line Items")}<div style={{flex:1}}/>
-          {isPQ&&isGroupDoc(doc)&&doc.sqBase&&<Btn v="bgh bsm" onClick={()=>{
-            const sel={};items.forEach(i=>{if(i.srcq&&i.sqKey)sel[i.sqKey]=i.srcq.lineId;});
-            // Start in the currency the sub-supplier quotes for this quotation are in (the most common one), unless lines
-            // were already transferred in another; the saved rate only applies to the saved currency
-            const curs=srcQuotes.filter(q=>q.sqBase===doc.sqBase&&(q.items||[]).some(it=>it.sqKey)).map(q=>q.currency||'TRY');
-            const counts=curs.reduce((m,c)=>({...m,[c]:(m[c]||0)+1}),{});
-            const common=Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
-            const cur=items.some(i=>i.srcq)?(doc.srcCurrency||'TRY'):(common||doc.srcCurrency||'TRY');
-            setXfer({cur,rate:cur===doc.srcCurrency?doc.fxRate||'':'',src:cur===doc.srcCurrency?doc.fxSource||null:null,markup:doc.markup||'',sel});}}><Ico n="convert"/>{tr("Transfer from sub-supplier quotes")}</Btn>}
+          {isPQ&&isGroupDoc(doc)&&<Btn v="bgh bsm" onClick={openXfer}><Ico n="convert"/>{tr("Transfer from sub-supplier quotes")}</Btn>}
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
-        {isPQ&&isGroupDoc(doc)&&!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the project and sales quotation to transfer the collected sub-supplier quotes.")}</div>}
-        {xfer&&(()=>{
-          const q=latestSQ(doc.sqBase);const dc=doc.currency||'GBP';
-          // Offers still open for this quote: pending lines, plus the ones this quote already uses or set aside
-          const open=srcQuotes.filter(s=>s.sqBase===doc.sqBase).flatMap(s=>(s.items||[]).filter(it=>it.sqKey&&(srcLineState(it)==='pending'||(doc.id&&((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id))))).map(it=>({s,it})));
-          const rows=q?(q.items||[]).map((ci,i)=>({ci,i,key:sqItemKey(ci),offers:open.filter(o=>o.it.sqKey===sqItemKey(ci))})):[];
-          const conv=p=>{const v=+p||0;if(!v)return null;const c=xfer.cur===dc?v:(+xfer.rate>0?v/+xfer.rate:null);return c==null?null:Math.round(c*(1+(+xfer.markup||0)/100)*100)/100;};
-          const pick=(key,id)=>setXfer(x=>({...x,sel:{...x.sel,[key]:id}}));
-          // only offers in the chosen currency are transferred: their prices are converted with this currency's rate
-          const chosen=rows.filter(r=>xfer.sel[r.key]&&r.offers.some(o=>o.it.id===xfer.sel[r.key]&&(o.s.currency||'TRY')===xfer.cur));
-          const needRate=xfer.cur!==dc&&!(+xfer.rate>0);
-          const pickedDates=chosen.map(r=>(r.offers.find(o=>o.it.id===xfer.sel[r.key])||{}).s).filter(Boolean).map(q=>q.date).filter(Boolean).sort();
-          const xferRateDate=pickedDates.length?pickedDates[pickedDates.length-1]:doc.date;
-          const apply=()=>{
-            const prev=Object.fromEntries(items.filter(i=>i.srcq).map(i=>[i.srcq.lineId,i]));
-            const picked=chosen.map(r=>{const o=r.offers.find(x=>x.it.id===xfer.sel[r.key]);const p=prev[o.it.id];
-              return{...(p||{}),id:(p&&p.id)||uid(),item:o.it.item||'',desc:o.it.desc||'',qty:o.it.qty,unit:o.it.unit||'',price:(v=>v==null?'':String(v))(conv(o.it.price)),
-                sqKey:r.key,srcSupplier:o.s.supplierCompany||'',srcDocNo:o.s.number||'',srcDocDate:o.s.date||'',srcPrice:o.it.price||'',srcq:{qid:o.s.id,lineId:o.it.id}};});
-            const manual=items.filter(i=>!i.srcq&&(i.desc||i.item||+i.price));
-            setItems(picked.length||manual.length?[...picked,...manual]:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
-            setDoc(d=>({...d,srcCurrency:xfer.cur,fxRate:xfer.rate,fxSource:xfer.src||null,markup:xfer.markup}));
-            setXfer(null);
-          };
-          return(<div className="mt-overlay" onClick={()=>setXfer(null)}>
-            <div className="mt-dialog mt-dialog-lg" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
-              <div className="mt-dialog-h">
-                <div><div className="mt-dialog-k">{tr("Transfer from sub-supplier quotes")}</div><div className="mt-dialog-t">{q?q.number:''} · {doc.supplierCompany}</div></div>
-                <button className="ab" onClick={()=>setXfer(null)} aria-label={tr("Close")}><Ico n="x"/></button>
-              </div>
-              <div className="mt-dialog-b">
-                <div className="fg g3">
-                  <Fld label={tr("Sub-supplier Currency")}><select className="fi" value={xfer.cur} onChange={e=>{const c=e.target.value;
-                    // picks in another currency are dropped; the rate is the one saved for that currency, else empty
-                    setXfer(x=>({...x,cur:c,rate:c===doc.srcCurrency?doc.fxRate||'':'',src:c===doc.srcCurrency?doc.fxSource||null:null,sel:Object.fromEntries(Object.entries(x.sel).filter(([,id])=>open.some(o=>o.it.id===id&&(o.s.currency||'TRY')===c)))}));}}>{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
-                  {xfer.cur!==dc?<Fld label={tr("Exchange Rate: 1 {0} = ? {1}",dc,xfer.cur)}><div className="rate-row">
-                    <input className="fi" type="number" min="0" step="0.0001" value={xfer.rate} onChange={e=>setXfer(x=>({...x,rate:e.target.value,src:null}))} placeholder="0.0000"/>
-                    <TcmbButton date={xferRateDate} from={dc} to={xfer.cur} onRate={r=>setXfer(x=>({...x,rate:String(r.rate),src:{date:r.date,kind:'banknoteBuying'}}))}/>
-                  </div><TcmbNote src={xfer.src}/></Fld>:<div/>}
-                  <Fld label={tr("Markup %")}><input className="fi" type="number" step="0.01" value={xfer.markup} onChange={e=>setXfer(x=>({...x,markup:e.target.value}))} placeholder="0"/></Fld>
-                </div>
-                <div style={{fontSize:12,color:'var(--g500)',margin:'4px 0 2px'}}>{tr('Pick one offer per customer item; the others become "Not used". Items left empty stay open for a later quote.')}</div>
-                {rows.length===0?<div className="empty"><div className="empty-t">{tr("The sales quotation has no items")}</div></div>:rows.map(r=><div key={r.key} className="xf-row">
-                  <div className="xf-cust"><span style={{color:'var(--g400)'}}>#{r.i+1}</span> {sqLineText(r.ci)} <span style={{color:'var(--g400)',fontWeight:400}}>· {r.ci.qty} {r.ci.unit||''}</span></div>
-                  {r.offers.length===0?<div className="xf-none">{tr("No open sub-supplier quote for this item")}</div>:<>
-                    <label className={'mt-cand'+(!xfer.sel[r.key]?' on':'')}><input type="radio" name={'xf-'+r.key} checked={!xfer.sel[r.key]} onChange={()=>pick(r.key,'')}/><div style={{color:'var(--g500)'}}>{tr("Don't transfer now")}</div></label>
-                    {r.offers.map(({s,it})=>{const other=(s.currency||'TRY')!==xfer.cur;const v=conv(it.price);return(
-                      <label key={it.id} className={'mt-cand'+(xfer.sel[r.key]===it.id?' on':'')+(other?' dis':'')}>
-                        <input type="radio" name={'xf-'+r.key} disabled={other} checked={xfer.sel[r.key]===it.id} onChange={()=>pick(r.key,it.id)}/>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{color:'var(--g900)'}}><b>{s.supplierCompany||'—'}</b> · {it.desc||it.item||'—'}</div>
-                          <div style={{fontSize:11,color:'var(--g500)',marginTop:2}}>{s.number||'—'} · {it.qty} {it.unit||''} × {CURR[s.currency]||s.currency}{fmt(+(it.price||0))}
-                            {other?<span className="mt-tag" style={{marginLeft:6}}>{tr("in {0} — change the sub-supplier currency to use it",s.currency)}</span>:v!=null&&<b style={{color:'var(--gm-600)',marginLeft:6}}>→ {CURR[dc]||''}{fmt(v)}</b>}</div>
-                        </div>
-                      </label>);})}
-                  </>}
-                </div>)}
-              </div>
-              <div className="mt-dialog-f">
-                {needRate&&<span className="mt-none" style={{marginRight:'auto'}}>{tr("Enter the exchange rate")}</span>}
-                <Btn v="bgh bsm" onClick={()=>setXfer(null)}>{tr("Cancel")}</Btn>
-                <Btn v="bp bsm" disabled={needRate||(!chosen.length&&!items.some(i=>i.srcq))} onClick={apply}>{tr("Transfer {0} item(s)",chosen.length)}</Btn>
-              </div>
-            </div>
-          </div>);
-        })()}
+        {xfer&&xferDialog()}
         <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} multi/>
       </div>
       {isGroupDoc(doc)&&(()=>{
