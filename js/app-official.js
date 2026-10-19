@@ -448,7 +448,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
               <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
                 <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
                   <SelTd bulk={bulk} id={d.id}/>
-                  <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+                  <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(d.date)}</td>
                   <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number||'—'}</span></td>
                   <td>{isRec?d.supplier:(d&&d.client&&d.client.name)||'—'}</td>
                   {type==='po'&&<td style={{color:'var(--g500)',fontSize:11}}>{d.project||'—'}{d.sourceRef&&<div style={{fontSize:10,color:'var(--g400)',marginTop:1}}>{tr("from {0}", d.sourceRef)}</div>}</td>}
@@ -674,10 +674,10 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
             <SortTh k="outstanding" sort={oSort} onSort={onOSort} className="tar">{tr("Outstanding")}</SortTh>
           </tr></thead>
           <tbody>{openRows.map(o=><tr key={o.type+o.d.id}>
-            <td style={{fontSize:12,color:'var(--g500)'}}>{o.d.date||'—'}</td>
+            <td style={{fontSize:12,color:'var(--g500)'}}>{fmtD(o.d.date)||'—'}</td>
             <td style={{fontWeight:600}}>{o.d.number||'—'}</td>
             <td style={{fontSize:12,color:'var(--g600)'}}>{o.type==='invoice'?tr('Sales Invoice'):tr('Received Invoice')}</td>
-            <td style={{fontSize:12,color:o.overdue?'var(--red)':'var(--g500)',fontWeight:o.overdue?600:400}}>{o.d.dueDate||'—'}{o.overdue&&tr(' · overdue')}</td>
+            <td style={{fontSize:12,color:o.overdue?'var(--red)':'var(--g500)',fontWeight:o.overdue?600:400}}>{fmtD(o.d.dueDate)||'—'}{o.overdue&&tr(' · overdue')}</td>
             <td className="tar">{curFmt(cur,o.total)}</td>
             <td className="tar" style={{color:'var(--g500)'}}>{o.paid?curFmt(cur,o.paid):'—'}</td>
             <td className="tar" style={{fontWeight:700}}>{curFmt(cur,o.outstanding)}</td>
@@ -697,7 +697,7 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
             <SortTh k="balance" sort={stSort} onSort={onStSort} className="tar">{tr("Balance")}</SortTh>
           </tr></thead>
           <tbody>{stRows.map(e=><tr key={e.id}>
-            <td style={{fontSize:12,color:'var(--g500)'}}>{e.date||'—'}</td>
+            <td style={{fontSize:12,color:'var(--g500)'}}>{fmtD(e.date)||'—'}</td>
             <td style={{fontWeight:500}}>{e.ref||'—'}</td>
             <td><span className={`ct-kind ct-k-${e.kind}`}>{tr(kindLabel[e.kind])}</span></td>
             <td style={{color:'var(--g600)'}}>{e.desc}</td>
@@ -831,7 +831,7 @@ function OffProjects({projects,onNew,onEdit,onDelete,onDeleteMany}){
         <SortTh k="status" sort={sort} onSort={onSort}>{tr("Status")}</SortTh>
         <th>{tr("Actions")}</th>
       </tr></thead>
-      <tbody>{rows.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">{projects.length?tr("No items match the filter"):tr("No projects yet")}</div></div></td></tr>:rows.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id} className={bulk.has(p.id)?'is-sel':''}><SelTd bulk={bulk} id={p.id}/><td style={{color:'var(--g500)',fontSize:12}}>{p.startDate||'—'}</td><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
+      <tbody>{rows.length===0?<tr><td colSpan={6}><div className="empty"><div className="empty-t">{projects.length?tr("No items match the filter"):tr("No projects yet")}</div></div></td></tr>:rows.slice((pg-1)*ps,pg*ps).map(p=><tr key={p.id} className={bulk.has(p.id)?'is-sel':''}><SelTd bulk={bulk} id={p.id}/><td style={{color:'var(--g500)',fontSize:12}}>{fmtD(p.startDate)||'—'}</td><td>{p.name}</td><td style={{color:'var(--g600)'}}>{p.client||'—'}</td><td><Badge s={p.status||'active'}/></td><td><div className="aw"><button className="ab" onClick={()=>onEdit(p)}><Ico n="edit"/></button><button className="ab danger" onClick={()=>onDelete(p)}><Ico n="trash"/></button></div></td></tr>)}
       </tbody>
     </table><Pagination total={rows.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
   </div>);
@@ -982,7 +982,7 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
         const curSym=CURR[(t.account&&t.account.currency)]||'£';
         return(
         <tr key={t.id}>
-          <td style={{color:'var(--g500)',fontSize:12}}>{t.date}</td>
+          <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(t.date)}</td>
           <td>{(t.account&&t.account.accountName)||'—'}</td>
           <td>{t.description||'—'}</td>
           <td>{linkLabel(t)?<span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(61,105,22,.09)',color:'#3D6916',border:'1px solid rgba(61,105,22,.18)'}}>{linkLabel(t)}</span>:<span style={{fontSize:11,color:'var(--g300)'}}>—</span>}</td>
@@ -1302,7 +1302,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
       </tr></thead>
       <tbody>{filtered.length===0?<tr><td colSpan={9}><div className="empty"><div className="empty-t">{tr("No transactions yet")}</div></div></td></tr>:shown.slice((pg-1)*ps,pg*ps).map(t=>(
         <tr key={t.id}>
-          <td style={{color:'var(--g500)',fontSize:12}}>{t.date||'—'}</td>
+          <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(t.date)||'—'}</td>
           <td style={{fontWeight:500,color:'var(--g800)'}}>{t.contactName||<span style={{color:'var(--g300)'}}>—</span>}</td>
           <td style={t.isOpening?{fontWeight:600,color:'var(--g700)'}:undefined}>{fxTitle(t)||'—'}{isFx(t)&&<div className="fx-sub">{fxDetail(t.fx)}</div>}{isXpay(t)&&<div className="fx-sub">{xpayDetail(t)}</div>}</td>
           <td>{isFx(t)?<span className="fx-badge">{tr("FX")}</span>:t.category?<span style={{background:'var(--purplel)',color:'var(--purple)',padding:'2px 7px',borderRadius:10,fontSize:11,fontWeight:600}}>{t.category}</span>:'—'}</td>
@@ -1485,7 +1485,7 @@ function OffBankTxForm({tx:init,account,cats,incomeCats,contacts,invoices,receiv
             <tr key={o.d.id} className={o.mine?'on':''}>
               <td><input type="checkbox" checked={!!o.mine} onChange={()=>toggleDoc(o)} aria-label={tr('Settle ')+o.d.number}/></td>
               <td style={{fontWeight:600}}>{o.d.number||'—'}{o.d.status==='draft'&&<span className="tx-draft">{tr("Draft")}</span>}</td>
-              <td style={{color:'var(--g500)'}}>{o.d.date||'—'}</td>
+              <td style={{color:'var(--g500)'}}>{fmtD(o.d.date)||'—'}</td>
               <td className="tar">{curFmt(docCur,o.total)}</td>
               <td className="tar">{curFmt(docCur,o.remaining)}</td>
               <td className="tar">{o.mine?<input type="number" value={o.mine.amount} onChange={x=>setAllocAmt(o,x.target.value)} className="fi tx-alloc-in" min="0" step=".01"/>:<span style={{color:'var(--g300)'}}>—</span>}</td>
@@ -1540,7 +1540,7 @@ function OffFxForm({fx:init,banks,cats,accountBalance,onSave,onCancel,onList,dir
     if(!(+f.sold>0)||!(+f.rate>0)||!(+f.received>0)||+(f.fee||0)<0){uiAlert(tr('Enter the amount out, FX rate and amount in (fee cannot be negative).'));return;}
     if(+(f.fee||0)>0&&!f.feeCategory){uiAlert(tr('Select an expense category for the fee.'));return;}
     const early=[from,to].find(b=>b.openingBalanceDate&&f.date<b.openingBalanceDate);
-    if(early){uiAlert(tr("This exchange is dated before the Opening Balance date of {0} ({1}). Pick a later date.", early.accountName, early.openingBalanceDate));return;}
+    if(early){uiAlert(tr("This exchange is dated before the Opening Balance date of {0} ({1}). Pick a later date.", early.accountName, fmtD(early.openingBalanceDate)));return;}
     onSave(f);
   };
 

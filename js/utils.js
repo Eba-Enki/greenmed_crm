@@ -10,6 +10,8 @@ const addD=(n,f=td())=>{const[y,m,d]=String(f).slice(0,10).split('-').map(Number
 const uid=()=>Math.random().toString(36).slice(2,9);
 const lt=i=>+(+(i.qty||0))*(+(i.price||0));
 const dt=items=>(items||[]).reduce((s,i)=>s+lt(i),0);
+// Dates are stored (and sorted / compared) as YYYY-MM-DD and shown as DD/MM/YYYY. Anything else passes through.
+const fmtD=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||'').trim());return m?`${m[3]}/${m[2]}/${m[1]}`:(v||'');};
 // Subtotal, VAT and total of a document. VAT is optional per document (vatOn + a hand-typed vatRate %) and is added
 // on top of the subtotal, rounded to the cent. Documents without vatOn total the same as dt(items).
 const docTotals=(doc,items=doc&&doc.items)=>{
@@ -122,7 +124,6 @@ const tcmbRate=async(date,from,to)=>{
   if(a==null||z==null)throw new Error(tr('TCMB has no banknote buying rate for {0}',a==null?from:to));
   return{rate:Math.round(a/z*10000)/10000,date:r.date};
 };
-const isoToDots=iso=>iso?iso.split('-').reverse().join('.'):'';
 // Button next to a rate field: fills it with the TCMB rate of `date`; onRate({rate,date})
 function TcmbButton({date,from,to,onRate}){
   const[busy,setBusy]=useState(false);
@@ -132,10 +133,10 @@ function TcmbButton({date,from,to,onRate}){
     catch(e){uiAlert(tr('Could not get the TCMB rate: {0}',e.message));}
     setBusy(false);
   };
-  return <Btn v="bgh bsm" type="button" onClick={get} disabled={busy} title={tr('TCMB banknote buying rate of {0}',isoToDots(date))}>{busy?tr('Fetching…'):tr('TCMB rate')}</Btn>;
+  return <Btn v="bgh bsm" type="button" onClick={get} disabled={busy} title={tr('TCMB banknote buying rate of {0}',fmtD(date))}>{busy?tr('Fetching…'):tr('TCMB rate')}</Btn>;
 }
 // Where a rate came from, under its field ({date} of the TCMB bulletin); nothing for a rate typed by hand
-const TcmbNote=({src})=>src&&src.date?<div className="tcmb-note">{tr('TCMB · {0} · banknote buying',isoToDots(src.date))}</div>:null;
+const TcmbNote=({src})=>src&&src.date?<div className="tcmb-note">{tr('TCMB · {0} · banknote buying',fmtD(src.date))}</div>:null;
 // Short content fingerprint (cyrb53) — tells which records changed since the last sync
 const hashStr=str=>{
   let h1=0xdeadbeef,h2=0x41c6ce57;

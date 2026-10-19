@@ -96,7 +96,7 @@ const drawModernHeader=async(pdf,ctx)=>{
 
   // Date / number block, right-aligned on the labels' colons
   const numLabel=isInv?'INVOICE NUMBER':isSalesQuote?'QUOTE NUMBER':isPO?'PO NUMBER':isPQ?'QUOTE NUMBER':'NUMBER';
-  const meta=[['DATE',doc.date||td()],[numLabel,doc.number||'']];
+  const meta=[['DATE',fmtD(doc.date||td())],[numLabel,doc.number||'']];
   if(isInv&&doc.quoteNum)meta.push(['PI NUMBER',doc.quoteNum]);
   pdf.setFont('Arial','normal');
   pdf.setFontSize(9);
@@ -243,7 +243,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     pdf.text(docLabel,149.437,31.173+3);
     pdf.text(': '+(doc.number||''),175.122,31.173+3);
     pdf.text('Date',149.437,36.602+3);
-    pdf.text(': '+(doc.date||td()),175.122,36.602+3);
+    pdf.text(': '+fmtD(doc.date||td()),175.122,36.602+3);
     if(isInv&&doc.quoteNum){
       pdf.text('PI No#',149.437,42.031+3);
       pdf.text(': '+doc.quoteNum,175.122,42.031+3);
@@ -666,7 +666,9 @@ const downloadFilesZip=async(files,zipName)=>{
     return false;
   }
 };
-const exportExcel=(rows,name)=>ensureXLSX().then(()=>{const ws=XLSX.utils.aoa_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');XLSX.writeFile(wb,`${name}-${td()}.xlsx`);},libLoadFailed);
+// YYYY-MM-DD cells are written as real Excel dates shown dd/mm/yyyy, so they sort and filter as dates
+const xlDate=v=>{const m=typeof v==='string'&&/^(\d{4})-(\d{2})-(\d{2})$/.exec(v);return m?{t:'n',v:(Date.UTC(+m[1],+m[2]-1,+m[3])-Date.UTC(1899,11,30))/864e5,z:'dd/mm/yyyy'}:v;}; // Excel day number, no time part
+const exportExcel=(rows,name)=>ensureXLSX().then(()=>{const ws=XLSX.utils.aoa_to_sheet(rows.map(r=>r.map(xlDate)));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Data');XLSX.writeFile(wb,`${name}-${td()}.xlsx`);},libLoadFailed);
 
 // Preview component — mirrors buildStandardPDF layout exactly
 function DocPage({doc,co,docType}){
@@ -765,7 +767,7 @@ function DocPage({doc,co,docType}){
 
       {/* Date row */}
       <div style={{position:'absolute',left:mm(149.437),top:mm(39.602),fontSize:10,fontWeight:700,color:'#111',whiteSpace:'nowrap'}}>Date</div>
-      <div style={{position:'absolute',left:mm(175.122),top:mm(39.602),fontSize:10,color:'#111',whiteSpace:'nowrap'}}>: {doc.date||td()}</div>
+      <div style={{position:'absolute',left:mm(175.122),top:mm(39.602),fontSize:10,color:'#111',whiteSpace:'nowrap'}}>: {fmtD(doc.date||td())}</div>
 
       {/* PI No# row (invoices only, when converted from quote) */}
       {isInv&&doc.quoteNum&&<>
@@ -980,7 +982,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
                 {doc.status&&<span className={`bdg ${statusClass}`}>{statusLabel}</span>}
               </div>
               <div className="pv2-hdr-meta">
-                <span><b>{doc.date||td()}</b></span>
+                <span><b>{fmtD(doc.date||td())}</b></span>
                 <span className="pv2-hdr-sep">·</span>
                 <span>{doc.currency||'GBP'} ({sym})</span>
                 {doc.validity&&<><span className="pv2-hdr-sep">·</span><span>{tr('Valid until')} <b>{doc.validity}</b></span></>}

@@ -853,7 +853,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             return(<React.Fragment key={base}>
               <tr className={bulk.has(latest.id)?'is-sel':''} style={{fontStyle:latest.status==='passive'?'italic':'normal',cursor:'pointer'}} onClick={()=>setQuickView(latest)}>
                 <SelTd bulk={bulk} id={latest.id}/>
-                <td style={{color:'var(--g500)',fontSize:12}}>{latest.date}</td>
+                <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(latest.date)}</td>
                 <td>
                   {/* The number never breaks; the lock and revision badges move under it when the column is narrow */}
                   <div style={{display:'flex',alignItems:'center',flexWrap:'wrap',gap:5}}>
@@ -894,7 +894,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               {expanded&&history.map(q=>(
                 <tr key={q.id} style={{background:'var(--g50)',fontStyle:'italic',cursor:'pointer'}} onClick={()=>setQuickView(q)}>
                   <td></td>
-                  <td style={{fontSize:12}}>{q.date}</td>
+                  <td style={{fontSize:12}}>{fmtD(q.date)}</td>
                   <td>
                     <div style={{display:'flex',alignItems:'center',gap:5,paddingLeft:22}}>
                       <span style={{color:'var(--g300)',fontSize:13,lineHeight:1}}>└</span>
@@ -1233,7 +1233,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               {warnings.length>0&&<tr><td colSpan={columnSettings.brand||columnSettings.model||columnSettings.category?10:7} style={{padding:0,border:'none'}}><div className="pw">
                 <div className="pw-h"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>{tr("This item was previously used:")}</div>
                 {warnings.map((w,i)=>{const showName=prodKey(w.matchedName)!==prodKey(it.desc);return(<div key={i} className="pw-row">
-                  <span className="pw-date">{w.date||'—'}</span>
+                  <span className="pw-date">{fmtD(w.date)||'—'}</span>
                   <button type="button" className="ph-doc pw-no" onClick={()=>{const d=salesQuotes.find(x=>x.id===w.docId);if(d)setPreviewQuote(d);}}>{w.quoteNum||'—'}</button>
                   <span className="pw-party"><span className="pw-name">{w.party||'—'}</span>
                     {w.similar&&<span className="mt-tag">{tr("similar")}</span>}
@@ -1458,7 +1458,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
             <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
               <SelTd bulk={bulk} id={d.id}/>
-              <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+              <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(d.date)}</td>
               <td><span style={{fontFamily:'Inter',fontSize:11}}>{d.number}</span></td>
               <td>{d.quoteNum?<span style={{fontFamily:'Inter',fontSize:11,color:'var(--gm-500)'}}>{d.quoteNum}</span>:'—'}</td>
               <td>
@@ -1542,7 +1542,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
             <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
               <SelTd bulk={bulk} id={d.id}/>
-              <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+              <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(d.date)}</td>
               <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
               <td style={{color:'var(--g800)'}}>{d.supplierCompany||'—'}</td>
@@ -1790,7 +1790,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               {it.srcq?<>
                 <td className="src-ro">{it.srcSupplier||'—'}</td>
                 <td className="src-ro">{it.srcDocNo||'—'} <span className="mt-tag ok">{tr("from sub-supplier quote")}</span></td>
-                <td className="src-ro">{it.srcDocDate||'—'}</td>
+                <td className="src-ro">{fmtD(it.srcDocDate)||'—'}</td>
                 <td className="src-ro" style={{textAlign:'right'}}>{fmt(+(it.srcPrice||0))}</td>
               </>:<>
               <td><input list="src-suppliers" value={it.srcSupplier||''} onChange={e=>setLine(it.id,'srcSupplier',e.target.value)} placeholder={tr("Sub-supplier...")}/></td>
@@ -1917,7 +1917,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>(
             <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} onClick={()=>setQuickView(d)}>
               <SelTd bulk={bulk} id={d.id}/>
-              <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+              <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(d.date)}</td>
               <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g800)'}}>{d.supplierCompany||'—'}</td>
               {!isQ&&<td>{d.srcqNumber?<span className="mt-chip">{d.srcqNumber}</span>:<span style={{color:'var(--g300)'}}>—</span>}</td>}
@@ -2060,7 +2060,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(d=>{const t=ceTotals(d.items);const sym=CURR[d.currency]||'';return(
             <tr key={d.id} className={bulk.has(d.id)?'is-sel':''} style={{cursor:'pointer'}} tabIndex={0} onClick={()=>open(d)} onKeyDown={e=>{if(e.key==='Enter'&&e.target===e.currentTarget)open(d);}}>
               <SelTd bulk={bulk} id={d.id}/>
-              <td style={{color:'var(--g500)',fontSize:12}}>{d.date}</td>
+              <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(d.date)}</td>
               <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
               <td style={{color:'var(--g800)'}}>{cust(d)||'—'}</td>
@@ -2606,7 +2606,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td className="tar">{e.hasGroup?marginCell(qc,e.co,e.sale):money(qc,null)}</td>
               <td className="tar">{marginCell(qc,e.group,e.sale)}</td>
               <td>{r.lines.map(({c,it:s})=>{const sh=(c.po&&c.po.shipment)||{};const any=sh.date||sh.gcb||sh.awb||sh.carrier||sh.incoterm;return(<div key={c.lead.id+s.id} className="mt-cell">
-                  {any?<>{sh.date&&<b>{sh.date}</b>}{c.po.dropShip&&<span className="mt-tag ok" style={{marginLeft:5}}>{tr("Direct")}</span>}
+                  {any?<>{sh.date&&<b>{fmtD(sh.date)}</b>}{c.po.dropShip&&<span className="mt-tag ok" style={{marginLeft:5}}>{tr("Direct")}</span>}
                     <div style={{color:'var(--g500)',fontSize:11}}>{[sh.incoterm,sh.carrier,sh.awb&&('AWB/BL '+sh.awb),sh.gcb&&('GÇB '+sh.gcb)].filter(Boolean).join(' · ')}</div></>
                   :<span style={{color:'var(--g300)'}}>{c.po?tr('not shipped yet'):'—'}</span>}</div>);})}</td>
             </tr>);})}</tbody>
@@ -2724,7 +2724,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>
       {/* Sections */}
       {(()=>{
-        const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>d.date};
+        const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>fmtD(d.date)};
         const noCol=l=>({k:'no',l,get:d=>d.number,show:d=>d.number,strong:true});
         const totalCol={k:'total',l:tr('Total'),get:d=>dt(d.items||[]),show:d=>`${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))}`};
         const statusCol={k:'status',l:tr('Status'),get:d=>d.status,show:d=><Badge s={d.status}/>};
@@ -2813,7 +2813,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <th className="tar">{tr("Unit Price")}</th>
                 </tr></thead>
                 <tbody>{list.map((r,i)=><tr key={i}>
-                  <td style={{color:'var(--g500)',fontSize:12}}>{r.date||'—'}</td>
+                  <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(r.date)||'—'}</td>
                   <td>
                     <span className="ph-kind">{tab==='similar'&&(r.side==='sale'?tr('Sales'):tr('Purchase'))+' · '}{tr(PRICE_KIND[r.kind])}</span>
                     {r.kind==='manual'?<span style={{color:'var(--g500)'}}>—</span>:<button type="button" className="ph-doc" onClick={()=>openDoc(r)}>{r.number||'—'}</button>}
@@ -2915,7 +2915,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td className="tar">{p.quoteCount}</td>
               <td className="tar" style={{fontWeight:p.salePrice?600:400,color:p.salePrice?'var(--g900)':'var(--g400)'}}>{p.salePrice?money(p.salePrice,p.saleCurrency):'—'}</td>
               <td className="tar" style={{color:p.purchasePrice?'var(--g900)':'var(--g400)'}}>{p.purchasePrice?money(p.purchasePrice,p.purchaseCurrency):'—'}</td>
-              <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{p.date||'—'}</td>
+              <td style={{color:'var(--g500)',fontSize:12,whiteSpace:'nowrap'}}>{fmtD(p.date)||'—'}</td>
               <td>{trash?<span style={{fontSize:12,color:'var(--g500)',whiteSpace:'nowrap'}}>{p.deletedOn}</span>:<button className="ab" onClick={e=>{e.stopPropagation();openPriceModal(p);}} title={tr("Set Purchase Price")}><Ico n="edit"/></button>}</td>
             </tr>
           )}</tbody>
@@ -3016,7 +3016,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </tr></thead>
           <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id} className={bulk.has(e.id)?'is-sel':''}>
             <SelTd bulk={bulk} id={e.id}/>
-            <td style={{color:'var(--g500)',fontSize:12}}>{e.date}</td>
+            <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(e.date)}</td>
             <td style={{color:'var(--g700)'}}><div className="fit-box fb-sm">{e.employee||'—'}</div></td>
             <td className="fit-grow" style={{color:'var(--g700)'}}>{expCatText(expCats,e)||'—'}</td>
             <td style={{fontWeight:500,color:'var(--g800)'}}><div className="fit-box fb-md">{e.description||'—'}</div></td>
@@ -3436,7 +3436,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </tr></thead>
           <tbody>{rows.slice((pg-1)*ps,pg*ps).map(d=><tr key={d.id} className={bulk.has(d.id)?'is-sel':''}>
             <SelTd bulk={bulk} id={d.id}/>
-            <td style={{color:'var(--g600)',fontSize:12}}>{d.uploadDate}</td>
+            <td style={{color:'var(--g600)',fontSize:12}}>{fmtD(d.uploadDate)}</td>
             <td style={{fontWeight:500}}>{d.name}</td>
             <td style={{color:'var(--g700)',fontSize:13}}>{d.category||'—'}</td>
             <td><span style={{padding:'2px 8px',borderRadius:4,fontSize:11,fontWeight:600,background:d.fileType==='application/pdf'?'var(--redl)':'var(--bluel)',color:d.fileType==='application/pdf'?'var(--red)':'var(--blue)'}}>{d.fileType==='application/pdf'?tr('PDF'):tr('JPG')}</span></td>
