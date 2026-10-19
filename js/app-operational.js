@@ -2902,11 +2902,24 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {lbl:tr('Net'),s:{v:net,wait,miss:0},rows:[],sub:rev.v>0&&!wait?tr("{0}% margin",(net/rev.v*100).toFixed(1)):tr('revenue - costs'),cls:net>=0?'sc-teal':'sc-red'},
     ];
     // "Amount (USD)" next to a document's own total, with the rate used when it was converted
-    const pcCol=amt=>({k:'pc',l:tr("Amount ({0})",pc),get:d=>{const x=toPc(d.currency,d.date,amt(d));return x>0||x<0?x:0;},show:d=>{
-      const own=(d.currency||'GBP')===pc,x=toPc(d.currency,d.date,amt(d)),r=fx[fxKey(d.currency,d.date)];
+    const pcVal=(cur,date,v)=>{const x=toPc(cur,date,v);return x>0||x<0?x:0;};
+    const pcCell=(cur,date,v,expected)=>{
+      const own=(cur||'GBP')===pc,x=toPc(cur,date,v),r=fx[fxKey(cur,date)];
       if(x===null)return <span style={{color:'var(--g400)'}}>{tr('Fetching…')}</span>;
       if(Number.isNaN(x))return <span className="mt-none" title={r&&r.err}>{tr("No rate")}</span>;
-      return<>{P(x)}{!own&&r&&<div className="mt-pct">1 {d.currency||'GBP'} = {+r.rate.toFixed(r.rate<1?6:4)} {pc} · {fmtD(r.date)}</div>}</>;}});
+      return<>{expected?<span className="pd-exp" title={tr("Expected cost — counted once the invoice arrives")}>({P(x)})</span>:P(x)}
+        {!own&&r&&<div className="mt-pct">1 {cur||'GBP'} = {+r.rate.toFixed(r.rate<1?6:4)} {pc} · {fmtD(r.date)}</div>}</>;};
+    const pcCol=amt=>({k:'pc',l:tr("Amount ({0})",pc),get:d=>pcVal(d.currency,d.date,amt(d)),show:d=>pcCell(d.currency,d.date,amt(d))});
+    // Purchases: one row per order with the received invoice made from it, then the invoices entered without an order.
+    // The project-currency amount (and the costs) come from the invoice; an order still awaiting one shows its own
+    // amount in brackets, as the cost to expect
+    const[quick,setQuick]=useState(null); // {doc, type:'po'|'ri'} shown in a quick view
+    const buys=[...pPO.map(po=>{const ri=pRI.find(r=>r.poId===po.id)||receivedInvoices.find(r=>r.poId===po.id)||null;return{id:po.id,po,ri,date:po.date};}),
+      ...pRI.filter(r=>!r.poId||!pPO.some(po=>po.id===r.poId)).map(ri=>({id:ri.id,po:null,ri,date:ri.date}))];
+    const docBtn=(doc,type)=><button type="button" className="ph-doc" onClick={()=>setQuick({doc,type})}>{doc.number||tr('(no number)')}</button>;
+    const amtOf=d=>`${CURR[d.currency]||d.currency||'£'}${fmt(docTotals(d).total)}`;
+    const diffMark=r=>{if(!r.po||!r.ri||(r.po.currency||'GBP')!==(r.ri.currency||'GBP'))return null;const dlt=docTotals(r.ri).total-docTotals(r.po).total;if(Math.abs(dlt)<0.005)return null;
+      const t=(CURR[r.ri.currency]||'')+fmt(Math.abs(dlt));return <span className={'pd-diff'+(dlt>0?' up':'')} title={dlt>0?tr("Invoice is {0} more than the order",t):tr("Invoice is {0} less than the order",t)}>{dlt>0?'▲':'▼'}</span>;};
     return(<div className="content">
       <FormHeader parent={'projects'} onBack={()=>go('projects')} title={<>{project.number?`${project.number} — `:''}  {project.name}</>} meta={<><Badge s={project.status||'active'}/>
         {(()=>{const m=projMatching(project.name);return <button className="mt-open" onClick={()=>{setCur(project);go('proj_matching');}}><Ico n="link"/>{tr("Item Matching")}{m.total>0&&<span className={m.done===m.total?'mt-count ok':'mt-count'}>{m.done}/{m.total}</span>}</button>;})()}</>}>
@@ -2935,12 +2948,19 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         return[
           {title:tr('Sales Quotations'),items:pQ,w:[0.8,1,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Quote No')),totalCol,pcCol(docTotal),statusCol]},
           {title:tr('Sales Invoices'),items:pI,w:[0.8,1,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Invoice No')),totalCol,pcCol(docTotal),statusCol]},
-          {title:tr('Purchase Orders'),items:pPO,w:[0.8,1,1.8,0.9,1.1,0.9],cols:[dateCol,noCol(tr('PO No')),supCol,totalCol,pcCol(docTotal),statusCol]},
-          {title:tr('Received Invoices'),items:pRI,w:[0.8,1,1.8,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Invoice No')),supCol,totalCol,pcCol(docTotal),statusCol]},
+          {title:tr('Purchases'),items:buys,w:[0.75,0.85,1.5,0.9,0.95,0.95,1.1,0.9],cols:[dateCol,
+            {k:'po',l:tr('Order'),get:r=>r.po?r.po.number:'',show:r=>r.po?docBtn(r.po,'po'):'—',strong:true},
+            {k:'supplier',l:tr('Supplier'),get:r=>(r.po||r.ri).supplierCompany||(r.po||r.ri).supplier,show:r=>(r.po||r.ri).supplierCompany||(r.po||r.ri).supplier||'—'},
+            {k:'poAmt',l:tr('Order Total'),get:r=>r.po?docTotals(r.po).total:-1,show:r=>r.po?amtOf(r.po):'—'},
+            {k:'ri',l:tr('Invoice'),get:r=>r.ri?r.ri.number||'':'',show:r=>r.ri?docBtn(r.ri,'ri'):'—'},
+            {k:'riAmt',l:tr('Invoice Total'),get:r=>r.ri?docTotals(r.ri).total:-1,show:r=>r.ri?<>{amtOf(r.ri)} {diffMark(r)}</>:'—'},
+            {k:'pc',l:tr("Amount ({0})",pc),get:r=>{const d=r.ri||r.po;return pcVal(d.currency,d.date,docTotals(d).total);},show:r=>{const d=r.ri||r.po;return pcCell(d.currency,d.date,docTotals(d).total,!r.ri);}},
+            {k:'status',l:tr('Status'),get:r=>r.ri?r.ri.status||'unpaid':'~',show:r=>r.ri?<Badge s={r.ri.status||'unpaid'}/>:<span className="mt-state">{tr('Awaiting invoice')}</span>}]},
           {title:tr('Expenses'),items:expList,w:[0.8,1,1.7,1.1,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
             {k:'src',l:tr('Source'),get:e=>e.src,show:e=>e.src||'—'},{k:'amount',l:tr('Amount'),get:e=>e.amount,show:e=>`${CURR[e.currency]||'£'}${fmt(e.amount)}`},pcCol(e=>e.amount)]},
         ].map(s=><ProjDocTable key={s.title} {...s}/>);
       })()}
+      {quick&&<DocQuickModal doc={quick.doc} co={co} docType={quick.type==='po'?'po':'invoice'} pdfOpts={SALES_PDF} itemNote={sqItemNote(quick.doc)} onClose={()=>setQuick(null)}/>}
     </div>);
   }
 
