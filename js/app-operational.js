@@ -2830,37 +2830,75 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   function ProjectDetail({project}){
     const pQ=salesQuotes.filter(d=>d.project===project.name);
     const pI=salesInvoices.filter(d=>d.project===project.name);
-    const pPQ=purchaseQuotes.filter(d=>d.project===project.name);
     const pPO=purchaseOrders.filter(d=>d.project===project.name);
     const pRI=receivedInvoices.filter(d=>d.project===project.name);
     const pExp=expenses.filter(d=>d.project===project.name);
-    // Per currency; Net is revenue − PO costs − expenses within each currency
-    const revenue=curTotals(pI.map(d=>[d.currency,dt(d.items)]));
-    const poTotal=curTotals(pPO.map(d=>[d.currency,docTotals(d).total]));
-    const expTotal=curTotals(pExp.map(e=>[e.currency,e.amount]));
-    const net=curTotals([...Object.entries(revenue),...Object.entries(poTotal).map(([c,v])=>[c,-v]),...Object.entries(expTotal).map(([c,v])=>[c,-v])]);
-    const zero=CURR.GBP+fmt(0);
+    // Everything is also shown in the project currency (its budget currency): each document at the TCMB banknote buying
+    // rate of its own date (cross rates through the lira). Revenue is invoiced net of discount and VAT; costs are the
+    // received invoices as billed, VAT included (VAT paid to a Turkish supplier is a cost for Green Med); expenses as entered.
+    const pc=project.currency||'GBP';
+    const[fx,setFx]=useState({}); // 'date|currency' → {rate,date} or {err}
+    const fxKey=(cur,date)=>(date||td())+'|'+(cur||'GBP');
+    const docs=[...pQ,...pI,...pPO,...pRI].map(d=>[d.currency,d.date]).concat(pExp.map(e=>[e.currency,e.date]));
+    const need=[...new Set(docs.filter(([c])=>(c||'GBP')!==pc).map(([c,d])=>fxKey(c,d)))];
+    useEffect(()=>{
+      need.filter(k=>!fx[k]).forEach(k=>{const[date,cur]=k.split('|');
+        tcmbRate(date,cur,pc).then(r=>setFx(m=>({...m,[k]:r}))).catch(e=>setFx(m=>({...m,[k]:{err:e.message}})));});
+    },[need.join(','),pc]);
+    // Amount in the project currency: a number, null while the rate is on its way, NaN when it could not be had
+    const toPc=(cur,date,v)=>{if((cur||'GBP')===pc)return +v||0;const r=fx[fxKey(cur,date)];return!r?null:r.err?NaN:(+v||0)*r.rate;};
+    const sumPc=rows=>rows.reduce((t,[c,d,v])=>{const x=toPc(c,d,v);return{v:t.v+(x>0||x<0?x:0),wait:t.wait||x===null,miss:t.miss+(Number.isNaN(x)?1:0)};},{v:0,wait:false,miss:0});
+    const revRows=pI.map(d=>{const t=docTotals(d);return[d.currency,d.date,t.sub-t.disc];});
+    const costRows=pRI.map(d=>[d.currency,d.date,docTotals(d).total]);
+    const expRows=pExp.map(e=>[e.currency,e.date,+(e.amount||0)]);
+    const rev=sumPc(revRows),cost=sumPc(costRows),exp=sumPc(expRows);
+    const net=rev.v-cost.v-exp.v,wait=rev.wait||cost.wait||exp.wait,miss=rev.miss+cost.miss+exp.miss;
+    const P=v=>(v<0?'-':'')+(CURR[pc]||pc+' ')+fmt(Math.abs(v));
+    const byCur=rows=>Object.keys(curTotals(rows.map(([c,,v])=>[c,v]))).length>1||rows.some(([c])=>(c||'GBP')!==pc)?fmtCurTotals(curTotals(rows.map(([c,,v])=>[c,v]))):null;
+    const awaiting=pPO.filter(o=>!receivedInvoices.some(r=>r.poId===o.id)).length;
+    const cards=[
+      {lbl:tr('Revenue'),s:rev,rows:revRows,sub:tr("{0} invoices",pI.length),cls:'sc-green'},
+      {lbl:tr('Costs'),s:cost,rows:costRows,sub:tr("{0} received invoices",pRI.length)+(awaiting?' · '+tr("{0} order(s) awaiting invoice",awaiting):''),cls:'sc-blue'},
+      {lbl:tr('Expenses'),s:exp,rows:expRows,sub:tr("{0} items",pExp.length),cls:'sc-purple'},
+      {lbl:tr('Net'),s:{v:net,wait,miss:0},rows:[],sub:rev.v>0&&!wait?tr("{0}% margin",(net/rev.v*100).toFixed(1)):tr('revenue - costs'),cls:net>=0?'sc-teal':'sc-red'},
+    ];
+    // "Amount (USD)" next to a document's own total, with the rate used when it was converted
+    const pcCol=amt=>({k:'pc',l:tr("Amount ({0})",pc),get:d=>{const x=toPc(d.currency,d.date,amt(d));return x>0||x<0?x:0;},show:d=>{
+      const own=(d.currency||'GBP')===pc,x=toPc(d.currency,d.date,amt(d)),r=fx[fxKey(d.currency,d.date)];
+      if(x===null)return <span style={{color:'var(--g400)'}}>{tr('Fetching…')}</span>;
+      if(Number.isNaN(x))return <span className="mt-none" title={r&&r.err}>{tr("No rate")}</span>;
+      return<>{P(x)}{!own&&r&&<div className="mt-pct">1 {d.currency||'GBP'} = {+r.rate.toFixed(r.rate<1?6:4)} {pc} · {fmtD(r.date)}</div>}</>;}});
     return(<div className="content">
       <FormHeader parent={'projects'} onBack={()=>go('projects')} title={<>{project.number?`${project.number} — `:''}  {project.name}</>} meta={<><Badge s={project.status||'active'}/>
         {(()=>{const m=projMatching(project.name);return <button className="mt-open" onClick={()=>{setCur(project);go('proj_matching');}}><Ico n="link"/>{tr("Item Matching")}{m.total>0&&<span className={m.done===m.total?'mt-count ok':'mt-count'}>{m.done}/{m.total}</span>}</button>;})()}</>}>
         <Btn v="bgh bsm" onClick={()=>{setCur(project);go('proj_form');}}><Ico n="edit"/>{tr("Edit Project")}</Btn>
       </FormHeader>
-      {/* Stats */}
+      {/* Stats, in the project currency */}
       <div className="stats" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
-        {[{lbl:tr('Revenue'),val:fmtCurTotals(revenue,zero),sub:tr("{0} invoices", pI.length),cls:'sc-green'},{lbl:tr('PO Costs'),val:fmtCurTotals(poTotal,zero),sub:tr("{0} orders", pPO.length),cls:'sc-blue'},{lbl:tr('Expenses'),val:fmtCurTotals(expTotal,zero),sub:tr("{0} items", pExp.length),cls:'sc-purple'},{lbl:tr('Net'),val:fmtCurTotals(net,zero),sub:tr('revenue - costs'),cls:Object.values(net).every(v=>v>=0)?'sc-teal':'sc-red'}].map(s=><div key={s.lbl} className={`stat-card ${s.cls}`}><div className="stat-val">{s.val}</div><div className="stat-lbl">{s.lbl}</div><div className="stat-sub">{s.sub}</div></div>)}
+        {cards.map(c=><div key={c.lbl} className={`stat-card ${c.cls}`}>
+          <div className="stat-val">{c.s.wait?'…':P(c.s.v)}</div>
+          <div className="stat-lbl">{c.lbl}</div>
+          <div className="stat-sub">{c.sub}</div>
+          {byCur(c.rows)&&<div className="stat-sub pd-cur">{byCur(c.rows)}</div>}
+          {c.s.miss>0&&<div className="stat-sub mt-none">{tr("{0} document(s) could not be converted",c.s.miss)}</div>}
+        </div>)}
       </div>
+      <div className="pd-note">{tr("Amounts in {0}, each document at the TCMB banknote buying rate of its date. Revenue excludes VAT; costs are the received invoices as billed, VAT included.",pc)}{miss>0&&' '+tr("Documents without a rate are left out of the totals.")}</div>
       {/* Sections */}
       {(()=>{
         const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>fmtD(d.date)};
         const noCol=l=>({k:'no',l,get:d=>d.number,show:d=>d.number,strong:true});
         const totalCol={k:'total',l:tr('Total'),get:d=>docTotals(d).total,show:d=>`${CURR[d.currency]||'£'}${fmt(docTotals(d).total)}`};
         const statusCol={k:'status',l:tr('Status'),get:d=>d.status,show:d=><Badge s={d.status}/>};
+        const supCol={k:'supplier',l:tr('Supplier'),get:d=>d.supplierCompany||d.supplier,show:d=>d.supplierCompany||d.supplier||'—'};
+        const docTotal=d=>docTotals(d).total;
         return[
-          {title:'Sales Quotations',items:pQ,w:[0.8,1,0.9,0.9],cols:[dateCol,noCol(tr('Quote No')),totalCol,statusCol]},
-          {title:'Sales Invoices',items:pI,w:[0.8,1,0.9,0.9],cols:[dateCol,noCol(tr('Invoice No')),totalCol,statusCol]},
-          {title:'Purchase Orders',items:pPO,w:[0.8,1,2,0.9,0.9],cols:[dateCol,noCol(tr('PO No')),{k:'supplier',l:tr('Supplier'),get:d=>d.supplier,show:d=>d.supplier},totalCol,statusCol]},
-          {title:'Expenses',items:pExp,w:[0.8,1,2,0.9],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
-            {k:'amount',l:tr('Amount'),get:e=>+(e.amount||0),show:e=>`${CURR[e.currency]||'£'}${fmt(+(e.amount||0))}`}]},
+          {title:tr('Sales Quotations'),items:pQ,w:[0.8,1,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Quote No')),totalCol,pcCol(docTotal),statusCol]},
+          {title:tr('Sales Invoices'),items:pI,w:[0.8,1,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Invoice No')),totalCol,pcCol(docTotal),statusCol]},
+          {title:tr('Purchase Orders'),items:pPO,w:[0.8,1,1.8,0.9,1.1,0.9],cols:[dateCol,noCol(tr('PO No')),supCol,totalCol,pcCol(docTotal),statusCol]},
+          {title:tr('Received Invoices'),items:pRI,w:[0.8,1,1.8,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Invoice No')),supCol,totalCol,pcCol(docTotal),statusCol]},
+          {title:tr('Expenses'),items:pExp,w:[0.8,1,2,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
+            {k:'amount',l:tr('Amount'),get:e=>+(e.amount||0),show:e=>`${CURR[e.currency]||'£'}${fmt(+(e.amount||0))}`},pcCol(e=>+(e.amount||0))]},
         ].map(s=><ProjDocTable key={s.title} {...s}/>);
       })()}
     </div>);

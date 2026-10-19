@@ -106,7 +106,10 @@ const I18N_TR={
   // Projects
   'No projects yet':'Henüz proje yok','Edit Project':'Projeyi Düzenle','Project Details':'Proje Bilgileri','Project name':'Proje adı',
   'Start Date':'Başlangıç Tarihi','Client: {0}':'Müşteri: {0}','{0} invoices · £{1}':'{0} fatura · £{1}','{0} invoices · {1}':'{0} fatura · {1}','{0} POs':'{0} sipariş',
-  '{0} expenses':'{0} gider','Revenue':'Gelir','{0} invoices':'{0} fatura','PO Costs':'Sipariş Maliyetleri','{0} orders':'{0} sipariş',
+  '{0} expenses':'{0} gider','Revenue':'Gelir','{0} invoices':'{0} fatura','Costs':'Maliyetler','{0} received invoices':'{0} alış faturası','{0} order(s) awaiting invoice':'{0} sipariş fatura bekliyor','{0}% margin':'%{0} marj',
+  'Amount ({0})':'Tutar ({0})','No rate':'Kur yok','{0} document(s) could not be converted':'{0} belge çevrilemedi','Documents without a rate are left out of the totals.':'Kuru alınamayan belgeler toplamlara katılmadı.',
+  'Amounts in {0}, each document at the TCMB banknote buying rate of its date. Revenue excludes VAT; costs are the received invoices as billed, VAT included.':'Tutarlar {0} cinsindendir; her belge kendi tarihindeki TCMB efektif alış kuruyla çevrilir. Gelir KDV hariç, maliyetler alış faturalarının KDV dahil tutarıdır.',
+  '{0} orders':'{0} sipariş',
   '{0} items':'{0} kalem','Net':'Net','revenue - costs':'gelir - maliyet','Project No':'Proje No','Project Name':'Proje Adı',
   '— Select customer —':'— Müşteri seçin —','Budget':'Bütçe','Budget Currency':'Bütçe Para Birimi',
 
