@@ -1025,7 +1025,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
                 <tbody>{(doc.items||[]).map((it,i)=>(
                   <tr key={it.id||i}>
                     <td style={{fontFamily:'monospace',fontSize:11,color:'var(--g500)',whiteSpace:'nowrap'}}>{it.item||'—'}</td>
-                    <td style={{color:'var(--g800)'}}>{it.desc||'—'}{isSrc&&it.brand&&<span className="it-brand"> · {it.brand}</span>}{itemNote&&itemNote(it)&&<div className="pv2-itemnote">{itemNote(it)}</div>}</td>
+                    <td style={{color:'var(--g800)',whiteSpace:'pre-line'}}>{it.desc||'—'}{isSrc&&it.brand&&<span className="it-brand"> · {it.brand}</span>}{itemNote&&itemNote(it)&&<div className="pv2-itemnote">{itemNote(it)}</div>}</td>
                     <td style={{textAlign:'right',color:'var(--g700)'}}>{it.qty||'1'}</td>
                     <td style={{fontSize:11,color:'var(--g400)'}}>{it.unit||''}</td>
                     <td style={{textAlign:'right',fontWeight:500,color:'var(--g800)',fontVariantNumeric:'tabular-nums'}}>{sym}{fmt(+(it.price||0))}</td>
@@ -1104,7 +1104,8 @@ const discLabel=t=>typeof t.discRate==='number'&&t.discRate>0?tr("Discount ({0}%
 // vat: {def} adds a VAT % column (empty = the document's default rate, shown as the placeholder)
 // disc: {def} adds a Disc. % column the same way
 // brand: adds a Brand column after the description
-function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand}){
+// multi: the description takes several lines (Shift+Enter), see LineText
+function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand,multi}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
   const addL=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
@@ -1126,7 +1127,9 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
         <thead><tr>{heads.map(([h,w],i)=><th key={i} style={{textAlign:['Qty','Unit Price','Disc. %','VAT %','Total'].includes(h)?'right':'left',width:w}}>{h&&tr(h)}</th>)}</tr></thead>
         <tbody onKeyDown={readOnly?undefined:onLineEnter(items,setItems,()=>({id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}))}>{items.map(it=><tr key={it.id} data-line={it.id}>
           <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Product...")} readOnly={readOnly}/></td>
-          <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/></td>
+          <td>{multi
+            ?<LineText value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>
+            :<input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>}</td>
           {brand&&<td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder={tr("Brand...")} readOnly={readOnly}/></td>}
           {match&&<td>{(()=>{const used=usedKeys(it);return(
             <select value={it.sqKey||''} onChange={e=>si(it.id,'sqKey',e.target.value)} disabled={readOnly} title={(match.options.find(o=>o.key===it.sqKey)||{}).label||''}

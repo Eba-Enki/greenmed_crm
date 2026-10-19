@@ -1220,7 +1220,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               return(<React.Fragment key={it.id}>
                 <tr className={flagged?'row-warn':''} data-line={it.id}>
                 <td title={isDup?tr('Duplicate item (same description)'):(warnings.length>0?tr('Previously quoted — see price history below'):'')}><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} onBlur={e=>checkPriceHistory(it.id,{...it,item:e.target.value})} placeholder={tr("Item code...")} readOnly={isLocked} style={flagged?{color:'var(--amber)',fontWeight:600}:{}}/></td>
-                <td><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} onBlur={e=>checkPriceHistory(it.id,{...it,desc:e.target.value})} placeholder={tr("Description...")} readOnly={isLocked} style={flagged?{color:'var(--amber)',fontWeight:600}:{}}/></td>
+                <td><LineText value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} onBlur={e=>checkPriceHistory(it.id,{...it,desc:e.target.value})} placeholder={tr("Description...")} readOnly={isLocked} style={flagged?{color:'var(--amber)',fontWeight:600}:{}}/></td>
                 {columnSettings.brand&&<td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder={tr("Brand...")} readOnly={isLocked}/></td>}
                 {columnSettings.model&&<td><input value={it.model||''} onChange={e=>si(it.id,'model',e.target.value)} placeholder={tr("Model...")} readOnly={isLocked}/></td>}
                 {columnSettings.category&&<td><input value={it.category||''} onChange={e=>si(it.id,'category',e.target.value)} placeholder={tr("Category...")} readOnly={isLocked}/></td>}
@@ -1356,7 +1356,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </div>}
       {/* Invoices raised directly (no quotation) get the free line editor; quote invoices only adjust qty/price */}
       {!inv.quoteId?<div className="fc"><div className="fct">{tr("Line Items")}</div>
-        <ItemsEditor items={items} setItems={setItems} currency={inv.currency||'GBP'}/>
+        <ItemsEditor items={items} setItems={setItems} currency={inv.currency||'GBP'} multi/>
       </div>:
       <div className="fc"><div className="fct">{tr("Line Items (from Quotation)")}</div>
         <div className="iw"><table className="ie">
@@ -1757,7 +1757,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             </div>
           </div>);
         })()}
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined}/>
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} multi/>
       </div>
       {isGroupDoc(doc)&&(()=>{
         const sc=srcCur(doc),dc=doc.currency||'GBP';
@@ -1990,7 +1990,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} disc={doc.discOn?{def:doc.discRate}:null} brand={showBrand}/>
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} disc={doc.discOn?{def:doc.discRate}:null} brand={showBrand} multi/>
         <div className="vat-row">
           <label className="st-check"><input type="checkbox" checked={!!doc.discOn} onChange={e=>set('discOn',e.target.checked)}/><span>{tr("Apply discount")}</span></label>
           {doc.discOn&&<label className="vat-rate"><span>{tr("Default discount rate")}</span><input value={doc.discRate||''} onChange={e=>set('discRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
@@ -2322,7 +2322,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               return(<tr key={it.id} data-line={it.id} className={(miss?'ce-miss ':'')+(bulk.has(it.id)?'is-sel':'')}>
                 {!locked&&<SelTd bulk={bulk} id={it.id}/>}
                 <td className="ce-no ce-stk" style={{left:pin[0]}}>{idx+1}</td>
-                <td className="ce-stk ce-stk-end" style={{left:pin[1]}}><input value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={locked?'':tr("Product name...")} readOnly={locked} title={it.desc||''}/></td>
+                <td className="ce-stk ce-stk-end" style={{left:pin[1]}}><LineText value={it.desc||''} onChange={e=>si(it.id,'desc',e.target.value)} placeholder={locked?'':tr("Product name...")} readOnly={locked}/></td>
                 <td><input value={it.category||''} onChange={e=>si(it.id,'category',e.target.value)} placeholder={locked?'':tr("Category...")} readOnly={locked}/></td>
                 <td><input value={it.brand||''} onChange={e=>si(it.id,'brand',e.target.value)} placeholder={locked?'':tr("Brand...")} readOnly={locked}/></td>
                 <td><input value={it.model||''} onChange={e=>si(it.id,'model',e.target.value)} placeholder={locked?'':tr("Model...")} readOnly={locked}/></td>

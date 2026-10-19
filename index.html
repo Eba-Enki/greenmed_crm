@@ -292,10 +292,11 @@ table.ie th{background:linear-gradient(180deg,var(--g50),var(--g100));padding:10
 table.ie td{border-top:1px solid var(--g100);padding:3px 4px;vertical-align:middle}
 table.ie tbody tr{transition:background .12s}
 table.ie tbody tr:hover{background:var(--g50)}
-table.ie td input{border:1.5px solid transparent;border-radius:6px;padding:6px 8px;width:100%;background:transparent;color:var(--g800);font-size:13px;transition:background .15s,border-color .15s,box-shadow .15s,color .15s,transform .15s}
-table.ie td input:hover{border-color:var(--g200);background:rgba(255,255,255,.6)}
-table.ie td input:focus{border-color:var(--gm-400)!important;background:var(--white)!important;box-shadow:0 0 0 2px rgba(97,154,48,.1)!important;outline:none!important}
-table.ie td input[readonly]{background:transparent;color:var(--g500)}
+table.ie td input,table.ie td .lt-text{border:1.5px solid transparent;border-radius:6px;padding:6px 8px;width:100%;background:transparent;color:var(--g800);font-size:13px;transition:background .15s,border-color .15s,box-shadow .15s,color .15s,transform .15s}
+table.ie td .lt-text{display:block;font-family:inherit;line-height:1.35;resize:none;overflow:hidden}
+table.ie td input:hover,table.ie td .lt-text:hover{border-color:var(--g200);background:rgba(255,255,255,.6)}
+table.ie td input:focus,table.ie td .lt-text:focus{border-color:var(--gm-400)!important;background:var(--white)!important;box-shadow:0 0 0 2px rgba(97,154,48,.1)!important;outline:none!important}
+table.ie td input[readonly],table.ie td .lt-text[readonly]{background:transparent;color:var(--g500)}
 .lt{text-align:right;font-weight:600;color:var(--dk);padding-right:10px!important;font-size:13px}
 .tip-wrap{position:relative;display:inline-flex;align-items:center}
 .tip-wrap .tip-box{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:#f1f5f9;font-size:11.5px;font-weight:400;white-space:normal;max-width:260px;min-width:120px;padding:7px 10px;border-radius:7px;box-shadow:0 4px 16px rgba(0,0,0,.22);pointer-events:none;z-index:9999;line-height:1.4;transition:opacity .15s,visibility .15s}
@@ -1319,17 +1320,17 @@ table.ie td input.ce-empty{border:1.5px dashed rgba(176,90,16,.5)}
 <body>
 <div id="root"><div class="splash" role="status" aria-label="Loading"><img class="splash-logo" src="brand_assets/logo/logo_fl.svg" alt=""><span class="splash-ring"></span></div></div>
 <!-- Loaded on first use, not on page load (see ensureXLSX / ensurePDF in js/utils.js) -->
-<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261019d","jszip":"https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"}</script>
+<script type="application/json" id="gm-lazy">{"xlsx":"https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js","jspdf":"https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js","fonts":"js/fonts.js?v=20261019e","jszip":"https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"}</script>
 <script>window.onerror=function(msg,src,line,col,err){document.getElementById('root').innerHTML='<pre style="color:red;background:#fff;padding:20px;font-size:13px">'+msg+'\n'+src+':'+line+'</pre>';return false;};</script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.22.5/babel.min.js"></script>
-<script src="js/i18n.js?v=20261019d"></script>
-<script type="text/babel" src="js/utils.js?v=20261019d"></script>
-<script type="text/babel" src="js/document-templates.js?v=20261019d"></script>
-<script type="text/babel" src="js/app-official.js?v=20261019d"></script>
-<script type="text/babel" src="js/app-operational.js?v=20261019d"></script>
-<script type="text/babel" src="js/app-system.js?v=20261019d"></script>
-<script type="text/babel" src="js/app-shell.js?v=20261019d"></script>
+<script src="js/i18n.js?v=20261019e"></script>
+<script type="text/babel" src="js/utils.js?v=20261019e"></script>
+<script type="text/babel" src="js/document-templates.js?v=20261019e"></script>
+<script type="text/babel" src="js/app-official.js?v=20261019e"></script>
+<script type="text/babel" src="js/app-operational.js?v=20261019e"></script>
+<script type="text/babel" src="js/app-system.js?v=20261019e"></script>
+<script type="text/babel" src="js/app-shell.js?v=20261019e"></script>
 </body>
 </html>

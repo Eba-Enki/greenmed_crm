@@ -740,7 +740,7 @@ const lineIsBlank=i=>!(i.item||'').trim()&&!(i.desc||'').trim()&&!+(i.price||0)&
 const onLineEnter=(items,setItems,mkLine,isBlank=lineIsBlank)=>e=>{
   if(e.key!=='Enter'||e.shiftKey||e.ctrlKey||e.altKey||e.metaKey||e.nativeEvent.isComposing)return;
   const t=e.target;
-  if(t.tagName!=='INPUT'||t.type==='checkbox'||t.readOnly||t.disabled)return;
+  if(!(t.tagName==='INPUT'||t.classList.contains('lt-text'))||t.type==='checkbox'||t.readOnly||t.disabled)return;
   const row=t.closest('tr[data-line]');
   if(!row)return;
   e.preventDefault();
@@ -752,10 +752,24 @@ const onLineEnter=(items,setItems,mkLine,isBlank=lineIsBlank)=>e=>{
   else{const n=mkLine();id=n.id;setItems([...items.slice(0,i+1),n,...items.slice(i+1)]);}
   setTimeout(()=>{
     const r=body.querySelector(`tr[data-line="${id}"]`);
-    const f=r&&r.querySelector('input:not([type=checkbox]):not([readonly]):not([disabled])');
+    const f=r&&r.querySelector('input:not([type=checkbox]):not([readonly]):not([disabled]),textarea.lt-text:not([readonly])');
     if(f)f.focus();
   },0);
 };
+// Multi-line text in a line item cell (product name / description): Shift+Enter starts a new line inside the text,
+// plain Enter is left to onLineEnter (next line item). Grows with its text, also when the column gets narrower.
+function LineText({value,...rest}){
+  const ref=useRef(null);
+  const fit=()=>{const t=ref.current;if(!t)return;t.style.height='auto';t.style.height=(t.scrollHeight+t.offsetHeight-t.clientHeight)+'px';};
+  React.useLayoutEffect(fit,[value]);
+  useEffect(()=>{
+    const t=ref.current;if(!t||!window.ResizeObserver)return;
+    let w=t.clientWidth;
+    const ro=new ResizeObserver(()=>{if(t.clientWidth!==w){w=t.clientWidth;fit();}});
+    ro.observe(t);return()=>ro.disconnect();
+  },[]);
+  return <textarea ref={ref} rows={1} className="lt-text" value={value} {...rest}/>;
+}
 // Header / row checkboxes; clicks don't reach the row (which opens the document)
 const SelTh=({bulk})=>(
   <th className="sel-col" onClick={e=>e.stopPropagation()}>
