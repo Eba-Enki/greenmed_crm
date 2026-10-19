@@ -549,7 +549,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const mkSrcQuote=()=>({id:null,number:'',date:td(),supplierId:'',supplierCompany:'',currency:'TRY',project:'',projectNumber:'',sqBase:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkSrcInvoice=q=>({id:null,number:'',date:td(),supplierId:(q&&q.supplierId)||'',supplierCompany:(q&&q.supplierCompany)||'',currency:(q&&q.currency)||'TRY',
     project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',vatOn:!!(q&&q.vatOn),vatRate:(q&&q.vatRate)||'',discOn:!!(q&&q.discOn),discRate:(q&&q.discRate)||'',
-    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',discRate:i.discRate||'',brand:i.brand||'',sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
+    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',discRate:i.discRate||'',brand:i.brand||'',...(i.kind?{kind:i.kind,kindAuto:!!i.kindAuto,expCatId:i.expCatId||''}:{}),sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const srcLineState=it=>it.status||'pending';
   const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>i.desc||i.item).map(srcLineState);
     if(!s.length||s.every(x=>x==='pending'))return'pending';if(s.every(x=>x==='unused'))return'unused';if(s.includes('pending'))return'partial';return'quoted';};
@@ -1760,7 +1760,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="xf-rate-n">{busy?tr('Fetching…'):err?<span className="xf-why">{err}</span>:r.src&&r.src.date?tr('TCMB · {0} · banknote buying',fmtD(r.src.date)):r.rate?tr('Typed'):''}</div>
         </div>);};
       const apply=()=>{
-        const mk=(s,it,p)=>{const net=srcNet(s,it);return{...(p||{}),id:(p&&p.id)||uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty:it.qty,unit:it.unit||'',
+        const mk=(s,it,p)=>{const net=srcNet(s,it);return{...(p||{}),id:(p&&p.id)||uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),...(it.kind==='charge'?{kind:'charge',kindAuto:false,expCatId:it.expCatId||''}:{}),qty:it.qty,unit:it.unit||'',
           price:str(conv(s,net)),fxRate:x.cur===dc?'':String(rateOf(s)||''),fxSource:x.cur===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
         const byId=Object.fromEntries(pickable.map(o=>[o.it.id,o]));
         const next=[];
@@ -2135,7 +2135,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} disc={doc.discOn?{def:doc.discRate}:null} brand={showBrand} multi/>
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} disc={doc.discOn?{def:doc.discRate}:null} brand={showBrand} multi
+          charge={{cats:chargeCats(),guess:guessCharge}}/>
         <div className="vat-row">
           <label className="st-check"><input type="checkbox" checked={!!doc.discOn} onChange={e=>set('discOn',e.target.checked)}/><span>{tr("Apply discount")}</span></label>
           {doc.discOn&&<label className="vat-rate"><span>{tr("Default discount rate")}</span><input value={doc.discRate||''} onChange={e=>set('discRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
