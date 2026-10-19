@@ -316,7 +316,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const mkSalesInvoice=(q)=>{
     const num=docNum('si');
     const remaining=getQuoteRemainingItems(q);
-    return{id:null,number:num,quoteId:q.id,quoteNum:q.number,date:td(),dueDate:td(),terms:'Due on Receipt',currency:q.currency||'GBP',bankId:q.bankId||'',status:'draft',project:q.project||'',projectNumber:q.projectNumber||'',client:{...q.client},shipToEnabled:q.shipToEnabled||false,shipTo:q.shipTo?{...q.shipTo}:{company:'',contact:'',email:'',phone:'',address:''},items:remaining.map(it=>({id:uid(),quoteItemId:it.id,quoteItemKey:sqItemKey(it),item:it.item,desc:it.desc,unit:it.unit,price:it.price,qty:String(it.remainingQty),maxQty:it.remainingQty})),notes:q.notes||''};
+    return{id:null,number:num,quoteId:q.id,quoteNum:q.number,date:td(),terms:'Due on Receipt',currency:q.currency||'GBP',bankId:q.bankId||'',status:'draft',project:q.project||'',projectNumber:q.projectNumber||'',client:{...q.client},shipToEnabled:q.shipToEnabled||false,shipTo:q.shipTo?{...q.shipTo}:{company:'',contact:'',email:'',phone:'',address:''},items:remaining.map(it=>({id:uid(),quoteItemId:it.id,quoteItemKey:sqItemKey(it),item:it.item,desc:it.desc,unit:it.unit,price:it.price,qty:String(it.remainingQty),maxQty:it.remainingQty})),notes:q.notes||''};
   };
   const assignInvoiceNumber=(si)=>{
     return isAutoNum('si',si.number)?{...si,number:docNum('si')}:si;
@@ -656,12 +656,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',sqBase:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkPurchaseOrder=(pq)=>{
     const num=docNum('po');
-    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',sqBase:(pq&&pq.sqBase)||'',supplierId:(pq&&pq.supplierId)||'',srcCurrency:(pq&&pq.srcCurrency)||'',fxRate:(pq&&pq.fxRate)||'',discOn:!!(pq&&pq.discOn),discRate:(pq&&pq.discRate)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:pq?i.id:undefined})),notes:''};
+    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',sqBase:(pq&&pq.sqBase)||'',supplierId:(pq&&pq.supplierId)||'',srcCurrency:(pq&&pq.srcCurrency)||'',fxRate:(pq&&pq.fxRate)||'',discOn:!!(pq&&pq.discOn),discRate:(pq&&pq.discRate)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:pq?i.id:undefined})),notes:''};
   };
   const assignPONumber=(po)=>{
     return isAutoNum('po',po.number)?{...po,number:docNum('po')}:po;
   };
-  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',supplierId:(po&&po.supplierId)||'',srcCurrency:(po&&po.srcCurrency)||'',fxRate:(po&&po.fxRate)||'',discOn:!!(po&&po.discOn),discRate:(po&&po.discRate)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
+  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',supplierId:(po&&po.supplierId)||'',srcCurrency:(po&&po.srcCurrency)||'',fxRate:(po&&po.fxRate)||'',discOn:!!(po&&po.discOn),discRate:(po&&po.discRate)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
 
   const handleSavePQ=pq0=>{
     const pq=addrCaseDoc(pq0);
@@ -1337,10 +1337,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </FormHeader>
       {inv.quoteNum&&<div style={{background:'var(--bluel)',border:'1px solid #bfdbfe',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--blue)',display:'flex',alignItems:'center',gap:8}}><Ico n="quote"/>{tr("From Quotation:")} <strong>{inv.quoteNum}</strong></div>}
       <div className="fc"><div className="fct">{tr("Invoice Details")}</div>
-        <div className="fg g4">
+        <div className="fg g3">
           <Fld label={tr("Invoice No")}><input value={inv.number} readOnly className="fi" style={{fontFamily:'monospace',fontWeight:700}}/></Fld>
           <Fld label={tr("Invoice Date")}><input type="date" value={inv.date||''} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
-          <Fld label={tr("Due Date")}><input type="date" value={inv.dueDate||''} onChange={e=>set('dueDate',e.target.value)} className="fi"/></Fld>
           <Fld label={tr("Terms")}><select value={inv.terms||'Due on Receipt'} onChange={e=>set('terms',e.target.value)} className="fi">{ITRM.map(t=><option key={t} value={t}>{t}</option>)}</select></Fld>
         </div>
         <div className="fg g3" style={{marginTop:12}}>
@@ -1590,7 +1589,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td className="tac">
                 {isPQ&&!d.linkedPO&&<ActBtn label={tr('Convert to PO')} onClick={()=>handleConvertPQtoPO(d)} due={isStale(d)?tr('Not ordered for over 14 days'):''}/>}
                 {isPO&&!d.linkedRI&&<ActBtn label={tr('Add Invoice')} onClick={()=>handleConvertPOtoRI(d)} due={isStale(d)?tr('No invoice for over 14 days'):''}/>}
-                {isRI&&d.status!=='paid'&&<ActBtn label={tr('Mark as Paid')} onClick={()=>{sRI(receivedInvoices.map(x=>x.id===d.id?{...x,status:'paid'}:x));showToast(tr('Marked as paid'));}} due={isOverdue(d)?tr('Overdue — not paid'):tr('Not paid yet')}/>}
+                {isRI&&d.status!=='paid'&&<ActBtn label={tr('Mark as Paid')} onClick={()=>{sRI(receivedInvoices.map(x=>x.id===d.id?{...x,status:'paid'}:x));showToast(tr('Marked as paid'));}} due={tr('Not paid yet')}/>}
               </td>
               {isRI&&<td className="tac"><Badge s={d.status||'unpaid'}/></td>}
             </tr>
@@ -1831,10 +1830,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {doc.pqNum&&<div style={{background:'var(--teall)',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--teal)'}}>{tr("From Purchase Quotation:")} <strong>{doc.pqNum}</strong></div>}
       {doc.poNum&&<div style={{background:'var(--teall)',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--teal)'}}>{tr("From Purchase Order:")} <strong>{doc.poNum}</strong></div>}
       <div className="fc"><div className="fct">{tr("Document Details")}</div>
-        <div className="fg g4">
+        <div className="fg g3">
           <Fld label={isPQ?tr("Their PQ No"):isPO?tr("PO No"):tr("Their Invoice No")}><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={isPO} style={isPO?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld>
           <Fld label={tr("Date")}><input type="date" value={doc.date||''} onChange={e=>set('date',e.target.value)} className="fi"/></Fld>
-          <Fld label={isPO?tr("Delivery Date"):tr("Due Date")}><input type="date" value={doc.dueDate||doc.deliveryDate||addD(30)} onChange={e=>set(isPO?'deliveryDate':'dueDate',e.target.value)} className="fi"/></Fld>
           <Fld label={tr("Currency")}><select value={doc.currency||'GBP'} onChange={e=>set('currency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select></Fld>
         </div>
         <div className="fg g3" style={{marginTop:12}}>
@@ -4037,7 +4035,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={titles[view]||''}>
             {view==='cost_estimates'&&<Btn v="bp bsm" onClick={()=>{setCur(mkCostEst());go('cost_estimates_form');}}><Ico n="plus"/>{tr("New Approximate Cost")}</Btn>}
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
-            {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si');setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),dueDate:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>{tr("New Invoice")}</Btn>}
+            {view==='sales_invoices'&&<Btn v="bp bsm" onClick={()=>{const num=docNum('si');setCur({id:null,number:num,quoteId:null,quoteNum:null,date:td(),terms:'Due on Receipt',currency:'GBP',status:'draft',project:'',client:{company:'',contact:'',email:'',phone:'',address:''},shipToEnabled:false,shipTo:{company:'',contact:'',email:'',phone:'',address:''},items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});go('sales_invoice_form');}}><Ico n="plus"/>{tr("New Invoice")}</Btn>}
             {view==='purchase_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkPurchaseQuote());go('pq_form');}}><Ico n="plus"/>{tr("New Received Quote")}</Btn>}
             {view==='source_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur(mkSrcQuote());go('source_quotes_form');}}><Ico n="plus"/>{tr("New Sub-supplier Quote")}</Btn>}
             {view==='source_invoices'&&<Btn v="bp bsm" onClick={()=>{setCur(mkSrcInvoice(null));go('source_invoices_form');}}><Ico n="plus"/>{tr("New Sub-supplier Invoice")}</Btn>}
