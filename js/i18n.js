@@ -333,6 +333,8 @@ const I18N_TR={
   'This quotation is passive — a newer revision replaced it. Edit it anyway?':'Bu teklif pasif — yerini yeni bir revizyon aldı. Yine de düzenlensin mi?',
   'This quotation is closed — it has been fully invoiced. Edit it anyway?':'Bu teklif kapalı — tamamı faturalandı. Yine de düzenlensin mi?',
   'Edit anyway':'Yine de düzenle',
+  'Apply discount':'İndirim uygula','Default discount rate':'Varsayılan indirim oranı','Disc. %':'İnd. %',
+  'Discount':'İndirim','Discount ({0}%)':'İndirim (%{0})',
   'Default VAT rate':'Varsayılan KDV oranı','VAT %':'KDV %','mixed':'karışık',
   'Apply VAT':'KDV uygula','VAT rate':'KDV oranı','VAT ({0}%)':'KDV (%{0})','Sub Total':'Ara Toplam',
   'Export selected':'Seçilenleri aktar','Delete {0} selected documents?':'Seçili {0} belge silinsin mi?','Delete {0} selected expenses?':'Seçili {0} gider silinsin mi?','Delete {0} selected projects?':'Seçili {0} proje silinsin mi?','Delete {0} selected lines?':'Seçili {0} kalem silinsin mi?',

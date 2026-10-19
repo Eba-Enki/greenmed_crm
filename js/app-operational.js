@@ -516,8 +516,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // quote uses it ("quoted", quotedIn) or uses another offer for the same customer line ("unused", unusedBy).
   const mkSrcQuote=()=>({id:null,number:'',date:td(),supplierId:'',supplierCompany:'',currency:'TRY',project:'',projectNumber:'',sqBase:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkSrcInvoice=q=>({id:null,number:'',date:td(),supplierId:(q&&q.supplierId)||'',supplierCompany:(q&&q.supplierCompany)||'',currency:(q&&q.currency)||'TRY',
-    project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',vatOn:!!(q&&q.vatOn),vatRate:(q&&q.vatRate)||'',
-    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',brand:i.brand||'',sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
+    project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',vatOn:!!(q&&q.vatOn),vatRate:(q&&q.vatRate)||'',discOn:!!(q&&q.discOn),discRate:(q&&q.discRate)||'',
+    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',discRate:i.discRate||'',brand:i.brand||'',sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const srcLineState=it=>it.status||'pending';
   const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>i.desc||i.item).map(srcLineState);
     if(!s.length||s.every(x=>x==='pending'))return'pending';if(s.every(x=>x==='unused'))return'unused';if(s.includes('pending'))return'partial';return'quoted';};
@@ -1854,8 +1854,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const lbl=isQ?tr('Sub-supplier Quote'):tr('Sub-supplier Invoice');
     const projNames=[...new Set(docs.map(d=>d.project).filter(Boolean))];
     const inQuote=d=>isQ&&(d.items||[]).some(i=>srcLineState(i)==='quoted');
-    const money=d=>{const t=docTotals(d);return[t.sub,t.rate==='mixed'?tr('mixed'):(t.rate||''),t.vat,t.total];};
-    const exportRows=list=>exportExcel([isQ?['Date','Quote No','Sub-supplier','Project','Sales Quotation','Currency','Sub Total','VAT %','VAT','Total','Status']:['Date','Invoice No','Sub-supplier','Sub-supplier Quote','Project','Currency','Sub Total','VAT %','VAT','Total'],
+    const rateCell=r=>r==='mixed'?tr('mixed'):(r||'');
+    const money=d=>{const t=docTotals(d);return[t.sub,rateCell(t.discRate),t.disc,rateCell(t.rate),t.vat,t.total];};
+    const exportRows=list=>exportExcel([isQ?['Date','Quote No','Sub-supplier','Project','Sales Quotation','Currency','Sub Total','Disc. %','Discount','VAT %','VAT','Total','Status']:['Date','Invoice No','Sub-supplier','Sub-supplier Quote','Project','Currency','Sub Total','Disc. %','Discount','VAT %','VAT','Total'],
       ...list.map(d=>isQ?[d.date,d.number,d.supplierCompany,d.project,sqNum(d),d.currency,...money(d),SRC_STATE[srcQuoteState(d)][0]]:[d.date,d.number,d.supplierCompany,d.srcqNumber||'',d.project,d.currency,...money(d)])],isQ?'source-quotes':'source-invoices');
     const bulk=useBulkSelect(sorted.map(d=>d.id));
     const picked=sorted.filter(d=>bulk.has(d.id));
@@ -1989,8 +1990,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} brand={showBrand}/>
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} disc={doc.discOn?{def:doc.discRate}:null} brand={showBrand}/>
         <div className="vat-row">
+          <label className="st-check"><input type="checkbox" checked={!!doc.discOn} onChange={e=>set('discOn',e.target.checked)}/><span>{tr("Apply discount")}</span></label>
+          {doc.discOn&&<label className="vat-rate"><span>{tr("Default discount rate")}</span><input value={doc.discRate||''} onChange={e=>set('discRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
           <label className="st-check"><input type="checkbox" checked={!!doc.vatOn} onChange={e=>set('vatOn',e.target.checked)}/><span>{tr("Apply VAT")}</span></label>
           {doc.vatOn&&<label className="vat-rate"><span>{tr("Default VAT rate")}</span><input value={doc.vatRate||''} onChange={e=>set('vatRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
         </div>

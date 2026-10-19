@@ -12,19 +12,28 @@ const lt=i=>+(+(i.qty||0))*(+(i.price||0));
 const dt=items=>(items||[]).reduce((s,i)=>s+lt(i),0);
 // Dates are stored (and sorted / compared) as YYYY-MM-DD and shown as DD/MM/YYYY. Anything else passes through.
 const fmtD=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||'').trim());return m?`${m[3]}/${m[2]}/${m[1]}`:(v||'');};
-// Subtotal, VAT and total of a document. VAT is optional per document (vatOn). Each line may carry its own vatRate %;
-// lines without one use the document's default vatRate. VAT is added on top, worked out and rounded to the cent per
-// rate (groups: [{rate, base, vat}]); rate is that single rate, 'mixed' for several, 0 for none.
-// Documents without vatOn total the same as dt(items).
+// Subtotal, discount, VAT and total of a document. Discount (discOn) and VAT (vatOn) are optional per document. Each
+// line may carry its own discRate / vatRate %; lines without one use the document's default discRate / vatRate.
+// The discount comes off each line first (rounded to the cent on the document); VAT is then added on the discounted
+// amounts, worked out and rounded to the cent per rate (groups: [{rate, base, vat}]).
+// rate / discRate is that single rate, 'mixed' for several, 0 for none.
+// Documents with neither total the same as dt(items).
 const pct=v=>+String(v==null?'':v).replace(',','.')||0;
+const lineRate=(i,f,def)=>String(i[f]==null?'':i[f]).trim()!==''?pct(i[f]):pct(def);
+const oneRate=rs=>{const u=[...new Set(rs.filter(r=>r>0))];return u.length===1?u[0]:u.length?'mixed':0;};
 const docTotals=(doc,items=doc&&doc.items)=>{
-  const sub=dt(items);
-  if(!doc||!doc.vatOn)return{sub,vat:0,total:sub,groups:[],rate:0};
+  const list=items||[];
+  const sub=dt(list);
+  const dr=i=>doc&&doc.discOn?lineRate(i,'discRate',doc.discRate):0;
+  const net=i=>lt(i)*(1-dr(i)/100);
+  const disc=Math.round(list.reduce((s,i)=>s+lt(i)*dr(i)/100,0)*100)/100;
+  const discRate=oneRate(list.map(dr));
+  if(!doc||!doc.vatOn)return{sub,disc,discRate,vat:0,total:sub-disc,groups:[],rate:0};
   const by={};
-  (items||[]).forEach(i=>{const r=String(i.vatRate==null?'':i.vatRate).trim()!==''?pct(i.vatRate):pct(doc.vatRate);by[r]=(by[r]||0)+lt(i);});
+  list.forEach(i=>{const r=lineRate(i,'vatRate',doc.vatRate);by[r]=(by[r]||0)+net(i);});
   const groups=Object.keys(by).map(Number).filter(r=>r>0).sort((a,b)=>a-b).map(r=>({rate:r,base:by[r],vat:Math.round(by[r]*r)/100}));
   const vat=groups.reduce((s,g)=>s+g.vat,0);
-  return{sub,vat,total:sub+vat,groups,rate:groups.length===1?groups[0].rate:groups.length?'mixed':0};
+  return{sub,disc,discRate,vat,total:sub-disc+vat,groups,rate:oneRate(groups.map(g=>g.rate))};
 };
 const fmt=n=>n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
 // Amounts in different currencies are never added together: totals are kept per currency ({GBP:…, USD:…})
