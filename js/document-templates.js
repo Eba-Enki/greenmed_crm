@@ -163,7 +163,9 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   const fixText=(txt)=>txt?String(txt):'';
   
   const sym=CURR[doc.currency]||'£';
-  const total=dt(doc.items||[]);
+  // Documents without discount or VAT: Sub Total = Total, as before
+  const totals=docTotals(doc);
+  const total=totals.total;
   const isInv=type==='invoice';
   const isPO=type==='po';
   const isPQ=type==='quote'; // Purchase Quote (Received Quote)
@@ -501,9 +503,21 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     P.setFont('Arial','normal');
     P.setFontSize(8);
     P.text('Sub Total',146.775,subTotalY+2.5);
-    P.text(fmt(total),195-3,subTotalY+2.5,{align:'right'});
+    P.text(fmt(totals.sub),195-3,subTotalY+2.5,{align:'right'});
+    // Discount and VAT rows under the Sub Total, labels ending where "Sub Total" ends
+    const labelEnd=146.775+pdf.getTextWidth('Sub Total');
+    const extra=[
+      ...(totals.disc>0?[[typeof totals.discRate==='number'?`Discount (${totals.discRate}%)`:'Discount','-'+fmt(totals.disc)]]:[]),
+      ...totals.groups.map(g=>[`VAT (${g.rate}%)`,fmt(g.vat)])
+    ];
+    const step=opts.modern?5:4;
+    extra.forEach(([l,v],k)=>{
+      const ry=subTotalY+(k+1)*step;
+      P.text(l,labelEnd,ry+2.5,{align:'right'});
+      P.text(v,195-3,ry+2.5,{align:'right'});
+    });
 
-    const totalY=subTotalY+(opts.modern?6:4.5);
+    const totalY=subTotalY+extra.length*step+(opts.modern?6:4.5);
     P.setFont('Arial','bold');
     P.setFontSize(9);
     P.text('Total',151.252,totalY+2.5);

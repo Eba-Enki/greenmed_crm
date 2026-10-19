@@ -624,12 +624,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const mkPurchaseQuote=()=>({id:null,number:'',date:td(),supplier:'',supplierAddress:'',currency:'GBP',project:'',projectNumber:'',sqBase:'',linkedPO:null,items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkPurchaseOrder=(pq)=>{
     const num=docNum('po');
-    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',sqBase:(pq&&pq.sqBase)||'',supplierId:(pq&&pq.supplierId)||'',srcCurrency:(pq&&pq.srcCurrency)||'',fxRate:(pq&&pq.fxRate)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:pq?i.id:undefined})),notes:''};
+    return{id:null,number:num,pqId:(pq&&pq.id)||null,pqNum:(pq&&pq.number)||'',date:td(),deliveryDate:addD(30),supplierCompany:(pq&&pq.supplierCompany)||'',supplierContact:(pq&&pq.supplierContact)||'',supplierEmail:(pq&&pq.supplierEmail)||'',supplierPhone:(pq&&pq.supplierPhone)||'',supplierAddress:(pq&&pq.supplierAddress)||'',currency:(pq&&pq.currency)||'GBP',project:(pq&&pq.project)||'',projectNumber:(pq&&pq.projectNumber)||'',sqBase:(pq&&pq.sqBase)||'',supplierId:(pq&&pq.supplierId)||'',srcCurrency:(pq&&pq.srcCurrency)||'',fxRate:(pq&&pq.fxRate)||'',discOn:!!(pq&&pq.discOn),discRate:(pq&&pq.discRate)||'',linkedRI:null,items:((pq&&pq.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:pq?i.id:undefined})),notes:''};
   };
   const assignPONumber=(po)=>{
     return isAutoNum('po',po.number)?{...po,number:docNum('po')}:po;
   };
-  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',supplierId:(po&&po.supplierId)||'',srcCurrency:(po&&po.srcCurrency)||'',fxRate:(po&&po.fxRate)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
+  const mkReceivedInvoice=(po)=>({id:null,number:'',poId:(po&&po.id)||null,poNum:(po&&po.number)||'',date:td(),dueDate:addD(30),terms:'Due on Receipt',supplierCompany:(po&&po.supplierCompany)||'',supplierContact:(po&&po.supplierContact)||'',supplierEmail:(po&&po.supplierEmail)||'',supplierPhone:(po&&po.supplierPhone)||'',supplierAddress:(po&&po.supplierAddress)||'',currency:(po&&po.currency)||'GBP',status:'unpaid',project:(po&&po.project)||'',projectNumber:(po&&po.projectNumber)||'',sqBase:(po&&po.sqBase)||'',supplierId:(po&&po.supplierId)||'',srcCurrency:(po&&po.srcCurrency)||'',fxRate:(po&&po.fxRate)||'',discOn:!!(po&&po.discOn),discRate:(po&&po.discRate)||'',items:((po&&po.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]).map(i=>({...i,id:uid(),srcId:po?i.id:undefined})),notes:''});
 
   const handleSavePQ=pq0=>{
     const pq=addrCaseDoc(pq0);
@@ -1495,14 +1495,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(fs.dateTo&&d.date>fs.dateTo)return false;
       return true;
     });
-    const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,project:d=>d.project,supplier:d=>d.supplierCompany,total:d=>dt(d.items||[]),
+    const sorted=sortRows(filtered,sort,{date:d=>d.date,no:d=>d.number,project:d=>d.project,supplier:d=>d.supplierCompany,total:d=>docTotals(d).total,
       linked:d=>isPQ?d.linkedPO&&d.linkedPO.number:isPO?d.pqNum:d.poNum,status:d=>d.status||'unpaid'});
     const lbl=isPQ?tr('Received Quote'):isPO?tr('Purchase Order'):tr('Received Invoice');
     const linkChip=(label,num)=><span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:10,fontWeight:600,padding:'2px 7px',borderRadius:5,background:'rgba(61,105,22,.09)',color:'#3D6916',border:'1px solid rgba(61,105,22,.18)'}}>{label} {num}</span>;
     const bulk=useBulkSelect(sorted.map(d=>d.id));
     const picked=sorted.filter(d=>bulk.has(d.id));
     const[zipBusy,setZipBusy]=useState(false);
-    const exportRows=docs=>exportExcel([['Date','Number','Supplier','Total',...(isRI?['Status']:[])],...docs.map(d=>[d.date,d.number,d.supplierCompany,fmt(dt(d.items)),...(isRI?[d.status]:[])])],type);
+    const exportRows=docs=>exportExcel([['Date','Number','Supplier','Total',...(isRI?['Status']:[])],...docs.map(d=>[d.date,d.number,d.supplierCompany,fmt(docTotals(d).total),...(isRI?[d.status]:[])])],type);
     const bulkPDF=async()=>{
       setZipBusy(true);
       const done=await downloadPDFZip(picked,co,isPO?'po':isRI?'invoice':'quote',SALES_PDF,isPQ?'received-quotes':isPO?'purchase-orders':'received-invoices',(i,n)=>showToast(tr('Preparing PDFs… {0}/{1}',i,n)));
@@ -1549,7 +1549,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td><span className="dn">{d.number||'—'}</span></td>
               <td style={{color:'var(--g500)',fontSize:12}}>{d.project||'—'}</td>
               <td style={{color:'var(--g800)'}}>{d.supplierCompany||'—'}</td>
-              <td className="tar">{CURR[d.currency]||'£'}{fmt(dt(d.items||[]))}</td>
+              <td className="tar">{CURR[d.currency]||'£'}{fmt(docTotals(d).total)}</td>
               <td className="tac">
                 {isPQ&&(d.linkedPO?linkChip('→',d.linkedPO.number):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
                 {isPO&&(d.pqNum?linkChip('←',d.pqNum):<span style={{fontSize:11,color:'var(--g300)'}}>—</span>)}
@@ -1841,7 +1841,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
         {xfer&&xferDialog()}
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} multi/>
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} multi
+          totals={docTotals(doc,items)} disc={doc.discOn?{def:doc.discRate}:null}/>
+        <div className="vat-row">
+          <label className="st-check"><input type="checkbox" checked={!!doc.discOn} onChange={e=>set('discOn',e.target.checked)}/><span>{tr("Apply discount")}</span></label>
+          {doc.discOn&&<label className="vat-rate"><span>{tr("Default discount rate")}</span><input value={doc.discRate||''} onChange={e=>set('discRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
+        </div>
       </div>
       {isGroupDoc(doc)&&(()=>{
         const sc=srcCur(doc),dc=doc.currency||'GBP';
@@ -2802,7 +2807,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const pExp=expenses.filter(d=>d.project===project.name);
     // Per currency; Net is revenue − PO costs − expenses within each currency
     const revenue=curTotals(pI.map(d=>[d.currency,dt(d.items)]));
-    const poTotal=curTotals(pPO.map(d=>[d.currency,dt(d.items)]));
+    const poTotal=curTotals(pPO.map(d=>[d.currency,docTotals(d).total]));
     const expTotal=curTotals(pExp.map(e=>[e.currency,e.amount]));
     const net=curTotals([...Object.entries(revenue),...Object.entries(poTotal).map(([c,v])=>[c,-v]),...Object.entries(expTotal).map(([c,v])=>[c,-v])]);
     const zero=CURR.GBP+fmt(0);
@@ -2819,7 +2824,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {(()=>{
         const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>fmtD(d.date)};
         const noCol=l=>({k:'no',l,get:d=>d.number,show:d=>d.number,strong:true});
-        const totalCol={k:'total',l:tr('Total'),get:d=>dt(d.items||[]),show:d=>`${CURR[d.currency]||'£'}${fmt(dt(d.items||[]))}`};
+        const totalCol={k:'total',l:tr('Total'),get:d=>docTotals(d).total,show:d=>`${CURR[d.currency]||'£'}${fmt(docTotals(d).total)}`};
         const statusCol={k:'status',l:tr('Status'),get:d=>d.status,show:d=><Badge s={d.status}/>};
         return[
           {title:'Sales Quotations',items:pQ,w:[0.8,1,0.9,0.9],cols:[dateCol,noCol(tr('Quote No')),totalCol,statusCol]},
