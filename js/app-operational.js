@@ -1898,10 +1898,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
         {xfer&&xferDialog()}
         <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} multi
-          charge={{cats:chargeCats(),guess:guessCharge}} totals={docTotals(doc,items)} disc={doc.discOn?{def:doc.discRate}:null}/>
+          charge={{cats:chargeCats(),guess:guessCharge}} totals={docTotals(doc,items)} disc={doc.discOn?{def:doc.discRate}:null}
+          vat={isPQ&&doc.vatOn?{def:doc.vatRate}:null}/>
         <div className="vat-row">
           <label className="st-check"><input type="checkbox" checked={!!doc.discOn} onChange={e=>set('discOn',e.target.checked)}/><span>{tr("Apply discount")}</span></label>
           {doc.discOn&&<label className="vat-rate"><span>{tr("Default discount rate")}</span><input value={doc.discRate||''} onChange={e=>set('discRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
+          {/* VAT on received quotes only, per line like the sub-supplier documents; orders and invoices are without */}
+          {isPQ&&<label className="st-check"><input type="checkbox" checked={!!doc.vatOn} onChange={e=>set('vatOn',e.target.checked)}/><span>{tr("Apply VAT")}</span></label>}
+          {isPQ&&doc.vatOn&&<label className="vat-rate"><span>{tr("Default VAT rate")}</span><input value={doc.vatRate||''} onChange={e=>set('vatRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}
         </div>
       </div>
       {isGroupDoc(doc)&&(()=>{
