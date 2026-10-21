@@ -1626,6 +1626,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
     const isPQ=docType==='pq',isPO=docType==='po',isRI=docType==='ri';
+    // Lines of a received quote can be moved, unless its order still pairs lines by position (made before lines
+    // remembered the line they came from): moving them would pair them wrongly
+    const legacyOrder=isPQ&&!!doc.id&&(()=>{const o=purchaseOrders.find(x=>x.pqId===doc.id);return!!o&&legacyPair(doc,o);})();
     const lbl=isPQ?tr('Received Quote'):isPO?tr('Purchase Order'):tr('Received Invoice');
     const supplierLocked=(isPO&&!!doc.pqId)||(isRI&&!!doc.poId);
     const roStyle={background:'var(--g50)',color:'var(--g700)',cursor:'default'};
@@ -1900,7 +1903,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {xfer&&xferDialog()}
         <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'GBP'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} multi
           charge={{cats:chargeCats(),guess:guessCharge}} totals={docTotals(doc,items)} disc={doc.discOn?{def:doc.discRate}:null}
-          vat={isPQ&&doc.vatOn?{def:doc.vatRate}:null}/>
+          vat={isPQ&&doc.vatOn?{def:doc.vatRate}:null} reorder={isPQ&&!legacyOrder}/>
         <div className="vat-row">
           <label className="st-check"><input type="checkbox" checked={!!doc.discOn} onChange={e=>set('discOn',e.target.checked)}/><span>{tr("Apply discount")}</span></label>
           {doc.discOn&&<label className="vat-rate"><span>{tr("Default discount rate")}</span><input value={doc.discRate||''} onChange={e=>set('discRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0"/><span>%</span></label>}

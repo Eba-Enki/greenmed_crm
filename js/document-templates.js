@@ -1124,7 +1124,8 @@ const discLabel=t=>typeof t.discRate==='number'&&t.discRate>0?tr("Discount ({0}%
 // its Customer Item column then lists the expense categories instead of the customer items, since a charge is never
 // matched to a customer line. A line whose description reads like a charge becomes one by itself (kindAuto) until a
 // choice is made in that column.
-function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand,multi,charge}){
+// reorder: a grip at the start of each line moves it, by dragging or with Alt+↑ / Alt+↓
+function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand,multi,charge,reorder}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
   const addL=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
@@ -1140,6 +1141,30 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
     :mcol
     ?[['Item','11%'],['Description',Math.max(22-opt,12)+'%'],[mHead,'20%'],['Qty','7%'],['Unit','7%'],['Unit Price','11%'],...rates,['Total','10%'],['','4%']]
     :[['Item','13%'],['Description',(27-opt)+'%'],['Qty','8%'],['Unit','9%'],['Unit Price','12%'],...rates,['Total','11%'],['','4%']];
+  // Line moving: the line being dragged, and the line it would land before / after
+  const canMove=reorder&&!readOnly&&items.length>1;
+  const[drag,setDrag]=useState(null);
+  const[over,setOver]=useState(null); // {id, after}
+  const moveTo=(id,toIdx)=>{const from=items.findIndex(i=>i.id===id);if(from<0)return;const n=items.filter(i=>i.id!==id);n.splice(Math.max(0,Math.min(toIdx,n.length)),0,items[from]);setItems(n);};
+  const dropOn=(target,after)=>{
+    if(!drag||drag===target){setDrag(null);setOver(null);return;}
+    const rest=items.filter(i=>i.id!==drag);const t=rest.findIndex(i=>i.id===target);
+    moveTo(drag,t+(after?1:0));setDrag(null);setOver(null);
+  };
+  const gripKey=(e,it)=>{
+    if(!e.altKey||(e.key!=='ArrowUp'&&e.key!=='ArrowDown'))return;
+    e.preventDefault();
+    const i=items.findIndex(x=>x.id===it.id),j=i+(e.key==='ArrowUp'?-1:1);
+    if(j<0||j>=items.length)return;
+    moveTo(it.id,j);
+    const btn=e.currentTarget;setTimeout(()=>btn.focus(),0);
+  };
+  const rowDrag=it=>!canMove?{}:{
+    className:(drag===it.id?'ie-dragging ':'')+(over&&over.id===it.id&&drag!==it.id?(over.after?'ie-drop-after':'ie-drop-before'):''),
+    onDragOver:e=>{if(!drag)return;e.preventDefault();e.dataTransfer.dropEffect='move';const r=e.currentTarget.getBoundingClientRect(),after=e.clientY>r.top+r.height/2;
+      if(!over||over.id!==it.id||over.after!==after)setOver({id:it.id,after});},
+    onDrop:e=>{e.preventDefault();dropOn(it.id,over&&over.id===it.id?over.after:false);}
+  };
   const usedKeys=it=>items.reduce((m,x)=>{if(x.id!==it.id&&x.sqKey)m[x.sqKey]=(m[x.sqKey]||0)+1;return m;},{});
   const setDesc=(it,v)=>setItems(items.map(i=>{
     if(i.id!==it.id)return i;
@@ -1156,8 +1181,14 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
   return(<>
     <div className="iw">
       <table className="ie">
-        <thead><tr>{heads.map(([h,w],i)=><th key={i} style={{textAlign:['Qty','Unit Price','Disc. %','VAT %','Total'].includes(h)?'right':'left',width:w}}>{h&&tr(h)}</th>)}</tr></thead>
-        <tbody onKeyDown={readOnly?undefined:onLineEnter(items,setItems,()=>({id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}))}>{items.map(it=><tr key={it.id} data-line={it.id}>
+        <thead><tr>{canMove&&<th className="ie-grip-col"/>}{heads.map(([h,w],i)=><th key={i} style={{textAlign:['Qty','Unit Price','Disc. %','VAT %','Total'].includes(h)?'right':'left',width:w}}>{h&&tr(h)}</th>)}</tr></thead>
+        <tbody onKeyDown={readOnly?undefined:onLineEnter(items,setItems,()=>({id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}))}>{items.map(it=><tr key={it.id} data-line={it.id} {...rowDrag(it)}>
+          {canMove&&<td className="ie-grip-col">
+            <button type="button" className="ie-grip" draggable title={tr("Drag to move (Alt+↑ / Alt+↓)")} aria-label={tr("Move line")}
+              onDragStart={e=>{setDrag(it.id);e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',it.id);const tr_=e.currentTarget.closest('tr');if(tr_)e.dataTransfer.setDragImage(tr_,16,tr_.offsetHeight/2);}}
+              onDragEnd={()=>{setDrag(null);setOver(null);}} onKeyDown={e=>gripKey(e,it)}>
+              <svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true"><circle cx="3" cy="3" r="1.3"/><circle cx="7" cy="3" r="1.3"/><circle cx="3" cy="8" r="1.3"/><circle cx="7" cy="8" r="1.3"/><circle cx="3" cy="13" r="1.3"/><circle cx="7" cy="13" r="1.3"/></svg>
+            </button></td>}
           <td><input value={it.item||''} onChange={e=>si(it.id,'item',e.target.value)} placeholder={tr("Product...")} readOnly={readOnly}/></td>
           <td>{multi
             ?<LineText value={it.desc||''} onChange={e=>setDesc(it,e.target.value)} placeholder={tr("Description...")} readOnly={readOnly}/>
