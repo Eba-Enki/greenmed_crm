@@ -503,7 +503,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const q=doc.sqBase&&it.sqKey&&latestSQ(doc.sqBase);
     const i=q?(q.items||[]).findIndex(x=>sqItemKey(x)===it.sqKey):-1;
     const parts=[i>=0?`↳ ${sqLineText(q.items[i])} (${q.number} #${i+1})`:null,
-      it.srcSupplier?`${tr('Sub-supplier')}: ${it.srcSupplier}${it.srcDocNo?' · '+it.srcDocNo:''}${+it.srcPrice?' · '+(CURR[srcCur(doc)]||srcCur(doc))+fmt(+it.srcPrice):''}`:null].filter(Boolean);
+      it.srcSupplier?`${tr('Sub-supplier')}: ${it.srcSupplier}${it.srcDocNo?' · '+it.srcDocNo:''}${+it.srcPrice?' · '+(CURR[lineCur(doc,it)]||lineCur(doc,it))+fmt(+it.srcPrice):''}`:null].filter(Boolean);
     return parts.length?parts.join('   '):null;
   };
   // A converted document's lines remember the line they came from (srcId); older ones pair up by position
@@ -514,7 +514,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // source supplier details) changed on any of them is copied to the others. Works on the given lists and returns
   // them (unchanged arrays when nothing moved).
   const CHAIN_DOC_FIELDS=['sqBase','srcCurrency','fxRate','fxSource'];
-  const CHAIN_LINE_FIELDS=['sqKey','srcSupplier','srcDocNo','srcDocDate','srcPrice','fxRate','fxSource','kind','expCatId'];
+  const CHAIN_LINE_FIELDS=['sqKey','srcSupplier','srcDocNo','srcDocDate','srcPrice','srcCurrency','fxRate','fxSource','kind','expCatId'];
   const pickFields=(o,fields)=>fields.reduce((r,f)=>({...r,[f]:o[f]||''}),{});
   const syncMatchChain=(kind,saved,{pq,po,ri})=>{
     const put=(arr,d)=>{const old=arr.find(x=>x.id===d.id);return old&&JSON.stringify(old)===JSON.stringify(d)?arr:arr.map(x=>x.id===d.id?d:x);};
@@ -540,11 +540,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const normName=v=>(v||'').trim().toLowerCase();
   const isGroupDoc=d=>!!d&&customers.some(c=>c.groupCompany&&(c.type==='supplier'||c.type==='both')&&((d.supplierId&&c.id===d.supplierId)||(!!normName(c.company)&&normName(c.company)===normName(d.supplierCompany))));
   // fxRate is how many source-currency units one document-currency unit buys. A line transferred from a sub-supplier
-  // quote carries the rate of that quote's date (it.fxRate); typed lines, and lines transferred before rates were kept
-  // per line, use the document's rate
+  // quote carries that quote's currency (it.srcCurrency) and the rate of its date (it.fxRate), so one document can hold
+  // lines from quotes in different currencies; typed lines, and lines transferred before currency and rate were kept
+  // per line, use the document's currency and rate
   const srcCur=d=>d.srcCurrency||'TRY';
+  const lineCur=(d,it)=>(it&&it.srcCurrency)||srcCur(d);
   const lineFx=(d,it)=>+(it.fxRate||0)||+(d.fxRate||0);
-  const srcInDocCur=(d,it)=>{const v=+(it.srcPrice||0);if(!v)return null;if(srcCur(d)===(d.currency||'GBP'))return v;const r=lineFx(d,it);return r>0?v/r:null;};
+  const srcInDocCur=(d,it)=>{const v=+(it.srcPrice||0);if(!v)return null;if(lineCur(d,it)===(d.currency||'GBP'))return v;const r=lineFx(d,it);return r>0?v/r:null;};
   // ── SOURCE QUOTES / SOURCE INVOICES ──
   // The group company collects quotes from its own suppliers (one record each, matched to the customer's lines), then
   // quotes Green Med by transferring the chosen lines into a received quote. A source line is "pending" until a group
@@ -1662,14 +1664,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const xferQuotes=srcQuotes.filter(s=>(doc.sqBase?s.sqBase===doc.sqBase||(!s.sqBase&&!!doc.project&&s.project===doc.project):!doc.project||s.project===doc.project)
       &&(s.items||[]).some(xferOpen)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.number||'').localeCompare(a.number||''));
     const srcNet=(s,it)=>{const r=s.discOn?lineRate(it,'discRate',s.discRate):0;return Math.round(+(it.price||0)*(1-r/100)*10000)/10000;};
-    // TCMB banknote buying rate on each quote's date (a holiday takes the bulletin before). Unless overwrite, a rate
-    // already there (typed meanwhile, or kept from an earlier transfer) stays
-    const fetchXferRates=(quotes,cur,overwrite)=>{
+    const qCur=s=>s.currency||'TRY';
+    // TCMB banknote buying rate on each quote's date, in that quote's currency (a holiday takes the bulletin before).
+    // Unless overwrite, a rate already there (typed meanwhile, or kept from an earlier transfer) stays
+    const fetchXferRates=(quotes,overwrite)=>{
       const dc=doc.currency||'GBP';
-      if(cur===dc)return;
-      quotes.forEach(s=>{
+      quotes.filter(s=>qCur(s)!==dc).forEach(s=>{
         setXfer(v=>v&&{...v,busy:{...v.busy,[s.id]:true},errs:{...v.errs,[s.id]:''}});
-        tcmbRate(s.date||doc.date,dc,cur)
+        tcmbRate(s.date||doc.date,dc,qCur(s))
           .then(r=>setXfer(v=>v&&{...v,busy:{...v.busy,[s.id]:false},rates:overwrite||!(+((v.rates||{})[s.id]||{}).rate>0)?{...v.rates,[s.id]:{rate:String(r.rate),src:{date:r.date,kind:'banknoteBuying'}}}:v.rates}))
           .catch(e=>setXfer(v=>v&&{...v,busy:{...v.busy,[s.id]:false},errs:{...v.errs,[s.id]:e.message}}));
       });
@@ -1681,12 +1683,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const xferDialog=()=>{
       const x=xfer,dc=doc.currency||'GBP';
       const chosenQ=xferQuotes.filter(s=>x.quotes.has(s.id));
-      // Quotes that can join the transfer: the currency of what is already transferred (or of the first quote ticked)
-      // and the sales quotation of this quote (or of the first quote ticked)
-      const lockCur=items.some(i=>i.srcq)?srcCur(doc):chosenQ[0]&&(chosenQ[0].currency||'TRY');
+      // Quotes that can join the transfer: those for the sales quotation of this quote (or of the first quote ticked).
+      // Their currencies may differ: each quote is converted at its own rate
       const base=doc.sqBase||(chosenQ.find(s=>s.sqBase)||{}).sqBase||'';
-      const blocked=s=>lockCur&&(s.currency||'TRY')!==lockCur?tr("In {0} — one currency per transfer",s.currency||'TRY')
-        :base&&s.sqBase&&s.sqBase!==base?tr("For another sales quotation"):null;
+      const blocked=s=>base&&s.sqBase&&s.sqBase!==base?tr("For another sales quotation"):null;
       const sq=latestSQ(base);
       const close=()=>setXfer(null);
       const head=<div className="mt-dialog-h">
@@ -1697,13 +1697,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const toggleQ=s=>setXfer(v=>{const n=new Set(v.quotes);if(n.has(s.id))n.delete(s.id);else n.add(s.id);return{...v,quotes:n};});
         const next=()=>{
           // Lines already in this quote stay ticked; a quote not used yet starts with all its open lines ticked
-          const cur=lockCur||'TRY';
           const sel=new Set(chosenQ.flatMap(s=>{const open=(s.items||[]).filter(xferOpen);const prev=open.filter(it=>xferIds.has(it.id));return(prev.length?prev:open).map(it=>it.id);}));
           // Each quote's rate: one typed earlier in this dialog, else the one its transferred lines keep, else TCMB's
-          const kept=s=>{const i=items.find(l=>l.srcq&&l.srcq.qid===s.id);return i&&cur===srcCur(doc)&&lineFx(doc,i)>0?{rate:String(lineFx(doc,i)),src:+i.fxRate?i.fxSource||null:doc.fxSource||null}:null;};
-          const rates=Object.fromEntries(chosenQ.map(s=>[s.id,x.cur===cur&&x.rates&&x.rates[s.id]&&+x.rates[s.id].rate>0?x.rates[s.id]:kept(s)]).filter(([,r])=>r));
-          setXfer(v=>({...v,step:'lines',sel,cur,rates,busy:{},errs:{}}));
-          fetchXferRates(chosenQ.filter(s=>!rates[s.id]),cur,false);
+          const kept=s=>{const i=items.find(l=>l.srcq&&l.srcq.qid===s.id);return i&&lineCur(doc,i)===qCur(s)&&lineFx(doc,i)>0?{rate:String(lineFx(doc,i)),src:+i.fxRate?i.fxSource||null:doc.fxSource||null}:null;};
+          const rates=Object.fromEntries(chosenQ.map(s=>[s.id,x.rates&&x.rates[s.id]&&+x.rates[s.id].rate>0?x.rates[s.id]:kept(s)]).filter(([,r])=>r));
+          setXfer(v=>({...v,step:'lines',sel,rates,busy:{},errs:{}}));
+          fetchXferRates(chosenQ.filter(s=>!rates[s.id]),false);
         };
         return(<div className="mt-overlay" onClick={close}>
           <div className="mt-dialog mt-dialog-lg" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
@@ -1735,9 +1734,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       }
       // Step 2: lines of the chosen quotes
       // Unit price in the document currency at a rate, with the markup; a quote's lines use that quote's rate
-      const convAt=(v,rate)=>{v=+v||0;if(!v)return null;const c=x.cur===dc?v:(+rate>0?v/+rate:null);return c==null?null:Math.round(c*(1+(+x.markup||0)/100)*100)/100;};
+      const convAt=(v,rate,cur)=>{v=+v||0;if(!v)return null;const c=cur===dc?v:(+rate>0?v/+rate:null);return c==null?null:Math.round(c*(1+(+x.markup||0)/100)*100)/100;};
       const rateOf=s=>((x.rates||{})[s.id]||{}).rate;
-      const conv=(s,v)=>convAt(v,rateOf(s));
+      const conv=(s,v)=>convAt(v,rateOf(s),qCur(s));
+      const foreign=chosenQ.some(s=>qCur(s)!==dc);
       const str=v=>v==null?'':String(v);
       const groups=chosenQ.map(s=>({s,lines:(s.items||[]).filter(it=>(it.desc||it.item)&&!isCharge(it))}));
       const pickable=groups.flatMap(g=>g.lines.filter(xferOpen).map(it=>({s:g.s,it})));
@@ -1748,8 +1748,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const custNo=key=>{const i=sq?(sq.items||[]).findIndex(c=>sqItemKey(c)===key):-1;return i<0?null:{n:i+1,text:sqLineText(sq.items[i])};};
       const rivals=(s,it)=>!it.sqKey||!base?[]:srcQuotes.filter(o=>o.id!==s.id&&o.sqBase===base&&(o.items||[]).some(l=>l.sqKey===it.sqKey&&xferOpen(l)))
         .map(o=>({o,on:(o.items||[]).some(l=>l.sqKey===it.sqKey&&x.sel.has(l.id)&&x.quotes.has(o.id))}));
-      const needRate=x.cur!==dc&&chosenQ.some(s=>!(+rateOf(s)>0)&&ticked.some(o=>o.s===s));
-      const srcSum=ticked.reduce((t,o)=>t+(+o.it.qty||0)*srcNet(o.s,o.it),0);
+      const needRate=chosenQ.some(s=>qCur(s)!==dc&&!(+rateOf(s)>0)&&ticked.some(o=>o.s===s));
+      const srcSums=curTotals(ticked.map(o=>[qCur(o.s),(+o.it.qty||0)*srcNet(o.s,o.it)]));
       const docSum=ticked.reduce((t,o)=>{const v=conv(o.s,srcNet(o.s,o.it));return t==null||v==null?null:t+(+o.it.qty||0)*v;},0);
       const chosenIds=new Set(chosenQ.map(s=>s.id));
       const removing=items.some(i=>i.srcq&&chosenIds.has(i.srcq.qid)&&!x.sel.has(i.srcq.lineId));
@@ -1757,26 +1757,27 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const rateCtl=s=>{const r=(x.rates||{})[s.id]||{},busy=(x.busy||{})[s.id],err=(x.errs||{})[s.id];return(
         <div className="xf-rate" onClick={e=>e.stopPropagation()}>
           <span>1 {dc} =</span>
-          <input className="fi" type="number" min="0" step="0.0001" value={r.rate||''} placeholder={busy?'…':'0.0000'} aria-label={tr("Exchange Rate: 1 {0} = ? {1}",dc,x.cur)}
+          <input className="fi" type="number" min="0" step="0.0001" value={r.rate||''} placeholder={busy?'…':'0.0000'} aria-label={tr("Exchange Rate: 1 {0} = ? {1}",dc,qCur(s))}
             onChange={e=>{const v=e.target.value;setXfer(o=>({...o,rates:{...o.rates,[s.id]:{rate:v,src:null}}}));}}/>
-          <span>{x.cur}</span>
+          <span>{qCur(s)}</span>
           <div className="xf-rate-n">{busy?tr('Fetching…'):err?<span className="xf-why">{err}</span>:r.src&&r.src.date?tr('TCMB · {0} · banknote buying',fmtD(r.src.date)):r.rate?tr('Typed'):''}</div>
         </div>);};
       const apply=()=>{
         const mk=(s,it,p)=>{const net=srcNet(s,it);return{...(p||{}),id:(p&&p.id)||uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty:it.qty,unit:it.unit||'',
-          price:str(conv(s,net)),fxRate:x.cur===dc?'':String(rateOf(s)||''),fxSource:x.cur===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
+          price:str(conv(s,net)),srcCurrency:qCur(s),fxRate:qCur(s)===dc?'':String(rateOf(s)||''),fxSource:qCur(s)===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
         const byId=Object.fromEntries(pickable.map(o=>[o.it.id,o]));
         const next=[];
         items.forEach(i=>{
           if(!i.srcq){if(i.desc||i.item||+i.price)next.push(i);return;}
-          if(chosenIds.has(i.srcq.qid)){const o=byId[i.srcq.lineId];if(!o)next.push(i);else if(x.sel.has(o.it.id))next.push(mk(o.s,o.it,i));return;}
-          next.push({...i,price:str(convAt(i.srcPrice,lineFx(doc,i)))}); // another quote's line: its own rate, the new markup
+          // Lines transferred before currencies were kept per line get the document's currency written on them
+          if(chosenIds.has(i.srcq.qid)){const o=byId[i.srcq.lineId];if(!o)next.push({...i,srcCurrency:lineCur(doc,i)});else if(x.sel.has(o.it.id))next.push(mk(o.s,o.it,i));return;}
+          next.push({...i,srcCurrency:lineCur(doc,i),price:str(convAt(i.srcPrice,lineFx(doc,i),lineCur(doc,i)))}); // another quote's line: its own rate, the new markup
         });
         ticked.filter(o=>!xferIds.has(o.it.id)).forEach(o=>next.push(mk(o.s,o.it)));
         setItems(next.length?next:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
         const fromQ=chosenQ.find(s=>s.project);
         const proj=fromQ&&projects.find(p=>p.name===fromQ.project);
-        setDoc(d=>({...d,srcCurrency:x.cur,markup:x.markup,...(base&&!d.sqBase?{sqBase:base}:{}),
+        setDoc(d=>({...d,markup:x.markup,...(base&&!d.sqBase?{sqBase:base}:{}),
           ...(!d.project&&fromQ?{project:fromQ.project,projectNumber:(proj&&proj.number)||fromQ.projectNumber||''}:{})}));
         close();
       };
@@ -1785,11 +1786,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           {head}
           <div className="mt-dialog-b">
             <div className="fg g3">
-              <Fld label={tr("Sub-supplier Currency")}><input className="fi" value={`${x.cur} (${CURR[x.cur]||''})`} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/></Fld>
+              <Fld label={tr("Sub-supplier Currency")}><input className="fi" value={[...new Set(chosenQ.map(qCur))].map(c=>`${c} (${CURR[c]||''})`).join(', ')} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/></Fld>
               <Fld label={tr("Markup %")}><input className="fi" type="number" step="0.01" value={x.markup} onChange={e=>{const m=e.target.value;setXfer(v=>({...v,markup:m}));}} placeholder="0"/></Fld>
-              {x.cur!==dc?<Fld label={tr("Exchange Rates")}><Btn v="bgh bsm" type="button" disabled={Object.values(x.busy||{}).some(Boolean)} onClick={()=>fetchXferRates(chosenQ,x.cur,true)}>{tr("Refresh TCMB rates")}</Btn></Fld>:<div/>}
+              {foreign?<Fld label={tr("Exchange Rates")}><Btn v="bgh bsm" type="button" disabled={Object.values(x.busy||{}).some(Boolean)} onClick={()=>fetchXferRates(chosenQ,true)}>{tr("Refresh TCMB rates")}</Btn></Fld>:<div/>}
             </div>
-            <div className="xf-note">{x.cur!==dc?tr("Each sub-supplier quote is converted at the TCMB banknote buying rate of its date; a rate can be typed over. The markup applies to every transferred line of this quote."):tr("The markup applies to every transferred line of this quote.")}</div>
+            <div className="xf-note">{foreign?tr("Each sub-supplier quote is converted at the TCMB banknote buying rate of its date; a rate can be typed over. The markup applies to every transferred line of this quote."):tr("The markup applies to every transferred line of this quote.")}</div>
             <table className="xf-tbl">
               <thead><tr>
                 <th style={{width:32}}><input type="checkbox" checked={allOn} ref={el=>{if(el)el.indeterminate=!allOn&&ticked.length>0;}} disabled={!pickable.length} onChange={()=>setSel(pickable.map(o=>o.it.id),!allOn)} aria-label={tr("Select all")}/></th>
@@ -1798,7 +1799,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               {groups.map(({s,lines})=>{const open=lines.filter(xferOpen).map(it=>it.id),gOn=open.length>0&&open.every(id=>x.sel.has(id));return(<tbody key={s.id}>
                 <tr className="xf-grp" onClick={()=>open.length&&setSel(open,!gOn)}>
                   <td><input type="checkbox" checked={gOn} ref={el=>{if(el)el.indeterminate=!gOn&&open.some(id=>x.sel.has(id));}} disabled={!open.length} onChange={()=>setSel(open,!gOn)} onClick={e=>e.stopPropagation()} aria-label={s.number||s.supplierCompany}/></td>
-                  <td colSpan={5}><div className="xf-grp-h"><div><span className="mt-chip">{s.number||'—'}</span> <b>{s.supplierCompany||'—'}</b> <span className="xf-sub">· {fmtD(s.date)} · {tr("{0} of {1} ticked",open.filter(id=>x.sel.has(id)).length,open.length)}</span></div>{x.cur!==dc&&rateCtl(s)}</div></td>
+                  <td colSpan={5}><div className="xf-grp-h"><div><span className="mt-chip">{s.number||'—'}</span> <b>{s.supplierCompany||'—'}</b> <span className="xf-sub">· {fmtD(s.date)} · {tr("{0} of {1} ticked",open.filter(id=>x.sel.has(id)).length,open.length)}</span></div>{qCur(s)!==dc&&rateCtl(s)}</div></td>
                 </tr>
                 {lines.map(it=>{const ok=xferOpen(it),on=x.sel.has(it.id),net=srcNet(s,it),v=conv(s,net),c=it.sqKey&&base&&s.sqBase===base?custNo(it.sqKey):null,rv=ok?rivals(s,it):[];
                   const disc=s.discOn?lineRate(it,'discRate',s.discRate):0;
@@ -1818,7 +1819,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
           <div className="mt-dialog-f">
             <span className="xf-sum">{needRate?<span className="mt-none">{tr("Enter the exchange rate")}</span>
-              :<>{tr("{0} line(s)",ticked.length)} · {CURR[x.cur]||''}{fmt(srcSum)}{docSum!=null&&x.cur!==dc&&<> → {CURR[dc]||''}{fmt(docSum)}</>}</>}</span>
+              :<>{tr("{0} line(s)",ticked.length)} · {fmtCurTotals(srcSums,(CURR[dc]||'')+fmt(0))}{docSum!=null&&Object.keys(srcSums).some(c=>c!==dc)&&<> → {CURR[dc]||''}{fmt(docSum)}</>}</>}</span>
             <Btn v="bgh bsm" onClick={()=>setXfer(v=>({...v,step:'quotes'}))}>← {tr("Quotes")}</Btn>
             <Btn v="bp bsm" disabled={needRate||(!ticked.length&&!removing)} onClick={apply}>{tr("Transfer {0} item(s)",ticked.length)}</Btn>
           </div>
@@ -1915,7 +1916,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const anyXfer=items.some(i=>i.srcq);
         // The document's rate is for typed lines (and lines transferred before rates were kept per line); it is taken on
         // their sub-supplier documents' date when there is one (the latest), else on this document's
-        const docRateUsed=!anyXfer||items.some(i=>i.srcq?!(+i.fxRate>0):(i.desc||i.item||+i.srcPrice));
+        const lc=it=>lineCur(doc,it);
+        const docRateUsed=!anyXfer||items.some(i=>i.srcq?lc(i)===sc&&!(+i.fxRate>0):(i.desc||i.item||+i.srcPrice));
+        // Columns: a rate when any line is in another currency than the document; the price header names the currency
+        // when all lines share one
+        const anyForeign=items.some(i=>lc(i)!==dc);
+        const lineCurs=[...new Set(items.map(lc))];
         const srcDates=items.filter(i=>!i.srcq).map(i=>i.srcDocDate).filter(Boolean).sort();
         const rateDate=srcDates.length?srcDates[srcDates.length-1]:doc.date;
         return(<div className="fc"><div className="fct" style={{display:'flex',alignItems:'center',gap:8}}>{tr("Sub-supplier")}<span className="mt-internal">{tr("internal — not printed")}</span></div>
@@ -1924,7 +1930,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             ?tr("Transferred lines come from the sub-supplier quotes, each at the rate of its quote's date — edit the sub-supplier quote to change them. The rates are used for the margins.")
             :tr("Who sold each item to {0}, at what price.",doc.supplierCompany||tr('the group company'))}</div>
           <div className="fg g3">
-            <Fld label={tr("Sub-supplier Currency")}>{anyXfer?<input className="fi" value={`${sc} (${CURR[sc]||''})`} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/>
+            <Fld label={tr("Sub-supplier Currency")}>{anyXfer?<input className="fi" value={lineCurs.map(c=>`${c} (${CURR[c]||''})`).join(', ')} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/>
               :<select value={sc} onChange={e=>set('srcCurrency',e.target.value)} className="fi">{Object.entries(CURR).map(([c,s])=><option key={c} value={c}>{c} ({s})</option>)}</select>}</Fld>
             {sc!==dc&&docRateUsed?<Fld label={anyXfer?tr("Rate for typed lines: 1 {0} = ? {1}",dc,sc):tr("Exchange Rate: 1 {0} = ? {1}",dc,sc)}><div className="rate-row">
               <input type="number" min="0" step="0.0001" value={doc.fxRate||''} onChange={e=>{set('fxRate',e.target.value);set('fxSource',null);}} className="fi" placeholder="0.0000"/>
@@ -1934,7 +1940,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
           <datalist id="src-suppliers">{srcNames.map(n=><option key={n} value={n}/>)}</datalist>
           <div className="iw" style={{marginTop:12}}><table className="ie">
-            <thead><tr><th style={{width:'4%'}}>#</th><th style={{width:'23%'}}>{tr("Line")}</th><th style={{width:'19%'}}>{tr("Sub-supplier")}</th><th style={{width:'13%'}}>{tr("Sub-supplier Doc No")}</th><th style={{width:'11%'}}>{tr("Date")}</th><th style={{width:'11%',textAlign:'right'}}>{tr("Unit Price")} ({sc})</th>{sc!==dc&&<th style={{width:'10%',textAlign:'right'}}>{tr("Rate")}</th>}<th style={{width:'9%',textAlign:'right'}}>= {dc}</th></tr></thead>
+            <thead><tr><th style={{width:'4%'}}>#</th><th style={{width:'23%'}}>{tr("Line")}</th><th style={{width:'19%'}}>{tr("Sub-supplier")}</th><th style={{width:'13%'}}>{tr("Sub-supplier Doc No")}</th><th style={{width:'11%'}}>{tr("Date")}</th><th style={{width:'11%',textAlign:'right'}}>{tr("Unit Price")}{lineCurs.length===1?` (${lineCurs[0]})`:''}</th>{anyForeign&&<th style={{width:'10%',textAlign:'right'}}>{tr("Rate")}</th>}<th style={{width:'9%',textAlign:'right'}}>= {dc}</th></tr></thead>
             <tbody>{items.map((it,i)=>{const conv=srcInDocCur({...doc,srcCurrency:sc},it);return(<tr key={it.id}>
               <td style={{color:'var(--g500)',paddingLeft:8}}>{i+1}</td>
               <td style={{color:'var(--g700)',fontSize:12,padding:'0 8px'}}>{it.desc||it.item||'—'}</td>
@@ -1942,14 +1948,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                 <td className="src-ro">{it.srcSupplier||'—'}</td>
                 <td className="src-ro">{it.srcDocNo||'—'} <span className="mt-tag ok">{tr("from sub-supplier quote")}</span></td>
                 <td className="src-ro">{fmtD(it.srcDocDate)||'—'}</td>
-                <td className="src-ro" style={{textAlign:'right'}}>{fmt(+(it.srcPrice||0))}</td>
+                <td className="src-ro" style={{textAlign:'right'}}>{lineCurs.length>1&&(CURR[lc(it)]||lc(it))}{fmt(+(it.srcPrice||0))}</td>
               </>:<>
               <td><input list="src-suppliers" value={it.srcSupplier||''} onChange={e=>setLine(it.id,'srcSupplier',e.target.value)} placeholder={tr("Sub-supplier...")}/></td>
               <td><input value={it.srcDocNo||''} onChange={e=>setLine(it.id,'srcDocNo',e.target.value)} placeholder={tr("Quote / invoice no")}/></td>
               <td><input type="date" value={it.srcDocDate||''} onChange={e=>setLine(it.id,'srcDocDate',e.target.value)}/></td>
               <td><input type="number" min="0" step=".01" value={it.srcPrice||''} onChange={e=>setLine(it.id,'srcPrice',e.target.value)} placeholder="0.00" style={{textAlign:'right'}}/></td>
               </>}
-              {sc!==dc&&<td className="src-ro" style={{textAlign:'right'}}>{(()=>{const r=lineFx(doc,it),own=+it.fxRate>0,src=own?it.fxSource:doc.fxSource;return r>0?<>{r}<div className="mt-pct">{src&&src.date?'TCMB '+fmtD(src.date):own?tr('Typed'):tr('Document rate')}</div></>:<span style={{color:'var(--g300)'}}>—</span>;})()}</td>}
+              {anyForeign&&<td className="src-ro" style={{textAlign:'right'}}>{lc(it)===dc?<span style={{color:'var(--g300)'}}>—</span>:(()=>{const r=lineFx(doc,it),own=+it.fxRate>0,src=own?it.fxSource:doc.fxSource;return r>0?<>{r}<div className="mt-pct">{src&&src.date?'TCMB '+fmtD(src.date):own?tr('Typed'):tr('Document rate')}</div></>:<span style={{color:'var(--g300)'}}>—</span>;})()}</td>}
               <td className="lt" style={{color:conv==null?'var(--g300)':undefined}}>{conv==null?(+it.srcPrice?tr("rate?"):'—'):(CURR[dc]||'')+fmt(conv)}</td>
             </tr>);})}</tbody>
           </table></div>
@@ -2715,11 +2721,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const rows=groups.flatMap(({q,rows})=>rows.filter(visible).map(r=>{
           const e=lineEconomics(q,r);const L=r.lines;const join=fn=>L.map(fn).filter(Boolean).join('; ');
           const grp=L.filter(({c})=>isGroupDoc(c.lead));
-          const srcTot=grp.length&&grp.every(({c,it})=>+it.srcPrice)?grp.reduce((s,{it})=>s+(+(it.qty||0))*(+it.srcPrice),0):null;
+          const srcCurs=[...new Set(grp.map(({c,it})=>lineCur(c.lead,it)))];
+          const srcTot=grp.length&&srcCurs.length===1&&grp.every(({c,it})=>+it.srcPrice)?grp.reduce((s,{it})=>s+(+(it.qty||0))*(+it.srcPrice),0):null;
           const srcConv=grp.length?grp.reduce((s,{c,it})=>{const u=srcInDocCur(c.lead,it);return s==null||u==null?null:s+(+(it.qty||0))*u;},0):null;
           const sh=fn=>join(({c})=>c.po&&c.po.shipment&&c.po.shipment[fn]);
           return[q.number,r.i+1,sqLineText(r.it),+(r.it.qty||0),r.it.unit||'',q.currency||'GBP',num(e.sale),join(({c})=>c.lead.supplierCompany),num(e.buy),
-            join(({it})=>it.srcSupplier),join(({it})=>it.srcDocNo),join(({it})=>{const inv=it.srcq&&srcInvoiceOf(it.srcq.lineId);return inv&&inv.number;}),grp.length?srcCur(grp[0].c.lead):'',num(srcTot),num(srcConv),num(e.gm),num(e.co),num(e.group),
+            join(({it})=>it.srcSupplier),join(({it})=>it.srcDocNo),join(({it})=>{const inv=it.srcq&&srcInvoiceOf(it.srcq.lineId);return inv&&inv.number;}),srcCurs.join('; '),num(srcTot),num(srcConv),num(e.gm),num(e.co),num(e.group),
             sh('date'),sh('incoterm'),sh('carrier'),sh('awb'),sh('gcb')];
         }));
         exportExcel([head,...rows],`supply-chain-${slug}`);return;
@@ -2767,7 +2774,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <td>{r.lines.map(({c,it:s})=>{if(!isGroupDoc(c.lead))return <div key={c.lead.id+s.id} className="mt-cell" style={{color:'var(--g400)'}}>{tr("direct purchase")}</div>;
                 const u=srcInDocCur(c.lead,s);return(<div key={c.lead.id+s.id} className="mt-cell">
                   {s.srcSupplier?<b>{s.srcSupplier}</b>:<span className="mt-none">{tr("Sub-supplier missing")}</span>}{s.srcDocNo&&<span style={{color:'var(--g500)'}}> · {s.srcDocNo}</span>}{(()=>{const inv=s.srcq&&srcInvoiceOf(s.srcq.lineId);return inv&&<span style={{color:'var(--g500)'}}> · {tr('Invoice {0}',inv.number)}</span>;})()}
-                  <div>{+s.srcPrice?<>{CURR[srcCur(c.lead)]||''}{fmt(+(s.qty||0)*+s.srcPrice)}{u!=null&&srcCur(c.lead)!==(c.lead.currency||'GBP')&&<span style={{color:'var(--g500)'}}> ≈ {CURR[c.lead.currency]||''}{fmt(+(s.qty||0)*u)}</span>}{u==null&&<span className="mt-none"> · {tr("rate missing")}</span>}</>:<span style={{color:'var(--g300)'}}>—</span>}</div></div>);})}</td>
+                  <div>{+s.srcPrice?<>{CURR[lineCur(c.lead,s)]||''}{fmt(+(s.qty||0)*+s.srcPrice)}{u!=null&&lineCur(c.lead,s)!==(c.lead.currency||'GBP')&&<span style={{color:'var(--g500)'}}> ≈ {CURR[c.lead.currency]||''}{fmt(+(s.qty||0)*u)}</span>}{u==null&&<span className="mt-none"> · {tr("rate missing")}</span>}</>:<span style={{color:'var(--g300)'}}>—</span>}</div></div>);})}</td>
               <td className="tar" title={e.otherCur?tr('Invoiced in another currency'):''}>{marginCell(qc,e.gm,e.sale)}</td>
               <td className="tar">{e.hasGroup?marginCell(qc,e.co,e.sale):money(qc,null)}</td>
               <td className="tar">{marginCell(qc,e.group,e.sale)}</td>
