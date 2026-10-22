@@ -129,6 +129,7 @@ const apiCall=async(path,opts={})=>{
 // TCMB banknote buying rate ("efektif alış") on a date, as 1 `from` = ? `to` (Sales & Procurement portal only).
 // TCMB quotes everything in lira, so a cross rate is from's lira ÷ to's lira; api/rates.php falls back to the latest
 // bulletin before the date (weekends, holidays). Resolves {rate, date: the bulletin used}. Bulletins are kept per day.
+// A rate below 1 (lira into pounds…) keeps 6 significant digits, as 4 decimals would round 0.023838 to 0.0238.
 const tcmbBulletins={};
 const tcmbRate=async(date,from,to)=>{
   const day=date||td();
@@ -137,7 +138,8 @@ const tcmbRate=async(date,from,to)=>{
   const lira=c=>{if(c==='TRY')return 1;const x=r.rates&&r.rates[c];return x&&x.banknoteBuying?x.banknoteBuying/(x.unit||1):null;};
   const a=lira(from),z=lira(to);
   if(a==null||z==null)throw new Error(tr('TCMB has no banknote buying rate for {0}',a==null?from:to));
-  return{rate:Math.round(a/z*10000)/10000,date:r.date};
+  const x=a/z;
+  return{rate:x>=1?Math.round(x*10000)/10000:+x.toPrecision(6),date:r.date};
 };
 // Button next to a rate field: fills it with the TCMB rate of `date`; onRate({rate,date})
 function TcmbButton({date,from,to,onRate}){

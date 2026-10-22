@@ -367,14 +367,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Expense category for a description that reads like a charge ('' when its category is missing), undefined otherwise
   const guessCharge=desc=>{const g=CHARGE_GUESS.find(([re])=>re.test(desc||''));if(!g)return undefined;const c=expCats.find(x=>(x.name||'').toLocaleLowerCase('tr')===g[1].toLocaleLowerCase('tr'));return c?c.id:'';};
   const chargeCats=()=>expCatTree(expCats).map(({c,depth})=>({id:c.id,label:(depth?'\u00a0\u00a0\u00a0':'')+expCatLabel(c)}));
-  // The charge lines of the received invoices and of the sub-supplier invoices as expense rows, listed with the
-  // expenses entered by hand. They live on the invoice, so they are changed there (fromInvoice; riId or srcInvId).
-  // Sub-supplier charges are booked here only: the group company does not bill them on to us, so they are never
-  // transferred into a received quote.
+  // The charge lines of the received invoices as expense rows, listed with the expenses entered by hand. They live on
+  // the invoice, so they are changed there (fromInvoice; riId). The sub-supplier charges are not Green Med's own
+  // expenses: they are the project's indirect costs (srcCharges) and stay out of the Expenses list.
   const chargeRows=(docs,key,label,cur)=>docs.flatMap(d=>(d.items||[]).filter(isCharge).map(i=>({id:key+':'+d.id+':'+i.id,[key==='ri'?'riId':'srcInvId']:d.id,fromInvoice:true,
     date:d.date||'',currency:d.currency||cur,amount:lineGross(d,i),description:i.desc||i.item||'',categoryId:i.expCatId||'',category:i.expCatId?'':tr('Charge'),
     project:d.project||'',employee:'',reference:d.number||'',src:label+' '+(d.number||'')+(d.supplierCompany?' · '+d.supplierCompany:'')})));
-  const invoiceCharges=[...chargeRows(receivedInvoices,'ri',tr('Received invoice'),'GBP'),...chargeRows(srcInvoices,'si',tr('Sub-supplier Invoice'),'TRY')];
+  const invoiceCharges=chargeRows(receivedInvoices,'ri',tr('Received invoice'),'GBP');
 
   // ── PRICE RECORDS ──
   // Every priced quotation line, for a product's price history: sent quotations, once each with their current
@@ -558,6 +557,17 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const srcLineState=it=>it.status||'pending';
   const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>(i.desc||i.item)&&!isCharge(i)).map(srcLineState);
     if(!s.length||s.every(x=>x==='pending'))return'pending';if(s.every(x=>x==='unused'))return'unused';if(s.includes('pending'))return'partial';return'quoted';};
+  // ── SUB-SUPPLIER INDIRECT COSTS ──
+  // Freight, packing… the group company pays its suppliers and does not bill on (its small markup goes to its own
+  // running costs) are still what the project costs: the project shows them as indirect costs, never the Expenses
+  // list. A sub-supplier invoice gives the actual charges; without one (they are rarely entered) a quote's charges
+  // count once it is (partly) quoted, are only expected while it is still to be quoted, and an unused quote's are left out.
+  // Sub-supplier invoices are hardly entered, so their menu is hidden; records already there still count.
+  const SHOW_SRC_INVOICES=false;
+  const srcCharges=[
+    ...chargeRows(srcInvoices,'si',tr('Sub-supplier Invoice'),'TRY'),
+    ...srcQuotes.filter(q=>!srcInvoices.some(v=>v.srcqId===q.id)).flatMap(q=>{const st=srcQuoteState(q);
+      return st==='unused'?[]:chargeRows([q],'sq',tr('Sub-supplier Quote'),'TRY').map(r=>({...r,srcInvId:undefined,srcqId:q.id,expected:st==='pending'}));})];
   const SRC_STATE={pending:['To be quoted',''],partial:['Partly quoted',''],quoted:['Quoted','ok'],unused:['Not used','off']};
   const SrcBadge=({s})=><span className={'mt-state '+SRC_STATE[s][1]}>{tr(SRC_STATE[s][0])}</span>;
   // Invoice of a source line, if one was recorded
@@ -2095,7 +2105,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {quickView&&<DocQuickModal doc={quickView} co={co} docType={isQ?'src_quote':'src_invoice'} noPdf itemNote={lineNote(quickView)} onClose={()=>setQuickView(null)}
         onEdit={()=>{setQuickView(null);setCur(quickView);go(isQ?'source_quotes_form':'source_invoices_form');}}
         onDelete={()=>del(quickView)}
-        extraActions={isQ?[{label:tr('Create Sub-supplier Invoice'),onClick:()=>{setQuickView(null);setCur(mkSrcInvoice(quickView));go('source_invoices_form');}}]:[]}/>}
+        extraActions={isQ&&SHOW_SRC_INVOICES?[{label:tr('Create Sub-supplier Invoice'),onClick:()=>{setQuickView(null);setCur(mkSrcInvoice(quickView));go('source_invoices_form');}}]:[]}/>}
     </div>);
   }
 
@@ -2758,7 +2768,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>)}
         {/* Charges on the supplier documents belong to no customer line, so the margins above leave them out */}
         {(()=>{const t=curTotals(chains.flatMap(c=>(c.lead.items||[]).filter(isCharge).map(i=>[c.lead.currency,lineGross(c.lead,i)])));
-          return Object.keys(t).length>0&&<div className="mt-sum-note" style={{marginBottom:16}}>{tr("Supplier charges (packing, freight…), not included in the margins: {0}",fmtCurTotals(t))}</div>;})()}
+          const ind=curTotals(srcCharges.filter(e=>e.project===project.name&&!e.expected).map(e=>[e.currency,e.amount]));
+          return(Object.keys(t).length>0||Object.keys(ind).length>0)&&<div className="mt-sum-note" style={{marginBottom:16}}>
+            {Object.keys(t).length>0&&<div>{tr("Supplier charges (packing, freight…), not included in the margins: {0}",fmtCurTotals(t))}</div>}
+            {Object.keys(ind).length>0&&<div>{tr("Sub-supplier indirect costs (paid by the group company), not included in the margins: {0}",fmtCurTotals(ind))}</div>}</div>;})()}
         {groups.map(({q,base,rows})=>{const qc=q.currency||'GBP';const shown=rows.filter(visible);return(<div key={base} style={{marginBottom:16}}>
           <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}>
             <div className="tcard-hdr-t">{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
@@ -2885,11 +2898,13 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // Everything is also shown in the project currency (its budget currency): each document at the TCMB banknote buying
     // rate of its own date (cross rates through the lira). Revenue is invoiced net of discount and VAT; costs are the
     // received invoices as billed, VAT included (VAT paid to a Turkish supplier is a cost for Green Med); expenses as entered,
-    // plus the charge lines of the received invoices (packing, freight…), which leave the costs for the expenses.
+    // plus the charge lines of the received invoices (packing, freight…), which leave the costs for the expenses, and the
+    // sub-supplier indirect costs (see srcCharges). The group company's markup stays in the costs and is noted under them.
     const pc=project.currency||'GBP';
     const[fx,setFx]=useState({}); // 'date|currency' → {rate,date} or {err}
     const fxKey=(cur,date)=>(date||td())+'|'+(cur||'GBP');
-    const docs=[...pQ,...pI,...pPO,...pRI].map(d=>[d.currency,d.date]).concat(pExp.map(e=>[e.currency,e.date]));
+    const indirect=srcCharges.filter(e=>e.project===project.name);
+    const docs=[...pQ,...pI,...pPO,...pRI].map(d=>[d.currency,d.date]).concat([...pExp,...indirect].map(e=>[e.currency,e.date]));
     const need=[...new Set(docs.filter(([c])=>(c||'GBP')!==pc).map(([c,d])=>fxKey(c,d)))];
     useEffect(()=>{
       need.filter(k=>!fx[k]).forEach(k=>{const[date,cur]=k.split('|');
@@ -2904,27 +2919,36 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // Expense rows for the table: the expenses entered, then the invoice charges with the invoice they come from
     const expList=[...pExp.map(e=>({...e,amount:+(e.amount||0),src:''})),...charges];
     const expRows=expList.map(e=>[e.currency,e.date,e.amount]);
-    const rev=sumPc(revRows),cost=sumPc(costRows),exp=sumPc(expRows);
+    const indRows=indirect.filter(e=>!e.expected).map(e=>[e.currency,e.date,e.amount]);
+    const own=sumPc(expRows),ind=sumPc(indRows),indExp=sumPc(indirect.filter(e=>e.expected).map(e=>[e.currency,e.date,e.amount]));
+    // The group company's markup inside its invoices: what it billed for the goods less what its suppliers asked
+    const markRows=pRI.filter(isGroupDoc).flatMap(d=>(d.items||[]).filter(i=>!isCharge(i)).map(i=>{const u=srcInDocCur(d,i);
+      return u==null?null:[d.currency,d.date,lt(i)*(1-(d.discOn?lineRate(i,'discRate',d.discRate):0)/100)-(+i.qty||0)*u];}).filter(Boolean));
+    const mark=sumPc(markRows);
+    const rev=sumPc(revRows),cost=sumPc(costRows),exp=sumPc([...expRows,...indRows]);
     const net=rev.v-cost.v-exp.v,wait=rev.wait||cost.wait||exp.wait,miss=rev.miss+cost.miss+exp.miss;
     const P=v=>(v<0?'-':'')+(CURR[pc]||pc+' ')+fmt(Math.abs(v));
     const byCur=rows=>Object.keys(curTotals(rows.map(([c,,v])=>[c,v]))).length>1||rows.some(([c])=>(c||'GBP')!==pc)?fmtCurTotals(curTotals(rows.map(([c,,v])=>[c,v]))):null;
     const awaiting=pPO.filter(o=>!receivedInvoices.some(r=>r.poId===o.id)).length;
     // Expenses per category, in the project currency
-    const byCat=(()=>{const m={};expList.forEach(e=>{const x=toPc(e.currency,e.date,e.amount);if(x>0||x<0){const k=expCatText(expCats,e)||tr('Uncategorised');m[k]=(m[k]||0)+x;}});
-      const l=Object.entries(m).sort((a,b)=>b[1]-a[1]);return l.length>1||charges.length?l.map(([k,v])=>k+' '+P(v)).join(' · '):null;})();
+    const byCat=(()=>{const m={};[...expList,...indirect.filter(e=>!e.expected)].forEach(e=>{const x=toPc(e.currency,e.date,e.amount);if(x>0||x<0){const k=expCatText(expCats,e)||tr('Uncategorised');m[k]=(m[k]||0)+x;}});
+      const l=Object.entries(m).sort((a,b)=>b[1]-a[1]);return l.length>1||charges.length||indRows.length?l.map(([k,v])=>k+' '+P(v)).join(' · '):null;})();
     const cards=[
       {lbl:tr('Revenue'),s:rev,rows:revRows,sub:tr("{0} invoices",pI.length),cls:'sc-green'},
-      {lbl:tr('Costs'),s:cost,rows:costRows,sub:tr("{0} received invoices",pRI.length)+(awaiting?' · '+tr("{0} order(s) awaiting invoice",awaiting):''),cls:'sc-blue'},
-      {lbl:tr('Expenses'),s:exp,rows:expRows,sub:charges.length?tr("{0} expenses · {1} invoice charges",pExp.length,charges.length):tr("{0} items",pExp.length),extra:byCat,cls:'sc-purple'},
+      {lbl:tr('Costs'),s:cost,rows:costRows,sub:tr("{0} received invoices",pRI.length)+(awaiting?' · '+tr("{0} order(s) awaiting invoice",awaiting):''),
+        extra:markRows.length&&!mark.wait?tr("incl. group company markup {0}",P(mark.v)):null,cls:'sc-blue'},
+      {lbl:tr('Expenses'),s:exp,rows:[...expRows,...indRows],sub:charges.length?tr("{0} expenses · {1} invoice charges",pExp.length,charges.length):tr("{0} items",pExp.length),
+        extra:[indirect.length&&!ind.wait&&!own.wait?tr("Green Med {0} · sub-supplier indirect {1}",P(own.v),P(ind.v))+(indExp.v&&!indExp.wait?' · '+tr("expected {0}",P(indExp.v)):''):null,byCat],cls:'sc-purple'},
       {lbl:tr('Net'),s:{v:net,wait,miss:0},rows:[],sub:rev.v>0&&!wait?tr("{0}% margin",(net/rev.v*100).toFixed(1)):tr('revenue - costs'),cls:net>=0?'sc-teal':'sc-red'},
     ];
     // "Amount (USD)" next to a document's own total, with the rate used when it was converted
     const pcVal=(cur,date,v)=>{const x=toPc(cur,date,v);return x>0||x<0?x:0;};
+    // expected: shown in brackets as a cost still to come (a string replaces the default hint)
     const pcCell=(cur,date,v,expected)=>{
       const own=(cur||'GBP')===pc,x=toPc(cur,date,v),r=fx[fxKey(cur,date)];
       if(x===null)return <span style={{color:'var(--g400)'}}>{tr('Fetching…')}</span>;
       if(Number.isNaN(x))return <span className="mt-none" title={r&&r.err}>{tr("No rate")}</span>;
-      return<>{expected?<span className="pd-exp" title={tr("Expected cost — counted once the invoice arrives")}>({P(x)})</span>:P(x)}
+      return<>{expected?<span className="pd-exp" title={typeof expected==='string'?expected:tr("Expected cost — counted once the invoice arrives")}>({P(x)})</span>:P(x)}
         {!own&&r&&<div className="mt-pct">1 {cur||'GBP'} = {+r.rate.toFixed(r.rate<1?6:4)} {pc} · {fmtD(r.date)}</div>}</>;};
     const pcCol=amt=>({k:'pc',l:tr("Amount ({0})",pc),get:d=>pcVal(d.currency,d.date,amt(d)),show:d=>pcCell(d.currency,d.date,amt(d))});
     // Purchases: one row per order with the received invoice made from it, then the invoices entered without an order.
@@ -2949,11 +2973,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="stat-lbl">{c.lbl}</div>
           <div className="stat-sub">{c.sub}</div>
           {byCur(c.rows)&&<div className="stat-sub pd-cur">{byCur(c.rows)}</div>}
-          {c.extra&&<div className="stat-sub pd-cur">{c.extra}</div>}
+          {[].concat(c.extra||[]).filter(Boolean).map((x,i)=><div key={i} className="stat-sub pd-cur">{x}</div>)}
           {c.s.miss>0&&<div className="stat-sub mt-none">{tr("{0} document(s) could not be converted",c.s.miss)}</div>}
         </div>)}
       </div>
-      <div className="pd-note">{tr("Amounts in {0}, each document at the TCMB banknote buying rate of its date. Revenue excludes VAT; costs are the received invoices as billed, VAT included; their charge lines (packing, freight…) count as expenses.",pc)}{miss>0&&' '+tr("Documents without a rate are left out of the totals.")}</div>
+      <div className="pd-note">{tr("Amounts in {0}, each document at the TCMB banknote buying rate of its date. Revenue excludes VAT; costs are the received invoices as billed, VAT included; their charge lines (packing, freight…) count as expenses.",pc)}{indirect.length>0&&' '+tr("Expenses also hold the sub-supplier indirect costs (freight, packing… paid by the group company): counted once their quote is quoted, expected while it is still to be quoted.")}{miss>0&&' '+tr("Documents without a rate are left out of the totals.")}</div>
       {/* Sections */}
       {(()=>{
         const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>fmtD(d.date)};
@@ -2975,6 +2999,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {k:'status',l:tr('Status'),get:r=>r.ri?r.ri.status||'unpaid':'~',show:r=>r.ri?<Badge s={r.ri.status||'unpaid'}/>:<span className="mt-state">{tr('Awaiting invoice')}</span>}]},
           {title:tr('Expenses'),items:expList,w:[0.8,1,1.7,1.1,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
             {k:'src',l:tr('Source'),get:e=>e.src,show:e=>e.src||'—'},{k:'amount',l:tr('Amount'),get:e=>e.amount,show:e=>`${CURR[e.currency]||'£'}${fmt(e.amount)}`},pcCol(e=>e.amount)]},
+          ...(indirect.length?[{title:tr('Sub-supplier Indirect Costs'),items:indirect,w:[0.8,1,1.7,1.4,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},
+            {k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},{k:'src',l:tr('Source'),get:e=>e.src,show:e=><>{e.src}{e.expected&&<div className="mt-pct">{tr("To be quoted — expected")}</div>}</>},
+            {k:'amount',l:tr('Amount'),get:e=>e.amount,show:e=>`${CURR[e.currency]||'₺'}${fmt(e.amount)}`},
+            {k:'pc',l:tr("Amount ({0})",pc),get:e=>pcVal(e.currency,e.date,e.amount),show:e=>pcCell(e.currency,e.date,e.amount,e.expected&&tr("Expected — counted once its quote is quoted"))}]}]:[]),
         ].map(s=><ProjDocTable key={s.title} {...s}/>);
       })()}
       {quick&&<DocQuickModal doc={quick.doc} co={co} docType={quick.type==='po'?'po':'invoice'} pdfOpts={SALES_PDF} itemNote={sqItemNote(quick.doc)} onClose={()=>setQuick(null)}/>}
@@ -3464,7 +3492,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     useEscape(()=>setDlg(null),!!dlg);
     const tree=expCatTree(expCats);
     const mains=tree.filter(r=>r.depth===0).map(r=>r.c);
-    const used=id=>[...expenses,...invoiceCharges].filter(e=>e.categoryId===id).length;
+    const used=id=>[...expenses,...invoiceCharges,...srcCharges].filter(e=>e.categoryId===id).length;
     const subsOf=id=>expCats.filter(c=>c.parentId===id);
     const save=()=>{
       const code=(dlg.code||'').trim(),name=toTitleCase(dlg.name||'');
@@ -4022,7 +4050,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // The group company's (e.g. Egefe) own purchases from its suppliers, kept apart from Green Med's
     {group:tr('Group Company')},
     {k:'source_quotes',ico:'rq',lbl:tr('Sub-supplier Quotes'),cnt:srcQuotes.length,col:'ops_srcq'},
-    {k:'source_invoices',ico:'ri',lbl:tr('Sub-supplier Invoices'),cnt:srcInvoices.length,col:'ops_srci'},
+    ...(SHOW_SRC_INVOICES?[{k:'source_invoices',ico:'ri',lbl:tr('Sub-supplier Invoices'),cnt:srcInvoices.length,col:'ops_srci'}]:[]),
     {div:true},
     {group:tr('Project Management')},
     {k:'projects',ico:'project',lbl:tr('Projects'),cnt:projects.length,col:'ops_proj'},
