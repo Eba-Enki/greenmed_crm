@@ -560,14 +560,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // ── SUB-SUPPLIER INDIRECT COSTS ──
   // Freight, packing… the group company pays its suppliers and does not bill on (its small markup goes to its own
   // running costs) are still what the project costs: the project shows them as indirect costs, never the Expenses
-  // list. A sub-supplier invoice gives the actual charges; without one (they are rarely entered) a quote's charges
-  // count once it is (partly) quoted, are only expected while it is still to be quoted, and an unused quote's are left out.
-  // Sub-supplier invoices are hardly entered, so their menu is hidden; records already there still count.
+  // list. They come from the sub-supplier quotes only: a quote's charges count once it is (partly) quoted, are only
+  // expected while it is still to be quoted, and an unused quote's are left out.
+  // Sub-supplier invoices are not used, so their menu is hidden (the screens stay, behind SHOW_SRC_INVOICES).
   const SHOW_SRC_INVOICES=false;
-  const srcCharges=[
-    ...chargeRows(srcInvoices,'si',tr('Sub-supplier Invoice'),'TRY'),
-    ...srcQuotes.filter(q=>!srcInvoices.some(v=>v.srcqId===q.id)).flatMap(q=>{const st=srcQuoteState(q);
-      return st==='unused'?[]:chargeRows([q],'sq',tr('Sub-supplier Quote'),'TRY').map(r=>({...r,srcInvId:undefined,srcqId:q.id,expected:st==='pending'}));})];
+  const srcCharges=srcQuotes.flatMap(q=>{const st=srcQuoteState(q);
+    return st==='unused'?[]:chargeRows([q],'sq',tr('Sub-supplier Quote'),'TRY').map(r=>({...r,srcInvId:undefined,srcqId:q.id,expected:st==='pending'}));});
   const SRC_STATE={pending:['To be quoted',''],partial:['Partly quoted',''],quoted:['Quoted','ok'],unused:['Not used','off']};
   const SrcBadge=({s})=><span className={'mt-state '+SRC_STATE[s][1]}>{tr(SRC_STATE[s][0])}</span>;
   // Invoice of a source line, if one was recorded
