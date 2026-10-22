@@ -1673,9 +1673,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     // Step 1 lists the sub-supplier quotes with lines still open for this quote, step 2 the lines of the chosen quotes
     // to tick. A line comes matched to the customer line it was matched to when the sub-supplier quote was entered, at
     // its price after the sub-supplier's discount. Ticked lines are added to this quote and unticking a line transferred
-    // before takes it out; lines of quotes not chosen stay. One currency and one markup per quote, so a transfer
-    // reprices every transferred line; each sub-supplier quote is converted at its own rate, the TCMB rate of its date
-    // unless typed, kept on its lines.
+    // before takes it out; lines of quotes not chosen stay as they are. Each sub-supplier quote is converted at its own
+    // rate, the TCMB rate of its date unless typed, and the markup is the one of the transfer: both are kept on the line
+    // (fxRate, markup). A line transferred before is priced again only when its quote is chosen again with another rate,
+    // markup or source price, so a price corrected by hand survives later transfers.
     const xferIds=new Set(items.filter(i=>i.srcq).map(i=>i.srcq.lineId));
     const usedHere=it=>xferIds.has(it.id)||(!!doc.id&&((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id)));
     const xferOpen=it=>!!(it.desc||it.item)&&!isCharge(it)&&(srcLineState(it)==='pending'||usedHere(it));
@@ -1782,14 +1783,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>);};
       const apply=()=>{
         const mk=(s,it,p)=>{const net=srcNet(s,it);return{...(p||{}),id:(p&&p.id)||uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty:it.qty,unit:it.unit||'',
-          price:str(conv(s,net)),srcCurrency:qCur(s),fxRate:qCur(s)===dc?'':String(rateOf(s)||''),fxSource:qCur(s)===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
+          price:str(conv(s,net)),markup:String(x.markup||''),srcCurrency:qCur(s),fxRate:qCur(s)===dc?'':String(rateOf(s)||''),fxSource:qCur(s)===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
         const byId=Object.fromEntries(pickable.map(o=>[o.it.id,o]));
         const next=[];
         items.forEach(i=>{
           if(!i.srcq){if(i.desc||i.item||+i.price)next.push(i);return;}
           // Lines transferred before currencies were kept per line get the document's currency written on them
-          if(chosenIds.has(i.srcq.qid)){const o=byId[i.srcq.lineId];if(!o)next.push({...i,srcCurrency:lineCur(doc,i)});else if(x.sel.has(o.it.id))next.push(mk(o.s,o.it,i));return;}
-          next.push({...i,srcCurrency:lineCur(doc,i),price:str(convAt(i.srcPrice,lineFx(doc,i),lineCur(doc,i)))}); // another quote's line: its own rate, the new markup
+          // (and those transferred before markups were kept per line get the document's markup)
+          const own={...i,srcCurrency:lineCur(doc,i),markup:i.markup!=null?i.markup:String(doc.markup||'')};
+          if(chosenIds.has(i.srcq.qid)){const o=byId[i.srcq.lineId];if(!o){next.push(own);return;}if(!x.sel.has(o.it.id))return;
+            const n=mk(o.s,o.it,i);
+            // Same rate, markup and source price: the price on the line stays (it may have been corrected by hand)
+            const same=String(own.fxRate||'')===String(n.fxRate||'')&&String(own.markup||'')===String(n.markup||'')&&String(i.srcPrice||'')===String(n.srcPrice||'');
+            next.push(same?{...n,price:i.price}:n);return;}
+          next.push(own); // another quote's line: untouched
         });
         ticked.filter(o=>!xferIds.has(o.it.id)).forEach(o=>next.push(mk(o.s,o.it)));
         setItems(next.length?next:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
@@ -1808,7 +1815,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <Fld label={tr("Markup %")}><input className="fi" type="number" step="0.01" value={x.markup} onChange={e=>{const m=e.target.value;setXfer(v=>({...v,markup:m}));}} placeholder="0"/></Fld>
               {foreign?<Fld label={tr("Exchange Rates")}><Btn v="bgh bsm" type="button" disabled={Object.values(x.busy||{}).some(Boolean)} onClick={()=>fetchXferRates(chosenQ,true)}>{tr("Refresh TCMB rates")}</Btn></Fld>:<div/>}
             </div>
-            <div className="xf-note">{foreign?tr("Each sub-supplier quote is converted at the TCMB banknote buying rate of its date; a rate can be typed over. The markup applies to every transferred line of this quote."):tr("The markup applies to every transferred line of this quote.")}</div>
+            <div className="xf-note">{foreign?tr("Each sub-supplier quote is converted at the TCMB banknote buying rate of its date; a rate can be typed over. The markup applies to the lines of this transfer; lines transferred before keep their price."):tr("The markup applies to the lines of this transfer; lines transferred before keep their price.")}</div>
             <table className="xf-tbl">
               <thead><tr>
                 <th style={{width:32}}><input type="checkbox" checked={allOn} ref={el=>{if(el)el.indeterminate=!allOn&&ticked.length>0;}} disabled={!pickable.length} onChange={()=>setSel(pickable.map(o=>o.it.id),!allOn)} aria-label={tr("Select all")}/></th>
@@ -1954,7 +1961,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               <input type="number" min="0" step="0.0001" value={doc.fxRate||''} onChange={e=>{set('fxRate',e.target.value);set('fxSource',null);}} className="fi" placeholder="0.0000"/>
               <TcmbButton date={rateDate} from={dc} to={sc} onRate={r=>{set('fxRate',String(r.rate));set('fxSource',{date:r.date,kind:'banknoteBuying'});}}/>
             </div><TcmbNote src={doc.fxSource}/></Fld>:<div/>}
-            {anyXfer&&doc.markup?<Fld label={tr("Markup % (at transfer)")}><input className="fi" value={doc.markup} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/></Fld>:<div/>}
+            {(()=>{const m=[...new Set(items.filter(i=>i.srcq).map(i=>String(i.markup!=null?i.markup:doc.markup||'')))].filter(Boolean);
+              return anyXfer&&m.length?<Fld label={tr("Markup % (at transfer)")}><input className="fi" value={m.length===1?m[0]:tr("Varies by line ({0})",m.join(' / '))} readOnly style={{background:'var(--g50)',color:'var(--g700)'}}/></Fld>:<div/>;})()}
           </div>
           <datalist id="src-suppliers">{srcNames.map(n=><option key={n} value={n}/>)}</datalist>
           <div className="iw" style={{marginTop:12}}><table className="ie">
