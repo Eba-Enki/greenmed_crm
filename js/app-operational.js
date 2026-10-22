@@ -19,6 +19,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // Quotes and invoices the group company (e.g. Egefe) collects from its own suppliers in Turkey
   const[srcQuotes,setSrcQuotes]=useState([]);
   const[srcInvoices,setSrcInvoices]=useState([]);
+  const[projExpenses,setProjExpenses]=useState([]); // paid by the group company, see PROJECT EXPENSES
   // Approximate costs: purchase prices collected per item, then freight / customs / margin rates on top (see CE logic)
   const[costEsts,setCostEsts]=useState([]);
   const[purchasePrices,setPurchasePrices]=useState({});
@@ -77,6 +78,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     if(ri)setReceivedInvoices(migratedRI);
     const srq=load('srcq');if(srq)setSrcQuotes(srq);
     const sri=load('srci');if(sri)setSrcInvoices(sri);
+    const pex=load('pexp');if(pex)setProjExpenses(pex);
     const ce=load('ce');if(ce)setCostEsts(ce);
     if(pq&&migratedPQ.some((q,i)=>q!==pq[i]))LS.set(ns+'pq',migratedPQ);
     if(po&&migratedPO.some((p,i)=>p!==po[i]))LS.set(ns+'po',migratedPO);
@@ -148,6 +150,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sRI=d=>save('ri',setReceivedInvoices,d);
   const sSRQ=d=>save('srcq',setSrcQuotes,d);
   const sSRI=d=>save('srci',setSrcInvoices,d);
+  const sPExp=d=>save('pexp',setProjExpenses,d);
   const sCE=d=>save('ce',setCostEsts,d);
   // Purchase price entered by hand in the Product Pool: {price, currency}; an empty price removes it
   const setPoolRows=(ids,val)=>{const next={...poolHidden};ids.forEach(id=>{if(val===undefined)delete next[id];else next[id]=val;});setPoolHidden(next);LS.set(ns+'poolhide',next);};
@@ -560,12 +563,16 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // ── SUB-SUPPLIER INDIRECT COSTS ──
   // Freight, packing… the group company pays its suppliers and does not bill on (its small markup goes to its own
   // running costs) are still what the project costs: the project shows them as indirect costs, never the Expenses
-  // list. They come from the sub-supplier quotes only: a quote's charges count once it is (partly) quoted, are only
-  // expected while it is still to be quoted, and an unused quote's are left out.
+  // list. They come from the sub-supplier quotes (a quote's charges count once it is (partly) quoted, are only expected
+  // while it is still to be quoted, and an unused quote's are left out) and from the project expenses the group company
+  // entered (paid, so counted at once).
   // Sub-supplier invoices are not used, so their menu is hidden (the screens stay, behind SHOW_SRC_INVOICES).
   const SHOW_SRC_INVOICES=false;
-  const srcCharges=srcQuotes.flatMap(q=>{const st=srcQuoteState(q);
-    return st==='unused'?[]:chargeRows([q],'sq',tr('Sub-supplier Quote'),'TRY').map(r=>({...r,srcInvId:undefined,srcqId:q.id,expected:st==='pending'}));});
+  const srcCharges=[...srcQuotes.flatMap(q=>{const st=srcQuoteState(q);
+    return st==='unused'?[]:chargeRows([q],'sq',tr('Sub-supplier Quote'),'TRY').map(r=>({...r,srcInvId:undefined,srcqId:q.id,expected:st==='pending'}));}),
+    ...projExpenses.map(e=>{const qt=[e.srcqNumber,e.srcqSupplier].filter(Boolean).join(' · ');return{id:'pe:'+e.id,peId:e.id,date:e.date||'',currency:e.currency||'TRY',
+      amount:+(e.amount||0),description:e.description||'',categoryId:e.categoryId||'',category:e.categoryId?'':e.category||'',project:e.project||'',reference:e.reference||'',
+      srcqId:e.srcqId||'',src:[tr('Project expense'),e.srcqId?qt:'',e.reference||''].filter(Boolean).join(' · '),expected:false};})];
   const SRC_STATE={pending:['To be quoted',''],partial:['Partly quoted',''],quoted:['Quoted','ok'],unused:['Not used','off']};
   const SrcBadge=({s})=><span className={'mt-state '+SRC_STATE[s][1]}>{tr(SRC_STATE[s][0])}</span>;
   // Invoice of a source line, if one was recorded
@@ -747,7 +754,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const old=!fresh&&projects.find(x=>x.id===saved.id);
     if(old&&old.name&&old.name!==saved.name){
       const moved=list=>list.some(d=>d.project===old.name)?list.map(d=>d.project===old.name?{...d,project:saved.name,projectNumber:saved.number||d.projectNumber||''}:d):null;
-      [[salesQuotes,sSQ],[salesInvoices,sSI],[purchaseQuotes,sPQ],[purchaseOrders,sPO],[receivedInvoices,sRI],[srcQuotes,sSRQ],[srcInvoices,sSRI],[costEsts,sCE],[expenses,sExp],[documents,sDocs]]
+      [[salesQuotes,sSQ],[salesInvoices,sSI],[purchaseQuotes,sPQ],[purchaseOrders,sPO],[receivedInvoices,sRI],[srcQuotes,sSRQ],[srcInvoices,sSRI],[projExpenses,sPExp],[costEsts,sCE],[expenses,sExp],[documents,sDocs]]
         .forEach(([list,set])=>{const next=moved(list);if(next)set(next);});
     }
     showToast(tr('Saved ✓'));go('projects');
@@ -2134,6 +2141,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <Btn v="bp bsm" onClick={save}>{tr("Save {0}",lbl)}</Btn>
       </FormHeader>
       {used&&used.length>0&&<div className="mt-banner">{tr("Lines of this quote are used in {0}. Changes here are not copied there.",used.join(', '))}</div>}
+      {isQ&&doc.id&&(()=>{const l=projExpenses.filter(e=>e.srcqId===doc.id);return l.length>0&&<div className="mt-banner">{tr("Project expenses tagged with this quote: {0} · {1}",l.length,fmtCurTotals(curTotals(l.map(e=>[e.currency,e.amount]))))}</div>;})()}
       {!isQ&&doc.srcqNumber&&<div className="mt-banner">{tr("From sub-supplier quote {0}",doc.srcqNumber)}</div>}
       <div className="fc"><div className="fct">{tr("Document Details")}</div>
         <div className="fg g4">
@@ -3252,6 +3260,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       bulk.clear();
     });
     return(<div className="content">
+      <ExpTabs/>
       <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.cat,fs.p,fs.dateFrom,fs.dateTo,fs.src].filter(Boolean).length} onClear={()=>setFs(f=>({...f,cat:'',p:'',dateFrom:'',dateTo:'',src:''}))} extra={<>{filtered.length>0&&<span className="lt-note">{tr("Total: {0}", fmtCurTotals(total))}</span>} <button className="lt-btn" onClick={()=>go('exp_import')}>{tr("Import Excel")}</button></>}>
         <FilterField label={tr("Category")}><select value={fs.cat} onChange={e=>setFs(f=>({...f,cat:e.target.value}))}>
           <option value="">{tr("All Categories")}</option><ExpCatOptions cats={expCats}/>
@@ -3308,6 +3317,141 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </table><Pagination total={filtered.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
       )}
     </div>);
+  }
+
+  // ── PROJECT EXPENSES (paid by the group company) ──
+  // Costs the group company pays for a project outside its suppliers' quotes (freight sent collect, translation…),
+  // kept apart from Green Med's own expenses (ops_pexp) and never in that list. Each may be tagged with the
+  // sub-supplier quote it belongs to (number and supplier kept with it, so the tag survives the quote). The project
+  // shows them under Sub-supplier Indirect Costs, counted at once: they are paid.
+  const ExpTabs=()=><div className="st-tabs" role="tablist" style={{marginBottom:12}}>
+    {[['expenses',tr('Expenses')],['proj_expenses',tr('Project Expenses')]].map(([k,l])=>
+      <button key={k} role="tab" aria-selected={view===k} className={'st-tab'+(view===k?' active':'')} onClick={()=>view!==k&&go(k)}>{l}</button>)}
+  </div>;
+  const mkProjExpense=()=>({id:null,date:td(),project:'',srcqId:'',srcqNumber:'',srcqSupplier:'',categoryId:'',category:'',description:'',amount:'',currency:'TRY',reference:'',notes:''});
+  const pexpQuote=e=>e.srcqId?[e.srcqNumber,e.srcqSupplier].filter(Boolean).join(' · '):'';
+  const handleSavePExp=e=>{const saved={...e,id:e.id||uid(),description:toSentenceCase(e.description||'')};sPExp(upsert(projExpenses,saved));showToast(tr('Saved ✓'));go('proj_expenses');};
+  const handleSavePExpAndNew=e=>{const saved={...e,id:e.id||uid(),description:toSentenceCase(e.description||'')};sPExp(upsert(projExpenses,saved));showToast(tr('Saved ✓ — ready for the next one'));};
+
+  function ProjExpensesView(){
+    const[fs,setFs]=useState({q:'',p:'',qt:'',cat:'',dateFrom:'',dateTo:''});
+    const{sort,onSort}=useSort();
+    const{pg,ps,setPg,setPs}=usePagination(JSON.stringify(fs)+JSON.stringify(sort));
+    const filtered=projExpenses.filter(e=>{
+      if(fs.q&&![e.description,e.reference,e.srcqNumber,e.srcqSupplier].some(x=>(x||'').toLowerCase().includes(fs.q.toLowerCase())))return false;
+      if(fs.p&&e.project!==fs.p)return false;
+      if(fs.qt&&e.srcqId!==fs.qt)return false;
+      if(fs.cat){const c=expCatOf(expCats,e);if(!c||(c.id!==fs.cat&&c.parentId!==fs.cat))return false;}
+      if(fs.dateFrom&&e.date<fs.dateFrom)return false;
+      if(fs.dateTo&&e.date>fs.dateTo)return false;
+      return true;
+    });
+    const sorted=sortRows([...filtered].reverse(),sort,{date:e=>e.date,project:e=>e.project,quote:pexpQuote,category:e=>expCatText(expCats,e),desc:e=>e.description,ref:e=>e.reference,amount:e=>+(e.amount||0)});
+    const total=curTotals(filtered.map(e=>[e.currency,e.amount]));
+    const bulk=useBulkSelect(sorted.map(e=>e.id));
+    const picked=sorted.filter(e=>bulk.has(e.id));
+    const quotes=srcQuotes.filter(q=>!fs.p||q.project===fs.p);
+    const exportRows=rows=>exportExcel([['Date','Project','Sub-supplier Quote','Category','Description','Company / Doc No','Amount','Currency'],
+      ...rows.map(e=>[e.date,e.project,pexpQuote(e),expCatText(expCats,e),e.description,e.reference,+(e.amount||0),e.currency])],'project-expenses');
+    const bulkDelete=()=>askGlobalConfirm(tr('Delete {0} selected expenses?',picked.length),{confirmLabel:tr('Delete'),cancelLabel:tr('Cancel')}).then(ok=>{
+      if(!ok)return;const ids=new Set(picked.map(e=>e.id));sPExp(projExpenses.filter(x=>!ids.has(x.id)));showToast(tr('{0} deleted',ids.size));bulk.clear();
+    });
+    return(<div className="content">
+      <ExpTabs/>
+      <div className="xf-note" style={{marginBottom:10}}>{tr("Costs the group company pays for a project outside the sub-supplier quotes (freight sent collect, translation…). They show on the project under Sub-supplier Indirect Costs, not in Expenses.")}</div>
+      <ListTools q={fs.q} onQ={v=>setFs(f=>({...f,q:v}))} placeholder={tr("Search...")} active={[fs.p,fs.qt,fs.cat,fs.dateFrom,fs.dateTo].filter(Boolean).length}
+        onClear={()=>setFs(f=>({...f,p:'',qt:'',cat:'',dateFrom:'',dateTo:''}))} onExport={()=>exportRows(sorted)}
+        extra={filtered.length>0&&<span className="lt-note">{tr("Total: {0}",fmtCurTotals(total))}</span>}>
+        <FilterField label={tr("Project")}><select value={fs.p} onChange={e=>setFs(f=>({...f,p:e.target.value,qt:''}))}>
+          <option value="">{tr("All Projects")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.name}</option>)}
+        </select></FilterField>
+        <FilterField label={tr("Sub-supplier Quote")}><select value={fs.qt} onChange={e=>setFs(f=>({...f,qt:e.target.value}))}>
+          <option value="">{tr("All")}</option>{quotes.map(q=><option key={q.id} value={q.id}>{[q.number,q.supplierCompany].filter(Boolean).join(' · ')}</option>)}
+        </select></FilterField>
+        <FilterField label={tr("Category")}><select value={fs.cat} onChange={e=>setFs(f=>({...f,cat:e.target.value}))}>
+          <option value="">{tr("All Categories")}</option><ExpCatOptions cats={expCats}/>
+        </select></FilterField>
+        <FilterField label={tr("From")}><input type="date" value={fs.dateFrom} onChange={e=>setFs(f=>({...f,dateFrom:e.target.value}))}/></FilterField>
+        <FilterField label={tr("To")}><input type="date" value={fs.dateTo} onChange={e=>setFs(f=>({...f,dateTo:e.target.value}))}/></FilterField>
+      </ListTools>
+      <BulkBar bulk={bulk}>
+        <BulkBtn onClick={()=>exportRows(picked)}>{tr("Export selected")}</BulkBtn>
+        <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
+      </BulkBar>
+      {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="expense" size={38}/><div className="empty-t">{projExpenses.length?tr("No items match the filter"):tr("No project expenses yet")}</div></div></div>:(
+        <div className="tcard"><table className="dt dt-fit">
+          <thead><tr>
+            <SelTh bulk={bulk}/>
+            <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
+            <SortTh k="project" sort={sort} onSort={onSort}>{tr("Project")}</SortTh>
+            <SortTh k="quote" sort={sort} onSort={onSort}>{tr("Sub-supplier Quote")}</SortTh>
+            <SortTh k="category" sort={sort} onSort={onSort}>{tr("Category")}</SortTh>
+            <SortTh k="desc" sort={sort} onSort={onSort} className="fit-grow">{tr("Description")}</SortTh>
+            <SortTh k="ref" sort={sort} onSort={onSort}>{tr("Company / Doc No")}</SortTh>
+            <SortTh k="amount" sort={sort} onSort={onSort} className="tar">{tr("Amount")}</SortTh>
+            <th>{tr("Actions")}</th>
+          </tr></thead>
+          <tbody>{sorted.slice((pg-1)*ps,pg*ps).map(e=><tr key={e.id} className={bulk.has(e.id)?'is-sel':''}>
+            <SelTd bulk={bulk} id={e.id}/>
+            <td style={{color:'var(--g500)',fontSize:12}}>{fmtD(e.date)}</td>
+            <td style={{color:'var(--g700)'}}><div className="fit-box fb-sm">{e.project||'—'}</div></td>
+            <td>{e.srcqId?<span className="mt-chip">{pexpQuote(e)}</span>:<span style={{color:'var(--g300)'}}>—</span>}</td>
+            <td style={{color:'var(--g700)'}}>{expCatText(expCats,e)||'—'}</td>
+            <td className="fit-grow" style={{fontWeight:500,color:'var(--g800)'}}><div className="fit-box fb-md">{e.description||'—'}</div></td>
+            <td className="exp-src"><div className="fit-box fb-sm">{e.reference||'—'}</div></td>
+            <td className="tar" style={{fontWeight:700}}>{CURR[e.currency]||e.currency||''}{fmt(+(e.amount||0))}</td>
+            <td><div className="aw">
+              <button className="ab" title={tr("Edit")} aria-label={tr("Edit")} onClick={()=>{setCur(e);go('pexp_form');}}><Ico n="edit"/></button>
+              <button className="ab danger" title={tr("Delete")} aria-label={tr("Delete")} onClick={()=>askConfirm(tr('Delete this expense?'),()=>{sPExp(projExpenses.filter(x=>x.id!==e.id));showToast(tr('Deleted'));})}><Ico n="trash"/></button>
+            </div></td>
+          </tr>)}</tbody>
+        </table><Pagination total={filtered.length} page={pg} pageSize={ps} onPageChange={setPg} onPageSizeChange={v=>{setPs(v);setPg(1);}}/></div>
+      )}
+    </div>);
+  }
+
+  function ProjExpenseForm({exp:init,onSave,onSaveAndNew,onCancel}){
+    const[e,setE]=useState(init);const s=(k,v)=>setE(d=>({...d,[k]:v}));
+    const _initStr=useRef(JSON.stringify(init));
+    const _isDirty=()=>JSON.stringify(e)!==_initStr.current;
+    const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
+    dirtyCheckRef.current=_isDirty;
+    // The project's sub-supplier quotes; a quote tagged earlier stays listed even if it moved or was deleted
+    const quotes=srcQuotes.filter(q=>e.project&&q.project===e.project);
+    const pickQuote=id=>{const q=srcQuotes.find(x=>x.id===id);setE(d=>({...d,srcqId:q?q.id:'',srcqNumber:q?q.number||'':'',srcqSupplier:q?q.supplierCompany||'':''}));};
+    const check=()=>{if(!e.project){uiAlert(tr('Select the project'));return false;}if(!(+e.amount>0)){uiAlert(tr('Amount is required'));return false;}return true;};
+    const saveAndNew=()=>{if(!check())return;onSaveAndNew(e);const fresh={...mkProjExpense(),project:e.project,currency:e.currency};setE(fresh);_initStr.current=JSON.stringify(fresh);};
+    return(<div className="content"><div className="fw">
+      <FormHeader parent={'expenses'} onBack={_handleCancel} title={<>{e.id?tr('Edit Project Expense'):tr('New Project Expense')}</>}>
+        {!e.id&&<Btn v="bgh bsm" onClick={saveAndNew}><Ico n="plus"/>{tr('Save & New')}</Btn>}<Btn v="bp bsm" onClick={()=>check()&&onSave(e)}>{tr("Save")}</Btn>
+      </FormHeader>
+      <div className="fc"><div className="fct">{tr("Project Expense")}</div>
+        <div className="xf-note" style={{marginBottom:12}}>{tr("Paid by the group company; shown on the project under Sub-supplier Indirect Costs.")}</div>
+        <div className="fg g3">
+          <Fld label={tr("Date")}><input type="date" value={e.date||''} onChange={x=>s('date',x.target.value)} className="fi"/></Fld>
+          <Fld label={tr("Project")+' *'}><select value={e.project||''} onChange={x=>{const v=x.target.value;setE(d=>({...d,project:v,...(d.srcqId&&!srcQuotes.some(q=>q.id===d.srcqId&&q.project===v)?{srcqId:'',srcqNumber:'',srcqSupplier:''}:{})}));}} className="fi">
+            <option value="">{tr("— Select —")}</option>{projects.map(p=><option key={p.id} value={p.name}>{p.number?(p.number+' - '):''}{p.name}</option>)}</select></Fld>
+          <Fld label={tr("Sub-supplier Quote")}><select value={e.srcqId||''} onChange={x=>pickQuote(x.target.value)} className="fi" disabled={!e.project}>
+            <option value="">{e.project?tr("— None —"):tr("Select the project first")}</option>
+            {quotes.map(q=><option key={q.id} value={q.id}>{[q.number,q.supplierCompany].filter(Boolean).join(' · ')}</option>)}
+            {e.srcqId&&!quotes.some(q=>q.id===e.srcqId)&&<option value={e.srcqId}>{pexpQuote(e)}</option>}
+          </select></Fld>
+        </div>
+        <div className="fg g3" style={{marginTop:12,gridTemplateColumns:'1fr 2fr 1fr'}}>
+          <Fld label={tr("Category")}><select value={(expCatOf(expCats,e)||{}).id||''} onChange={x=>{const v=x.target.value;setE(d=>({...d,...expCatFields(expCats,v)}));}} className="fi"><option value="">{tr("— Select —")}</option><ExpCatOptions cats={expCats}/></select></Fld>
+          <Fld label={tr("Description")}><input value={e.description||''} onChange={x=>s('description',x.target.value)} className="fi" placeholder={tr("e.g. freight sent collect for the supplier's shipment")}/></Fld>
+          <Fld label={tr("Amount")}><div style={{display:'flex',gap:6}}>
+            <input type="number" value={e.amount||''} onChange={x=>s('amount',x.target.value)} className="fi" placeholder="0.00" min="0" step=".01" style={{flex:1,minWidth:0}}/>
+            <select value={e.currency||'TRY'} onChange={x=>s('currency',x.target.value)} className="fi" style={{width:96}} aria-label={tr("Currency")}>{Object.entries(CURR).map(([c,v])=><option key={c} value={c}>{c} ({v})</option>)}</select>
+          </div></Fld>
+        </div>
+        <div className="fg g2" style={{marginTop:12}}>
+          <Fld label={tr("Company / Doc No")}><input value={e.reference||''} onChange={x=>s('reference',x.target.value)} className="fi" placeholder={tr("e.g. Yurtiçi Kargo · 123456")}/></Fld>
+          <Fld label={tr("Notes")}><input value={e.notes||''} onChange={x=>s('notes',x.target.value)} className="fi"/></Fld>
+        </div>
+      </div>
+      <div className="fact"><Btn v="bgh bsm" onClick={_handleCancel}>{tr("Cancel")}</Btn>{!e.id&&<Btn v="bgh bsm" onClick={saveAndNew}><Ico n="plus"/>{tr('Save & New')}</Btn>}<Btn v="bp bsm" onClick={()=>check()&&onSave(e)}>{tr("Save")}</Btn></div>
+    </div></div>);
   }
 
   // Bulk Expense Import — staff (often abroad) send a monthly expense sheet; this previews
@@ -4063,20 +4207,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   // Sidebar + page header menu: Dashboard first, then the sections above
   const NAV=[{k:'home',ico:'home',lbl:tr('Dashboard')},...SB];
-  const isNav=k=>view===k||view===k+'_form'||view===k+'_preview';
+  const isNav=k=>view===k||view===k+'_form'||view===k+'_preview'||(k==='expenses'&&(view==='proj_expenses'||view==='pexp_form'));
 
-  const titles={home:tr('Dashboard'),cost_estimates:tr('Approximate Cost'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),source_quotes:tr('Sub-supplier Quotes'),source_invoices:tr('Sub-supplier Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
+  const titles={home:tr('Dashboard'),proj_expenses:tr('Expenses'),cost_estimates:tr('Approximate Cost'),sales_quotes:tr('Sales Quotations'),sales_invoices:tr('Sales Invoices'),purchase_quotes:tr('Received Quotes'),purchase_orders:tr('Purchase Orders'),received_invoices:tr('Received Invoices'),source_quotes:tr('Sub-supplier Quotes'),source_invoices:tr('Sub-supplier Invoices'),projects:tr('Projects'),proj_detail:(cur&&cur.name)||tr('Project'),proj_matching:(cur&&cur.name)||tr('Project'),product_pool:tr('Product Pool'),expenses:tr('Expenses'),customers:tr('Customers'),documents:tr('Documents'),settings:tr('Settings'),exp_cats:tr('Expense Categories')};
 
   dirtyCheckRef.current=null;
   if(view!=='settings')settingsDraftRef.current=null;
-  const S=useStableComponents({CostEstimatesList,CostEstimateForm,SourceList,SourceForm,SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ProductHistoryModal,ExpensesView,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
+  const S=useStableComponents({CostEstimatesList,CostEstimateForm,SourceList,SourceForm,SalesQuotesList,SalesQuoteForm,SalesInvoiceForm,SalesInvoicesList,ProcurementList,ProcurementForm,ProjectsList,ItemMatching,ProjectDetail,ProjectForm,ProductPoolView,ProductHistoryModal,ExpensesView,ProjExpensesView,ProjExpenseForm,ExpenseImportView,ExpCatsView,CustomersView,CustomerForm,DocumentsView,DocumentForm,OpsSettings,Dashboard});
   return(
     <div style={{display:'flex',minHeight:'100vh',width:'100%'}}>
       <PortalSidebar sb={NAV} isActive={isNav} onGo={goGuarded} session={session} onPortalSwitch={guardedPortalSwitch} onOpenProfile={onOpenProfile} onLogout={guardedLogout} onLang={guardedLang}/>
       <div className="main">
         <div className="fh-slot"/>
         <React.Fragment key={navSeq}>
-        {!['sales_invoice_edit','received_invoice_form','proj_detail','proj_matching','sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','source_quotes_form','source_invoices_form','cost_estimates_form','proj_form','exp_form','cust_form','exp_cats','exp_import'].includes(view)&&
+        {!['sales_invoice_edit','received_invoice_form','proj_detail','proj_matching','sales_quote_preview','sales_invoice_preview','pq_preview','po_preview','ri_preview','sales_quote_form','sales_invoice_form','pq_form','po_form','ri_form','source_quotes_form','source_invoices_form','cost_estimates_form','proj_form','exp_form','pexp_form','cust_form','exp_cats','exp_import'].includes(view)&&
           <PageHeader sb={NAV} isActive={isNav} onGo={goGuarded} session={session} title={titles[view]||''}>
             {view==='cost_estimates'&&<Btn v="bp bsm" onClick={()=>{setCur(mkCostEst());go('cost_estimates_form');}}><Ico n="plus"/>{tr("New Approximate Cost")}</Btn>}
             {view==='sales_quotes'&&<Btn v="bp bsm" onClick={()=>{setCur({...mkSalesQuote(null,0),number:docNum('sq')});go('sales_quote_form');}}><Ico n="plus"/>{tr("New Quotation")}</Btn>}
@@ -4089,6 +4233,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             {view==='projects'&&<Btn v="bp bsm" onClick={()=>{setCur(mkProject());go('proj_form');}}><Ico n="plus"/>{tr("New Project")}</Btn>}
             {view==='product_pool'&&<Btn v="bex bsm" onClick={()=>exportExcel(poolExport(poolItems),'product-pool')}>{tr("Export Excel")}</Btn>}
             {view==='expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>{tr("Categories")}</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkExpense());go('exp_form');}}><Ico n="plus"/>{tr("New Expense")}</Btn></div>}
+            {view==='proj_expenses'&&<div style={{display:'flex',gap:7}}><Btn v="bgh bsm" onClick={()=>go('exp_cats')}><Ico n="tag"/>{tr("Categories")}</Btn><Btn v="bp bsm" onClick={()=>{setCur(mkProjExpense());go('pexp_form');}}><Ico n="plus"/>{tr("New Project Expense")}</Btn></div>}
             {view==='customers'&&<Btn v="bp bsm" onClick={()=>{setCur({id:null,contact:'',email:'',phone:'',address:'',company:'',notes:'',type:'customer'});go('cust_form');}}><Ico n="plus"/>{tr("New Customer")}</Btn>}
             {view==='documents'&&<Btn v="bp bsm" onClick={()=>{setDocToEdit({id:null,name:'',category:'',file:'',fileType:'',uploadDate:td()});setShowDocForm(true);}}><Ico n="plus"/>{tr("Upload Document")}</Btn>}
           </PageHeader>
@@ -4110,6 +4255,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {view==='proj_matching'&&cur&&<S.ItemMatching project={cur}/>}
         {view==='product_pool'&&<S.ProductPoolView/>}
         {view==='expenses'&&<S.ExpensesView/>}
+        {view==='proj_expenses'&&<S.ProjExpensesView/>}
         {view==='customers'&&<S.CustomersView/>}
         {view==='documents'&&<S.DocumentsView/>}
         {view==='settings'&&<S.OpsSettings/>}
@@ -4123,6 +4269,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         {view==='received_invoice_form'&&cur&&<S.ProcurementForm doc={cur} docType="ri" onSave={handleSaveRIFromPO} onCancel={()=>go('purchase_orders')}/>}
         {view==='proj_form'&&cur&&<S.ProjectForm proj={cur} onSave={handleSaveProj} onCancel={()=>go('projects')}/>}
         {view==='exp_form'&&cur&&<ExpenseForm exp={cur} expCats={expCats} projects={projects} mkExpense={mkExpense} onSave={handleSaveExp} onSaveAndNew={handleSaveExpAndNew} onCancel={()=>go('expenses')} dirtyRef={dirtyCheckRef}/>}
+        {view==='pexp_form'&&cur&&<S.ProjExpenseForm exp={cur} onSave={handleSavePExp} onSaveAndNew={handleSavePExpAndNew} onCancel={()=>go('proj_expenses')}/>}
         {view==='exp_cats'&&<S.ExpCatsView/>}
         {view==='exp_import'&&<S.ExpenseImportView/>}
         {view==='cust_form'&&cur&&<S.CustomerForm cust={cur} onSave={handleSaveCust} onCancel={()=>go('customers')}/>}

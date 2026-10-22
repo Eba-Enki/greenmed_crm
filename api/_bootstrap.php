@@ -15,6 +15,7 @@ const RECORD_KEYS = [
     'ops_cust', 'ops_proj', 'ops_sq', 'ops_si', 'ops_pq', 'ops_po', 'ops_ri', 'ops_exp', 'ops_expcat', 'ops_docs',
     'ops_srcq', 'ops_srci', // source quotes / invoices the group company collects from its own suppliers
     'ops_ce', // approximate costs: price research and cost / margin build-up before a sales quotation
+    'ops_pexp', // project expenses the group company pays outside its suppliers' quotes (freight sent collect…)
 ];
 const SETTING_KEYS = ['off_co', 'off_cnt', 'ops_co', 'ops_cnt', 'ops_pp', 'ops_poolhide']; // ops_poolhide: Product Pool rows removed by hand
 const RAW_KEYS = ['gm_logo', 'gm_signature'];
