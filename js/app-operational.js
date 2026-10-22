@@ -1670,18 +1670,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {sqChoices.map(q=><option key={sqBaseOf(q)} value={sqBaseOf(q)}>{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</option>)}
     </select></Fld>;
     // ── Transfer from sub-supplier quotes (group company) ──
-    // Step 1 lists the sub-supplier quotes with lines still open for this quote, step 2 the lines of the chosen quotes
-    // to tick. A line comes matched to the customer line it was matched to when the sub-supplier quote was entered, at
-    // its price after the sub-supplier's discount. Ticked lines are added to this quote and unticking a line transferred
-    // before takes it out; lines of quotes not chosen stay as they are. Each sub-supplier quote is converted at its own
-    // rate, the TCMB rate of its date unless typed, and the markup is the one of the transfer: both are kept on the line
-    // (fxRate, markup). A line transferred before is priced again only when its quote is chosen again with another rate,
-    // markup or source price, so a price corrected by hand survives later transfers.
+    // Step 1 lists the sub-supplier quotes with lines that can still be added to this quote, step 2 those lines to tick
+    // (searchable; lines already transferred are hidden unless asked for, and can't be ticked). A line comes matched to
+    // the customer line it was matched to when the sub-supplier quote was entered, at its price after the sub-supplier's
+    // discount, converted at its quote's rate (the TCMB rate of its date unless typed) with the markup of the transfer;
+    // both are kept on the line (fxRate, markup). A transfer only adds lines: the lines already on the quote keep their
+    // price, quantity and match, so prices typed by hand are never worked out again. A line is taken out with its ×
+    // in the form, and its sub-supplier line is open again for a later transfer.
     const xferIds=new Set(items.filter(i=>i.srcq).map(i=>i.srcq.lineId));
-    const usedHere=it=>xferIds.has(it.id)||(!!doc.id&&((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id)));
-    const xferOpen=it=>!!(it.desc||it.item)&&!isCharge(it)&&(srcLineState(it)==='pending'||usedHere(it));
+    const usedHere=it=>!!doc.id&&((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id));
+    const xferNamed=it=>!!(it.desc||it.item)&&!isCharge(it);
+    // Can be added now: not on this quote yet, and still open (or set aside by this quote, which is being edited)
+    const xferAddable=it=>xferNamed(it)&&!xferIds.has(it.id)&&(srcLineState(it)==='pending'||usedHere(it));
     const xferQuotes=srcQuotes.filter(s=>(doc.sqBase?s.sqBase===doc.sqBase||(!s.sqBase&&!!doc.project&&s.project===doc.project):!doc.project||s.project===doc.project)
-      &&(s.items||[]).some(xferOpen)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.number||'').localeCompare(a.number||''));
+      &&(s.items||[]).some(xferAddable)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.number||'').localeCompare(a.number||''));
     const srcNet=(s,it)=>{const r=s.discOn?lineRate(it,'discRate',s.discRate):0;return Math.round(+(it.price||0)*(1-r/100)*10000)/10000;};
     const qCur=s=>s.currency||'TRY';
     // TCMB banknote buying rate on each quote's date, in that quote's currency (a holiday takes the bulletin before).
@@ -1695,10 +1697,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           .catch(e=>setXfer(v=>v&&{...v,busy:{...v.busy,[s.id]:false},errs:{...v.errs,[s.id]:e.message}}));
       });
     };
-    const openXfer=()=>{
-      const used=new Set(items.filter(i=>i.srcq).map(i=>i.srcq.qid));
-      setXfer({step:'quotes',quotes:new Set(xferQuotes.filter(s=>used.has(s.id)).map(s=>s.id)),sel:new Set(),markup:doc.markup||''});
-    };
+    const openXfer=()=>setXfer({step:'quotes',quotes:new Set(),sel:new Set(),markup:doc.markup||'',q1:'',q:'',showDone:false});
     const xferDialog=()=>{
       const x=xfer,dc=doc.currency||'GBP';
       const chosenQ=xferQuotes.filter(s=>x.quotes.has(s.id));
@@ -1708,19 +1707,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const blocked=s=>base&&s.sqBase&&s.sqBase!==base?tr("For another sales quotation"):null;
       const sq=latestSQ(base);
       const close=()=>setXfer(null);
+      const has=(q,...parts)=>!q||parts.some(p=>String(p||'').toLocaleLowerCase('tr').includes(q));
       const head=<div className="mt-dialog-h">
         <div><div className="mt-dialog-k">{tr("Transfer from sub-supplier quotes")}</div><div className="mt-dialog-t">{sq?sq.number+' · ':''}{doc.supplierCompany}</div></div>
         <button className="ab" onClick={close} aria-label={tr("Close")}><Ico n="x"/></button>
       </div>;
       if(x.step==='quotes'){
         const toggleQ=s=>setXfer(v=>{const n=new Set(v.quotes);if(n.has(s.id))n.delete(s.id);else n.add(s.id);return{...v,quotes:n};});
+        const q1=(x.q1||'').trim().toLocaleLowerCase('tr');
+        const shown=xferQuotes.filter(s=>x.quotes.has(s.id)||has(q1,s.number,s.supplierCompany));
         const next=()=>{
-          // Lines already in this quote stay ticked; a quote not used yet starts with all its open lines ticked
-          const sel=new Set(chosenQ.flatMap(s=>{const open=(s.items||[]).filter(xferOpen);const prev=open.filter(it=>xferIds.has(it.id));return(prev.length?prev:open).map(it=>it.id);}));
           // Each quote's rate: one typed earlier in this dialog, else the one its transferred lines keep, else TCMB's
           const kept=s=>{const i=items.find(l=>l.srcq&&l.srcq.qid===s.id);return i&&lineCur(doc,i)===qCur(s)&&lineFx(doc,i)>0?{rate:String(lineFx(doc,i)),src:+i.fxRate?i.fxSource||null:doc.fxSource||null}:null;};
           const rates=Object.fromEntries(chosenQ.map(s=>[s.id,x.rates&&x.rates[s.id]&&+x.rates[s.id].rate>0?x.rates[s.id]:kept(s)]).filter(([,r])=>r));
-          setXfer(v=>({...v,step:'lines',sel,rates,busy:{},errs:{}}));
+          setXfer(v=>({...v,step:'lines',sel:new Set([...v.sel].filter(id=>chosenQ.some(s=>(s.items||[]).some(it=>it.id===id&&xferAddable(it))))),rates,busy:{},errs:{}}));
           fetchXferRates(chosenQ.filter(s=>!rates[s.id]),false);
         };
         return(<div className="mt-overlay" onClick={close}>
@@ -1729,16 +1729,20 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <div className="mt-dialog-b">
               {xferQuotes.length===0?<div className="empty"><div className="empty-t">{tr("No open sub-supplier quotes")}</div>
                 <div className="empty-s">{tr("Enter the sub-supplier quotes under Group Company with this project and sales quotation selected.")}</div></div>:<>
-              <div className="xf-note">{tr("Tick the sub-supplier quotes to transfer from.")}</div>
+              <div className="xf-tools">
+                <input className="fi xf-search" type="search" value={x.q1||''} onChange={e=>{const v=e.target.value;setXfer(o=>({...o,q1:v}));}} placeholder={tr("Search quote no or sub-supplier...")} aria-label={tr("Search")}/>
+                <span className="xf-note" style={{margin:0}}>{tr("Tick the sub-supplier quotes to transfer from.")}</span>
+              </div>
               <table className="xf-tbl">
                 <thead><tr><th style={{width:32}}/><th>{tr("Date")}</th><th>{tr("Quote No")}</th><th>{tr("Sub-supplier")}</th><th className="tar">{tr("Open lines")}</th><th className="tar">{tr("Total")}</th><th>{tr("Status")}</th></tr></thead>
-                <tbody>{xferQuotes.map(s=>{const why=blocked(s),on=x.quotes.has(s.id),named=(s.items||[]).filter(it=>(it.desc||it.item)&&!isCharge(it));return(
+                <tbody>{shown.length===0?<tr><td colSpan={7}><div className="xf-note">{tr("No items match the filter")}</div></td></tr>:
+                  shown.map(s=>{const why=blocked(s),on=x.quotes.has(s.id),named=(s.items||[]).filter(xferNamed);return(
                   <tr key={s.id} className={'xf-pick'+(on?' on':'')+(why&&!on?' off':'')} onClick={()=>(!why||on)&&toggleQ(s)}>
                     <td><input type="checkbox" checked={on} disabled={!!why&&!on} onChange={()=>toggleQ(s)} onClick={e=>e.stopPropagation()} aria-label={s.number||s.supplierCompany}/></td>
                     <td style={{color:'var(--g500)',whiteSpace:'nowrap'}}>{fmtD(s.date)||'—'}</td>
                     <td><span className="mt-chip">{s.number||'—'}</span></td>
                     <td><b style={{color:'var(--g900)'}}>{s.supplierCompany||'—'}</b>{why&&!on&&<div className="xf-why">{why}</div>}</td>
-                    <td className="tar">{named.filter(xferOpen).length} / {named.length}</td>
+                    <td className="tar">{named.filter(xferAddable).length} / {named.length}</td>
                     <td className="tar" style={{whiteSpace:'nowrap'}}>{CURR[s.currency||'TRY']||s.currency}{fmt(docTotals(s).total)}</td>
                     <td><SrcBadge s={srcQuoteState(s)}/></td>
                   </tr>);})}</tbody>
@@ -1758,20 +1762,24 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const conv=(s,v)=>convAt(v,rateOf(s),qCur(s));
       const foreign=chosenQ.some(s=>qCur(s)!==dc);
       const str=v=>v==null?'':String(v);
-      const groups=chosenQ.map(s=>({s,lines:(s.items||[]).filter(it=>(it.desc||it.item)&&!isCharge(it))}));
-      const pickable=groups.flatMap(g=>g.lines.filter(xferOpen).map(it=>({s:g.s,it})));
-      const ticked=pickable.filter(o=>x.sel.has(o.it.id));
-      const setSel=(ids,on)=>setXfer(v=>{const n=new Set(v.sel);ids.forEach(id=>on?n.add(id):n.delete(id));return{...v,sel:n};});
-      const allOn=pickable.length>0&&ticked.length===pickable.length;
       // Customer line of a source line, and the open lines of other quotes offering the same customer line
       const custNo=key=>{const i=sq?(sq.items||[]).findIndex(c=>sqItemKey(c)===key):-1;return i<0?null:{n:i+1,text:sqLineText(sq.items[i])};};
-      const rivals=(s,it)=>!it.sqKey||!base?[]:srcQuotes.filter(o=>o.id!==s.id&&o.sqBase===base&&(o.items||[]).some(l=>l.sqKey===it.sqKey&&xferOpen(l)))
-        .map(o=>({o,on:(o.items||[]).some(l=>l.sqKey===it.sqKey&&x.sel.has(l.id)&&x.quotes.has(o.id))}));
+      const custOf=(s,it)=>it.sqKey&&base&&s.sqBase===base?custNo(it.sqKey):null;
+      const q=(x.q||'').trim().toLocaleLowerCase('tr');
+      const matches=(s,it)=>{const c=custOf(s,it);return has(q,it.desc,it.item,it.brand,c&&c.text,c&&'#'+c.n);};
+      // Shown: the lines that can be added (and, when asked for, the others greyed out) that match the search
+      const groups=chosenQ.map(s=>{const all=(s.items||[]).filter(xferNamed);
+        return{s,lines:all.filter(it=>(xferAddable(it)||x.showDone)&&matches(s,it)),done:all.filter(it=>!xferAddable(it)).length};}).filter(g=>g.lines.length||!q);
+      const doneCount=groups.reduce((t,g)=>t+g.done,0);
+      const pickable=chosenQ.flatMap(s=>(s.items||[]).filter(xferAddable).map(it=>({s,it})));
+      const ticked=pickable.filter(o=>x.sel.has(o.it.id));
+      const visibleIds=groups.flatMap(g=>g.lines.filter(xferAddable).map(it=>it.id));
+      const setSel=(ids,on)=>setXfer(v=>{const n=new Set(v.sel);ids.forEach(id=>on?n.add(id):n.delete(id));return{...v,sel:n};});
+      const rivals=(s,it)=>!it.sqKey||!base?[]:srcQuotes.filter(o=>o.id!==s.id&&o.sqBase===base&&(o.items||[]).some(l=>l.sqKey===it.sqKey&&(xferAddable(l)||xferIds.has(l.id))))
+        .map(o=>({o,on:(o.items||[]).some(l=>l.sqKey===it.sqKey&&(xferIds.has(l.id)||(x.sel.has(l.id)&&x.quotes.has(o.id))))}));
       const needRate=chosenQ.some(s=>qCur(s)!==dc&&!(+rateOf(s)>0)&&ticked.some(o=>o.s===s));
       const srcSums=curTotals(ticked.map(o=>[qCur(o.s),(+o.it.qty||0)*srcNet(o.s,o.it)]));
       const docSum=ticked.reduce((t,o)=>{const v=conv(o.s,srcNet(o.s,o.it));return t==null||v==null?null:t+(+o.it.qty||0)*v;},0);
-      const chosenIds=new Set(chosenQ.map(s=>s.id));
-      const removing=items.some(i=>i.srcq&&chosenIds.has(i.srcq.qid)&&!x.sel.has(i.srcq.lineId));
       // Rate of one quote, on its header row: fetched from TCMB on the quote's date, or typed
       const rateCtl=s=>{const r=(x.rates||{})[s.id]||{},busy=(x.busy||{})[s.id],err=(x.errs||{})[s.id];return(
         <div className="xf-rate" onClick={e=>e.stopPropagation()}>
@@ -1782,23 +1790,12 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="xf-rate-n">{busy?tr('Fetching…'):err?<span className="xf-why">{err}</span>:r.src&&r.src.date?tr('TCMB · {0} · banknote buying',fmtD(r.src.date)):r.rate?tr('Typed'):''}</div>
         </div>);};
       const apply=()=>{
-        const mk=(s,it,p)=>{const net=srcNet(s,it);return{...(p||{}),id:(p&&p.id)||uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty:it.qty,unit:it.unit||'',
+        const mk=(s,it)=>{const net=srcNet(s,it);return{id:uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty:it.qty,unit:it.unit||'',
           price:str(conv(s,net)),markup:String(x.markup||''),srcCurrency:qCur(s),fxRate:qCur(s)===dc?'':String(rateOf(s)||''),fxSource:qCur(s)===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
-        const byId=Object.fromEntries(pickable.map(o=>[o.it.id,o]));
-        const next=[];
-        items.forEach(i=>{
-          if(!i.srcq){if(i.desc||i.item||+i.price)next.push(i);return;}
-          // Lines transferred before currencies were kept per line get the document's currency written on them
-          // (and those transferred before markups were kept per line get the document's markup)
-          const own={...i,srcCurrency:lineCur(doc,i),markup:i.markup!=null?i.markup:String(doc.markup||'')};
-          if(chosenIds.has(i.srcq.qid)){const o=byId[i.srcq.lineId];if(!o){next.push(own);return;}if(!x.sel.has(o.it.id))return;
-            const n=mk(o.s,o.it,i);
-            // Same rate, markup and source price: the price on the line stays (it may have been corrected by hand)
-            const same=String(own.fxRate||'')===String(n.fxRate||'')&&String(own.markup||'')===String(n.markup||'')&&String(i.srcPrice||'')===String(n.srcPrice||'');
-            next.push(same?{...n,price:i.price}:n);return;}
-          next.push(own); // another quote's line: untouched
-        });
-        ticked.filter(o=>!xferIds.has(o.it.id)).forEach(o=>next.push(mk(o.s,o.it)));
+        // The lines already on the quote stay as they are; those transferred before currencies and markups were kept per
+        // line get the document's written on them, so their margins keep reading the same
+        const kept=items.filter(i=>i.srcq||i.desc||i.item||+i.price).map(i=>i.srcq?{...i,srcCurrency:lineCur(doc,i),markup:i.markup!=null?i.markup:String(doc.markup||'')}:i);
+        const next=[...kept,...ticked.map(o=>mk(o.s,o.it))];
         setItems(next.length?next:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
         const fromQ=chosenQ.find(s=>s.project);
         const proj=fromQ&&projects.find(p=>p.name===fromQ.project);
@@ -1816,26 +1813,31 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               {foreign?<Fld label={tr("Exchange Rates")}><Btn v="bgh bsm" type="button" disabled={Object.values(x.busy||{}).some(Boolean)} onClick={()=>fetchXferRates(chosenQ,true)}>{tr("Refresh TCMB rates")}</Btn></Fld>:<div/>}
             </div>
             <div className="xf-note">{foreign?tr("Each sub-supplier quote is converted at the TCMB banknote buying rate of its date; a rate can be typed over. The markup applies to the lines of this transfer; lines transferred before keep their price."):tr("The markup applies to the lines of this transfer; lines transferred before keep their price.")}</div>
+            <div className="xf-tools">
+              <input className="fi xf-search" type="search" value={x.q||''} onChange={e=>{const v=e.target.value;setXfer(o=>({...o,q:v}));}} placeholder={tr("Search item, code, brand or customer item...")} aria-label={tr("Search")}/>
+              <Btn v="bgh bsm" type="button" disabled={!visibleIds.length} onClick={()=>setSel(visibleIds,true)}>{tr("Select all")}</Btn>
+              <Btn v="bgh bsm" type="button" disabled={!ticked.length} onClick={()=>setSel(q?visibleIds:[...x.sel],false)}>{tr("Clear selection")}</Btn>
+              {doneCount>0&&<label className="xf-toggle"><input type="checkbox" checked={!!x.showDone} onChange={e=>{const v=e.target.checked;setXfer(o=>({...o,showDone:v}));}}/>{tr("Show transferred ({0})",doneCount)}</label>}
+            </div>
             <table className="xf-tbl">
-              <thead><tr>
-                <th style={{width:32}}><input type="checkbox" checked={allOn} ref={el=>{if(el)el.indeterminate=!allOn&&ticked.length>0;}} disabled={!pickable.length} onChange={()=>setSel(pickable.map(o=>o.it.id),!allOn)} aria-label={tr("Select all")}/></th>
-                <th>{tr("Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Unit Price")}</th><th className="tar">→ {dc}</th><th>{tr("Customer Item")}</th>
-              </tr></thead>
-              {groups.map(({s,lines})=>{const open=lines.filter(xferOpen).map(it=>it.id),gOn=open.length>0&&open.every(id=>x.sel.has(id));return(<tbody key={s.id}>
+              <thead><tr><th style={{width:32}}/><th>{tr("Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Unit Price")}</th><th className="tar">→ {dc}</th><th>{tr("Customer Item")}</th></tr></thead>
+              {groups.length===0?<tbody><tr><td colSpan={6}><div className="xf-note">{tr("No items match the filter")}</div></td></tr></tbody>:groups.map(({s,lines})=>{
+                const open=lines.filter(xferAddable).map(it=>it.id),gOn=open.length>0&&open.every(id=>x.sel.has(id));return(<tbody key={s.id}>
                 <tr className="xf-grp" onClick={()=>open.length&&setSel(open,!gOn)}>
                   <td><input type="checkbox" checked={gOn} ref={el=>{if(el)el.indeterminate=!gOn&&open.some(id=>x.sel.has(id));}} disabled={!open.length} onChange={()=>setSel(open,!gOn)} onClick={e=>e.stopPropagation()} aria-label={s.number||s.supplierCompany}/></td>
                   <td colSpan={5}><div className="xf-grp-h"><div><span className="mt-chip">{s.number||'—'}</span> <b>{s.supplierCompany||'—'}</b> <span className="xf-sub">· {fmtD(s.date)} · {tr("{0} of {1} ticked",open.filter(id=>x.sel.has(id)).length,open.length)}</span></div>{qCur(s)!==dc&&rateCtl(s)}</div></td>
                 </tr>
-                {lines.map(it=>{const ok=xferOpen(it),on=x.sel.has(it.id),net=srcNet(s,it),v=conv(s,net),c=it.sqKey&&base&&s.sqBase===base?custNo(it.sqKey):null,rv=ok?rivals(s,it):[];
+                {lines.length===0&&<tr><td/><td colSpan={5}><div className="xf-note" style={{margin:0}}>{tr("Every line of this quote is already transferred")}</div></td></tr>}
+                {lines.map(it=>{const ok=xferAddable(it),on=x.sel.has(it.id),net=srcNet(s,it),v=conv(s,net),c=custOf(s,it),rv=ok?rivals(s,it):[];
                   const disc=s.discOn?lineRate(it,'discRate',s.discRate):0;
                   return(<tr key={it.id} className={'xf-pick'+(on?' on':'')+(ok?'':' off')} onClick={()=>ok&&setSel([it.id],!on)}>
-                    <td><input type="checkbox" checked={on} disabled={!ok} onChange={()=>setSel([it.id],!on)} onClick={e=>e.stopPropagation()} aria-label={it.desc||it.item}/></td>
-                    <td><div style={{color:'var(--g900)'}}>{it.desc||it.item}</div>
+                    <td>{ok&&<input type="checkbox" checked={on} onChange={()=>setSel([it.id],!on)} onClick={e=>e.stopPropagation()} aria-label={it.desc||it.item}/>}</td>
+                    <td><div style={{color:ok?'var(--g900)':undefined}}>{it.desc||it.item}</div>
                       {(it.item&&it.desc||it.brand)&&<div className="xf-sub">{[it.desc&&it.item,it.brand].filter(Boolean).join(' · ')}</div>}
-                      {!ok&&<div className="xf-sub">{it.quotedIn?tr("Transferred to {0}",it.quotedIn.number||'—'):tr("Not used")}</div>}</td>
+                      {!ok&&<div className="xf-sub">{xferIds.has(it.id)?<span className="mt-tag ok">{tr("In this quote")}</span>:it.quotedIn?tr("Transferred to {0}",it.quotedIn.number||'—'):tr("Not used")}</div>}</td>
                     <td className="tar" style={{whiteSpace:'nowrap'}}>{it.qty} {it.unit||''}</td>
                     <td className="tar" style={{whiteSpace:'nowrap'}}>{CURR[s.currency||'TRY']||s.currency}{fmt(net)}{disc>0&&<div className="xf-sub">{tr("Discount {0}%",disc)}</div>}</td>
-                    <td className="tar" style={{whiteSpace:'nowrap',fontWeight:600,color:'var(--gm-600)'}}>{v==null?<span style={{color:'var(--g300)'}}>—</span>:(CURR[dc]||'')+fmt(v)}</td>
+                    <td className="tar" style={{whiteSpace:'nowrap',fontWeight:600,color:ok?'var(--gm-600)':undefined}}>{!ok||v==null?<span style={{color:'var(--g300)'}}>—</span>:(CURR[dc]||'')+fmt(v)}</td>
                     <td>{c?<span>↳ #{c.n} {c.text}</span>:<span className="mt-none">{tr("Not matched")}</span>}
                       {rv.map(({o,on:both})=><div key={o.id}><span className={'mt-tag'+(both&&on?'':' xf-soft')}>{tr("Also in {0}",o.number||o.supplierCompany)}</span></div>)}</td>
                   </tr>);})}
@@ -1846,7 +1848,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <span className="xf-sum">{needRate?<span className="mt-none">{tr("Enter the exchange rate")}</span>
               :<>{tr("{0} line(s)",ticked.length)} · {fmtCurTotals(srcSums,(CURR[dc]||'')+fmt(0))}{docSum!=null&&Object.keys(srcSums).some(c=>c!==dc)&&<> → {CURR[dc]||''}{fmt(docSum)}</>}</>}</span>
             <Btn v="bgh bsm" onClick={()=>setXfer(v=>({...v,step:'quotes'}))}>← {tr("Quotes")}</Btn>
-            <Btn v="bp bsm" disabled={needRate||(!ticked.length&&!removing)} onClick={apply}>{tr("Transfer {0} item(s)",ticked.length)}</Btn>
+            <Btn v="bp bsm" disabled={needRate||!ticked.length} onClick={apply}>{tr("Transfer {0} item(s)",ticked.length)}</Btn>
           </div>
         </div>
       </div>);
