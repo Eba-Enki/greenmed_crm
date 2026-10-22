@@ -1125,7 +1125,9 @@ const discLabel=t=>typeof t.discRate==='number'&&t.discRate>0?tr("Discount ({0}%
 // matched to a customer line. A line whose description reads like a charge becomes one by itself (kindAuto) until a
 // choice is made in that column.
 // reorder: a grip at the start of each line moves it, by dragging or with Alt+↑ / Alt+↓
-function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand,multi,charge,reorder}){
+// split (with match): a line may be split across several customer items by quantity (sqSplit: [{key, qty}], sqKey the
+// first of them), e.g. a supplier's 2 microscopes for customer items #24 and #7; a transfer turns it into one line each.
+function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,brand,multi,charge,reorder,split}){
   const sym=CURR[currency]||'£';
   const si=(id,f,v)=>setItems(items.map(i=>i.id===id?{...i,[f]:v}:i));
   const addL=()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
@@ -1165,7 +1167,15 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
       if(!over||over.id!==it.id||over.after!==after)setOver({id:it.id,after});},
     onDrop:e=>{e.preventDefault();dropOn(it.id,over&&over.id===it.id?over.after:false);}
   };
-  const usedKeys=it=>items.reduce((m,x)=>{if(x.id!==it.id&&x.sqKey)m[x.sqKey]=(m[x.sqKey]||0)+1;return m;},{});
+  const keysOf=x=>x.sqSplit&&x.sqSplit.length>1?x.sqSplit.map(a=>a.key):x.sqKey?[x.sqKey]:[];
+  const usedKeys=it=>items.reduce((m,x)=>{if(x.id!==it.id)keysOf(x).forEach(k=>{m[k]=(m[k]||0)+1;});return m;},{});
+  // Split dialog: the line being split and its draft rows
+  const[splitDlg,setSplitDlg]=useState(null); // {id, rows:[{key,qty}]}
+  const SPLIT='__split__';
+  const openSplit=it=>setSplitDlg({id:it.id,rows:it.sqSplit&&it.sqSplit.length>1?it.sqSplit.map(a=>({...a})):[{key:it.sqKey||'',qty:String(it.qty||'1')},{key:'',qty:''}]});
+  const saveSplit=()=>{const ok=splitDlg.rows.filter(r=>r.key&&+r.qty>0);
+    setItems(items.map(i=>i.id!==splitDlg.id?i:ok.length>1?{...i,sqKey:ok[0].key,sqSplit:ok.map(r=>({key:r.key,qty:String(+r.qty)}))}:{...i,sqKey:ok[0]?ok[0].key:'',sqSplit:undefined}));
+    setSplitDlg(null);};
   const setDesc=(it,v)=>setItems(items.map(i=>{
     if(i.id!==it.id)return i;
     const n={...i,desc:v};
@@ -1173,7 +1183,7 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
     const g=charge.guess(v);
     return g===undefined?(i.kindAuto?{...n,kind:'',kindAuto:false,expCatId:''}:n):{...n,kind:'charge',kindAuto:true,expCatId:g};
   }));
-  const pickLine=(it,v)=>setItems(items.map(i=>i.id!==it.id?i:{...i,kind:i.kind||'',kindAuto:false,sqKey:v}));
+  const pickLine=(it,v)=>{if(v===SPLIT){openSplit(it);return;}setItems(items.map(i=>i.id!==it.id?i:{...i,kind:i.kind||'',kindAuto:false,sqKey:v,sqSplit:undefined}));};
   // A charge's category; PRODUCT turns it back into a product line
   const PRODUCT='__product__';
   const pickCat=(it,v)=>setItems(items.map(i=>i.id!==it.id?i:v===PRODUCT?{...i,kind:'product',kindAuto:false,expCatId:''}:{...i,kind:'charge',kindAuto:false,expCatId:v}));
@@ -1205,12 +1215,17 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
                   {!readOnly&&<option value={PRODUCT}>{tr("↩ Make it a product line")}</option>}
                 </select></div>);}
             if(!match)return <span style={{color:'var(--g300)',padding:'0 8px'}}>—</span>;
+            if(split&&it.sqSplit&&it.sqSplit.length>1){const sum=it.sqSplit.reduce((t,a)=>t+(+a.qty||0),0),off=sum!==(+it.qty||0);
+              const lbl=k=>{const o=opts.find(o=>o.key===k);return o?o.label.split(' ')[0]:'?';};return(
+              <button type="button" className={'ie-split'+(off?' off':'')} onClick={()=>openSplit(it)} disabled={readOnly} title={it.sqSplit.map(a=>((opts.find(o=>o.key===a.key)||{}).label||a.key)+' ×'+a.qty).join('\n')}>
+                {it.sqSplit.map(a=>lbl(a.key)+' ×'+a.qty).join(' · ')}{off&&' ⚠'}</button>);}
             return(
             <select value={it.sqKey||''} onChange={e=>pickLine(it,e.target.value)} disabled={readOnly} title={(opts.find(o=>o.key===it.sqKey)||{}).label||''}
               style={{width:'100%',color:it.sqKey?'var(--g800)':'var(--g400)'}}>
               <option value="">{tr("— Not matched —")}</option>
               {opts.map(o=><option key={o.key} value={o.key}>{o.label}{used[o.key]?` (${tr("+{0} line(s)",used[o.key])})`:''}</option>)}
               {it.sqKey&&!opts.some(o=>o.key===it.sqKey)&&<option value={it.sqKey}>{tr("(item no longer in quotation)")}</option>}
+              {split&&!readOnly&&<option value={SPLIT}>{tr("Split across several items…")}</option>}
             </select>);})()}</td>}
           <td><input type="number" value={it.qty} onChange={e=>si(it.id,'qty',e.target.value)} min="0" step=".01" style={{textAlign:'right'}} readOnly={readOnly}/></td>
           <td><input value={it.unit||''} onChange={e=>si(it.id,'unit',e.target.value)} placeholder="pcs" readOnly={readOnly}/></td>
@@ -1225,6 +1240,32 @@ function ItemsEditor({items,setItems,currency,readOnly,match,totals,vat,disc,bra
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
       {!readOnly?<div style={{display:'flex',gap:8}}><Btn v="bgh bsm" onClick={addL}><Ico n="plus"/>{tr("Add Line")}</Btn>
         {charge&&<Btn v="bgh bsm" onClick={addCharge}><Ico n="plus"/>{tr("Add Charge")}</Btn>}</div>:<div/>}
+      {splitDlg&&match&&(()=>{const it=items.find(i=>i.id===splitDlg.id);if(!it)return null;const opts=match.options;
+        const rows=splitDlg.rows,setRow=(i,p)=>setSplitDlg(d=>({...d,rows:d.rows.map((r,j)=>j===i?{...r,...p}:r)}));
+        const sum=rows.reduce((t,r)=>t+(r.key?+r.qty||0:0),0),qty=+it.qty||0,dup=rows.filter(r=>r.key).some((r,i,a)=>a.findIndex(x=>x.key===r.key)!==i);
+        return(<div className="mt-overlay" onClick={()=>setSplitDlg(null)}>
+          <div className="mt-dialog" role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+            <div className="mt-dialog-h"><div><div className="mt-dialog-k">{tr("Split across several items")}</div><div className="mt-dialog-t">{it.desc||it.item||'—'} · {it.qty} {it.unit||''}</div>
+              <div className="mt-dialog-n">{tr("The line stays one line here; a transfer turns it into one line per customer item.")}</div></div>
+              <button className="ab" onClick={()=>setSplitDlg(null)} aria-label={tr("Close")}><Ico n="x"/></button></div>
+            <div className="mt-dialog-b">
+              {rows.map((r,i)=><div key={i} className="ie-split-row">
+                <select className="fi" value={r.key} onChange={e=>setRow(i,{key:e.target.value})} aria-label={tr("Customer Item")}>
+                  <option value="">{tr("— Customer item —")}</option>{opts.map(o=><option key={o.key} value={o.key}>{o.label}</option>)}</select>
+                <input className="fi" type="number" min="0" step="1" value={r.qty} onChange={e=>setRow(i,{qty:e.target.value})} placeholder="0" aria-label={tr("Qty")}/>
+                <button type="button" className="ab danger" onClick={()=>setSplitDlg(d=>({...d,rows:d.rows.filter((_,j)=>j!==i)}))} aria-label={tr("Remove")} title={tr("Remove")}><Ico n="x"/></button>
+              </div>)}
+              <div><Btn v="bgh bsm" type="button" onClick={()=>setSplitDlg(d=>({...d,rows:[...d.rows,{key:'',qty:''}]}))}><Ico n="plus"/>{tr("Add item")}</Btn></div>
+              <div className={sum===qty?'ie-split-sum ok':'ie-split-sum'}>{tr("Total {0} / {1}",sum,qty)}{sum===qty?' ✓':sum<qty?' — '+tr("the rest is transferred unmatched"):' — '+tr("more than the line's quantity")}</div>
+              {dup&&<div className="mt-none">{tr("A customer item is picked twice")}</div>}
+            </div>
+            <div className="mt-dialog-f">
+              {it.sqSplit&&it.sqSplit.length>1&&<Btn v="bgh bsm" onClick={()=>{setItems(items.map(i=>i.id!==it.id?i:{...i,sqSplit:undefined}));setSplitDlg(null);}} style={{marginRight:'auto'}}>{tr("Remove split")}</Btn>}
+              <Btn v="bgh bsm" onClick={()=>setSplitDlg(null)}>{tr("Cancel")}</Btn>
+              <Btn v="bp bsm" disabled={dup||sum>qty||!rows.some(r=>r.key&&+r.qty>0)} onClick={saveSplit}>{tr("Save")}</Btn>
+            </div>
+          </div>
+        </div>);})()}
       {totals&&(totals.groups.length>0||totals.disc>0)
         ?<div className="totbox totbox-vat">
           <span className="totlbl">{tr("Sub Total")}</span><span className="totsub">{sym}{fmt(totals.sub)}</span>

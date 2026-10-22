@@ -340,6 +340,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   // sales quotation group (sqBase) and each of its lines at one customer line (sqKey). Matches resolve against the
   // group's latest revision; quotation lines keep their key across revisions (older lines use their id).
   const sqItemKey=it=>it.key||it.id;
+  // Customer lines a supplier line is matched to: one (sqKey), or several when its quantity is split across them
+  // (sqSplit: [{key, qty}], on sub-supplier quote lines; a transfer turns such a line into one line per customer line)
+  const lineKeys=it=>it.sqSplit&&it.sqSplit.length>1?it.sqSplit.map(a=>a.key).filter(Boolean):it.sqKey?[it.sqKey]:[];
   const sqBaseOf=q=>q.base||q.number;
   const latestSQ=base=>base?salesQuotes.filter(q=>sqBaseOf(q)===base).reduce((a,q)=>!a||(q.rev||0)>(a.rev||0)?q:a,null):null;
   const sqLineText=it=>it.desc||it.item||'—';
@@ -556,7 +559,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const mkSrcQuote=()=>({id:null,number:'',date:td(),supplierId:'',supplierCompany:'',currency:'TRY',project:'',projectNumber:'',sqBase:'',items:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const mkSrcInvoice=q=>({id:null,number:'',date:td(),supplierId:(q&&q.supplierId)||'',supplierCompany:(q&&q.supplierCompany)||'',currency:(q&&q.currency)||'TRY',
     project:(q&&q.project)||'',projectNumber:(q&&q.projectNumber)||'',sqBase:(q&&q.sqBase)||'',srcqId:(q&&q.id)||'',srcqNumber:(q&&q.number)||'',vatOn:!!(q&&q.vatOn),vatRate:(q&&q.vatRate)||'',discOn:!!(q&&q.discOn),discRate:(q&&q.discRate)||'',
-    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',discRate:i.discRate||'',brand:i.brand||'',...(i.kind?{kind:i.kind,kindAuto:!!i.kindAuto,expCatId:i.expCatId||''}:{}),sqKey:i.sqKey||''})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
+    items:q?(q.items||[]).filter(i=>(i.desc||i.item)&&(i.status||'pending')!=='unused').map(i=>({id:uid(),srcId:i.id,item:i.item||'',desc:i.desc||'',qty:i.qty,unit:i.unit||'',price:i.price,vatRate:i.vatRate||'',discRate:i.discRate||'',brand:i.brand||'',...(i.kind?{kind:i.kind,kindAuto:!!i.kindAuto,expCatId:i.expCatId||''}:{}),sqKey:i.sqKey||'',...(i.sqSplit?{sqSplit:i.sqSplit}:{})})):[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}],notes:''});
   const srcLineState=it=>it.status||'pending';
   const srcQuoteState=q=>{const s=(q.items||[]).filter(i=>(i.desc||i.item)&&!isCharge(i)).map(srcLineState);
     if(!s.length||s.every(x=>x==='pending'))return'pending';if(s.every(x=>x==='unused'))return'unused';if(s.includes('pending'))return'partial';return'quoted';};
@@ -593,7 +596,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         let n=it;
         if((it.quotedIn&&it.quotedIn.id===doc.id)||(it.unusedBy&&it.unusedBy.id===doc.id))n={...it,status:'pending',quotedIn:null,unusedBy:null};
         if(used.has(it.id))n={...n,status:'quoted',quotedIn:ref,unusedBy:null};
-        else if(!removed&&srcLineState(n)==='pending'&&q.sqBase&&q.sqBase===doc.sqBase&&n.sqKey&&usedFor[n.sqKey]&&!usedFor[n.sqKey].has(q.id))n={...n,status:'unused',unusedBy:ref};
+        // (a line split across several customer lines only when every one of them was covered by another quote)
+        else if(!removed&&srcLineState(n)==='pending'&&q.sqBase&&q.sqBase===doc.sqBase&&lineKeys(n).length&&lineKeys(n).every(k=>usedFor[k]&&!usedFor[k].has(q.id)))n={...n,status:'unused',unusedBy:ref};
         if(JSON.stringify(n)!==JSON.stringify(it))qChanged=true;
         return n;
       });
@@ -1648,10 +1652,24 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const supplierLocked=(isPO&&!!doc.pqId)||(isRI&&!!doc.poId);
     const roStyle={background:'var(--g50)',color:'var(--g700)',cursor:'default'};
     const savedDoc={...doc,items};
+    // A PO made from a received quote (an invoice from a PO) does not follow lines added to or split on that document
+    // afterwards: they are pointed out here and brought over on request (missing lines added, quantities matched).
+    // Documents paired by position (made before lines kept their source line) are not compared
+    const parentDoc=isPO&&doc.pqId?purchaseQuotes.find(q=>q.id===doc.pqId):isRI&&doc.poId?purchaseOrders.find(o=>o.id===doc.poId):null;
+    const drift=(()=>{
+      if(!parentDoc||!items.some(i=>i.srcId))return null;
+      const pl=(parentDoc.items||[]).filter(p=>p.desc||p.item||+p.price);
+      const missing=pl.filter(p=>!items.some(c=>c.srcId===p.id));
+      const qtyDiff=pl.filter(p=>{const c=items.find(c=>c.srcId===p.id);return c&&(+c.qty||0)!==(+p.qty||0);});
+      return missing.length||qtyDiff.length?{missing,qtyDiff}:null;
+    })();
+    const syncWithParent=()=>setItems(its=>[
+      ...its.map(c=>{const p=c.srcId&&drift.qtyDiff.find(x=>x.id===c.srcId);return p?{...c,qty:p.qty}:c;}).filter(c=>c.srcId||c.desc||c.item||+c.price),
+      ...drift.missing.map(p=>({...p,id:uid(),srcId:p.id}))]);
     // Sales quotation whose customer lines this document's lines are matched to (latest revision of each group)
     const sqChoices=[...new Set(salesQuotes.filter(q=>!doc.project||q.project===doc.project).map(sqBaseOf))].concat(doc.sqBase?[doc.sqBase]:[])
       .filter((b,i,a)=>a.indexOf(b)===i).map(latestSQ).filter(Boolean);
-    const clearMatches=()=>setItems(its=>its.map(i=>i.sqKey?{...i,sqKey:''}:i));
+    const clearMatches=()=>setItems(its=>its.map(i=>i.sqKey||i.sqSplit?{...i,sqKey:'',sqSplit:undefined}:i));
     const pickSQ=base=>{
       if(base===(doc.sqBase||''))return;
       const q=latestSQ(base);
@@ -1765,8 +1783,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       // Customer line of a source line, and the open lines of other quotes offering the same customer line
       const custNo=key=>{const i=sq?(sq.items||[]).findIndex(c=>sqItemKey(c)===key):-1;return i<0?null:{n:i+1,text:sqLineText(sq.items[i])};};
       const custOf=(s,it)=>it.sqKey&&base&&s.sqBase===base?custNo(it.sqKey):null;
+      // A line split across customer lines: one entry per part, with its quantity (and the rest left unmatched)
+      const partsOf=(s,it)=>{const sp=it.sqSplit&&it.sqSplit.length>1&&base&&s.sqBase===base?it.sqSplit:null;if(!sp)return null;
+        const rest=(+it.qty||0)-sp.reduce((t,a)=>t+(+a.qty||0),0);return[...sp.map(a=>({key:a.key,qty:a.qty,c:custNo(a.key)})),...(rest>0?[{key:'',qty:String(rest),c:null}]:[])];};
       const q=(x.q||'').trim().toLocaleLowerCase('tr');
-      const matches=(s,it)=>{const c=custOf(s,it);return has(q,it.desc,it.item,it.brand,c&&c.text,c&&'#'+c.n);};
+      const matches=(s,it)=>{const cs=(partsOf(s,it)||[{c:custOf(s,it)}]).map(p=>p.c).filter(Boolean);return has(q,it.desc,it.item,it.brand,...cs.flatMap(c=>[c.text,'#'+c.n]));};
       // Shown: the lines that can be added (and, when asked for, the others greyed out) that match the search
       const groups=chosenQ.map(s=>{const all=(s.items||[]).filter(xferNamed);
         return{s,lines:all.filter(it=>(xferAddable(it)||x.showDone)&&matches(s,it)),done:all.filter(it=>!xferAddable(it)).length};}).filter(g=>g.lines.length||!q);
@@ -1775,8 +1796,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const ticked=pickable.filter(o=>x.sel.has(o.it.id));
       const visibleIds=groups.flatMap(g=>g.lines.filter(xferAddable).map(it=>it.id));
       const setSel=(ids,on)=>setXfer(v=>{const n=new Set(v.sel);ids.forEach(id=>on?n.add(id):n.delete(id));return{...v,sel:n};});
-      const rivals=(s,it)=>!it.sqKey||!base?[]:srcQuotes.filter(o=>o.id!==s.id&&o.sqBase===base&&(o.items||[]).some(l=>l.sqKey===it.sqKey&&(xferAddable(l)||xferIds.has(l.id))))
-        .map(o=>({o,on:(o.items||[]).some(l=>l.sqKey===it.sqKey&&(xferIds.has(l.id)||(x.sel.has(l.id)&&x.quotes.has(o.id))))}));
+      const shares=(l,it)=>lineKeys(l).some(k=>lineKeys(it).includes(k));
+      const rivals=(s,it)=>!lineKeys(it).length||!base?[]:srcQuotes.filter(o=>o.id!==s.id&&o.sqBase===base&&(o.items||[]).some(l=>shares(l,it)&&(xferAddable(l)||xferIds.has(l.id))))
+        .map(o=>({o,on:(o.items||[]).some(l=>shares(l,it)&&(xferIds.has(l.id)||(x.sel.has(l.id)&&x.quotes.has(o.id))))}));
       const needRate=chosenQ.some(s=>qCur(s)!==dc&&!(+rateOf(s)>0)&&ticked.some(o=>o.s===s));
       const srcSums=curTotals(ticked.map(o=>[qCur(o.s),(+o.it.qty||0)*srcNet(o.s,o.it)]));
       const docSum=ticked.reduce((t,o)=>{const v=conv(o.s,srcNet(o.s,o.it));return t==null||v==null?null:t+(+o.it.qty||0)*v;},0);
@@ -1790,12 +1812,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="xf-rate-n">{busy?tr('Fetching…'):err?<span className="xf-why">{err}</span>:r.src&&r.src.date?tr('TCMB · {0} · banknote buying',fmtD(r.src.date)):r.rate?tr('Typed'):''}</div>
         </div>);};
       const apply=()=>{
-        const mk=(s,it)=>{const net=srcNet(s,it);return{id:uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty:it.qty,unit:it.unit||'',
-          price:str(conv(s,net)),markup:String(x.markup||''),srcCurrency:qCur(s),fxRate:qCur(s)===dc?'':String(rateOf(s)||''),fxSource:qCur(s)===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:base&&s.sqBase===base?it.sqKey||'':'',srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id}};};
+        // One line per customer line the source line is split across (else one line), at the same unit price
+        const mk=(s,it)=>{const net=srcNet(s,it);const line=(qty,key,part)=>({id:uid(),item:it.item||'',desc:it.desc||'',...(it.brand?{brand:it.brand}:{}),qty,unit:it.unit||'',
+          price:str(conv(s,net)),markup:String(x.markup||''),srcCurrency:qCur(s),fxRate:qCur(s)===dc?'':String(rateOf(s)||''),fxSource:qCur(s)===dc?null:((x.rates||{})[s.id]||{}).src||null,sqKey:key,srcSupplier:s.supplierCompany||'',srcDocNo:s.number||'',srcDocDate:s.date||'',srcPrice:net?String(net):'',srcq:{qid:s.id,lineId:it.id,...(part!=null?{part}:{})}});
+          const parts=partsOf(s,it);return parts?parts.map((p,i)=>line(p.qty,p.key,i)):[line(it.qty,base&&s.sqBase===base?it.sqKey||'':'')];};
         // The lines already on the quote stay as they are; those transferred before currencies and markups were kept per
         // line get the document's written on them, so their margins keep reading the same
         const kept=items.filter(i=>i.srcq||i.desc||i.item||+i.price).map(i=>i.srcq?{...i,srcCurrency:lineCur(doc,i),markup:i.markup!=null?i.markup:String(doc.markup||'')}:i);
-        const next=[...kept,...ticked.map(o=>mk(o.s,o.it))];
+        const next=[...kept,...ticked.flatMap(o=>mk(o.s,o.it))];
         setItems(next.length?next:[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:''}]);
         const fromQ=chosenQ.find(s=>s.project);
         const proj=fromQ&&projects.find(p=>p.name===fromQ.project);
@@ -1828,7 +1852,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   <td colSpan={5}><div className="xf-grp-h"><div><span className="mt-chip">{s.number||'—'}</span> <b>{s.supplierCompany||'—'}</b> <span className="xf-sub">· {fmtD(s.date)} · {tr("{0} of {1} ticked",open.filter(id=>x.sel.has(id)).length,open.length)}</span></div>{qCur(s)!==dc&&rateCtl(s)}</div></td>
                 </tr>
                 {lines.length===0&&<tr><td/><td colSpan={5}><div className="xf-note" style={{margin:0}}>{tr("Every line of this quote is already transferred")}</div></td></tr>}
-                {lines.map(it=>{const ok=xferAddable(it),on=x.sel.has(it.id),net=srcNet(s,it),v=conv(s,net),c=custOf(s,it),rv=ok?rivals(s,it):[];
+                {lines.map(it=>{const ok=xferAddable(it),on=x.sel.has(it.id),net=srcNet(s,it),v=conv(s,net),c=custOf(s,it),parts=partsOf(s,it),rv=ok?rivals(s,it):[];
                   const disc=s.discOn?lineRate(it,'discRate',s.discRate):0;
                   return(<tr key={it.id} className={'xf-pick'+(on?' on':'')+(ok?'':' off')} onClick={()=>ok&&setSel([it.id],!on)}>
                     <td>{ok&&<input type="checkbox" checked={on} onChange={()=>setSel([it.id],!on)} onClick={e=>e.stopPropagation()} aria-label={it.desc||it.item}/>}</td>
@@ -1838,7 +1862,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                     <td className="tar" style={{whiteSpace:'nowrap'}}>{it.qty} {it.unit||''}</td>
                     <td className="tar" style={{whiteSpace:'nowrap'}}>{CURR[s.currency||'TRY']||s.currency}{fmt(net)}{disc>0&&<div className="xf-sub">{tr("Discount {0}%",disc)}</div>}</td>
                     <td className="tar" style={{whiteSpace:'nowrap',fontWeight:600,color:ok?'var(--gm-600)':undefined}}>{!ok||v==null?<span style={{color:'var(--g300)'}}>—</span>:(CURR[dc]||'')+fmt(v)}</td>
-                    <td>{c?<span>↳ #{c.n} {c.text}</span>:<span className="mt-none">{tr("Not matched")}</span>}
+                    <td>{parts?<><span className="mt-tag ok">{tr("→ {0} lines",parts.length)}</span>{parts.map((p,i)=><div key={i}>{p.c?<span>↳ #{p.c.n} {p.c.text}</span>:<span className="mt-none">{tr("Not matched")}</span>} <b>×{p.qty}</b></div>)}</>
+                      :c?<span>↳ #{c.n} {c.text}</span>:<span className="mt-none">{tr("Not matched")}</span>}
                       {rv.map(({o,on:both})=><div key={o.id}><span className={'mt-tag'+(both&&on?'':' xf-soft')}>{tr("Also in {0}",o.number||o.supplierCompany)}</span></div>)}</td>
                   </tr>);})}
               </tbody>);})}
@@ -1860,6 +1885,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </FormHeader>
       {doc.pqNum&&<div style={{background:'var(--teall)',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--teal)'}}>{tr("From Purchase Quotation:")} <strong>{doc.pqNum}</strong></div>}
       {doc.poNum&&<div style={{background:'var(--teall)',border:'1px solid #a5f3fc',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12.5,color:'var(--teal)'}}>{tr("From Purchase Order:")} <strong>{doc.poNum}</strong></div>}
+      {drift&&<div className="pd-drift"><span>{tr(isPO?"The received quote {0} has changed since this order was made: {1} line(s) not here, {2} with another quantity.":"The order {0} has changed since this invoice was made: {1} line(s) not here, {2} with another quantity.",parentDoc.number||'—',drift.missing.length,drift.qtyDiff.length)}</span>
+        <Btn v="bgh bsm" onClick={syncWithParent}>{isPO?tr("Sync with the quote"):tr("Sync with the order")}</Btn></div>}
       <div className="fc"><div className="fct">{tr("Document Details")}</div>
         <div className="fg g3">
           <Fld label={isPQ?tr("Their PQ No"):isPO?tr("PO No"):tr("Their Invoice No")}><input value={doc.number||''} onChange={e=>set('number',e.target.value)} className="fi" readOnly={isPO} style={isPO?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld>
@@ -2141,9 +2168,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       .filter((b,i,a)=>a.indexOf(b)===i).map(latestSQ).filter(Boolean);
     const pickSQ=base=>{if(base===(doc.sqBase||''))return;const q=latestSQ(base);
       setDoc(d=>({...d,sqBase:base,...(q&&!d.project&&q.project?{project:q.project,projectNumber:q.projectNumber||''}:{})}));
-      setItems(its=>its.map(i=>i.sqKey?{...i,sqKey:''}:i));};
+      setItems(its=>its.map(i=>i.sqKey||i.sqSplit?{...i,sqKey:'',sqSplit:undefined}:i));};
     const pickProject=name=>{const proj=projects.find(p=>p.name===name);const q=latestSQ(doc.sqBase);const keep=!q||!name||q.project===name;
-      setDoc(d=>({...d,project:name,projectNumber:proj?proj.number:'',...(keep?{}:{sqBase:''})}));if(!keep)setItems(its=>its.map(i=>i.sqKey?{...i,sqKey:''}:i));};
+      setDoc(d=>({...d,project:name,projectNumber:proj?proj.number:'',...(keep?{}:{sqBase:''})}));if(!keep)setItems(its=>its.map(i=>i.sqKey||i.sqSplit?{...i,sqKey:'',sqSplit:undefined}:i));};
     const used=isQ&&(init.items||[]).filter(i=>srcLineState(i)==='quoted').map(i=>i.quotedIn&&i.quotedIn.number).filter((v,i,a)=>v&&a.indexOf(v)===i);
     const save=()=>{if(!(doc.number||'').trim()){showToast(isQ?tr('Enter the quote number'):tr('Enter the invoice number'));return;}onSave({...doc,number:doc.number.trim(),items});};
     return(<div className="content"><div className="fw doc-fw">
@@ -2178,7 +2205,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </div>
         </div>
         {!doc.sqBase&&<div style={{fontSize:12,color:'var(--g500)',marginBottom:10}}>{tr("Select the sales quotation above to match each line to the customer's item.")}</div>}
-        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} disc={doc.discOn?{def:doc.discRate}:null} brand={showBrand} multi
+        <ItemsEditor items={items} setItems={setItems} currency={doc.currency||'TRY'} match={doc.sqBase?{options:sqMatchOptions(doc.sqBase)}:undefined} totals={docTotals(doc,items)} vat={doc.vatOn?{def:doc.vatRate}:null} disc={doc.discOn?{def:doc.discRate}:null} brand={showBrand} multi split
           charge={{cats:chargeCats(),guess:guessCharge}}/>
         <div className="vat-row">
           <label className="st-check"><input type="checkbox" checked={!!doc.discOn} onChange={e=>set('discOn',e.target.checked)}/><span>{tr("Apply discount")}</span></label>
@@ -2700,6 +2727,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const linesFor=(base,key)=>chains.filter(c=>c.lead.sqBase===base).flatMap(c=>(c.lead.items||[]).filter(it=>it.sqKey===key).map(it=>({c,it})));
     const groups=[...new Set(salesQuotes.filter(q=>q.project===projName).map(sqBaseOf))].map(latestSQ).filter(Boolean)
       .map(q=>({q,base:sqBaseOf(q),rows:(q.items||[]).map((it,i)=>({it,i,key:sqItemKey(it),lines:linesFor(sqBaseOf(q),sqItemKey(it))}))}));
+    // A customer line matched on a received quote more often than on the order / invoice made from it (lines added or
+    // split on the quote afterwards): the page reads the latest document, so it is pointed out
+    const gapsFor=(base,key)=>chains.filter(c=>c.pq&&c.lead!==c.pq&&c.pq.sqBase===base).filter(c=>(c.pq.items||[]).filter(it=>it.sqKey===key).length>(c.lead.items||[]).filter(it=>it.sqKey===key).length)
+      .map(c=>({c,label:(c.kind==='ri'?tr('INV'):tr('PO'))+' '+(c.lead.number||'')}));
+    groups.forEach(g=>g.rows.forEach(r=>{r.gaps=gapsFor(g.base,r.key);}));
     const all=groups.flatMap(g=>g.rows);
     return{chains,groups,total:all.length,done:all.filter(r=>r.lines.length).length};
   };
@@ -2845,7 +2877,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <Cg w={[0.45,1.6,2.1,1.5,2.1,0.8,1,1.05,1.75,0.75]}/>
             <thead><tr><th>#</th><th>{tr("Supplier")}</th><th>{tr("Customer Item")}</th><th>{tr("Sub-supplier")}</th><th>{tr("Supplier Item")}</th><th className="tar">{tr("Qty")}</th><th className="tar">{tr("Sale Price")}</th><th className="tar">{tr("Purchase Price")}</th><th>{tr("Documents")}</th><th/></tr></thead>
             <tbody>{shown.length===0?<tr><td colSpan={10}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
-            shown.flatMap(({it,i,key,lines})=>{
+            shown.flatMap(({it,i,key,lines,gaps})=>{
               // One row per matched supplier line; the customer's columns (#, item, qty, sale price) span them
               const n=Math.max(1,lines.length);
               const matchBtn=<button className="ab" title={tr("Match")} aria-label={tr("Match")} onClick={()=>openPick({base,key,label:`#${i+1} ${sqLineText(it)}`})}><Ico n="link"/></button>;
@@ -2857,7 +2889,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               const setUnit=setCur&&lines.reduce((s,{it:p})=>s+(+p.qty||0)*(+p.price||0),0)/(+it.qty||1);
               const item=<td key="d" rowSpan={n} style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(it)}
                 {lines.length>1&&<div className="mt-set"><span className="mt-tag ok">{tr("Set · {0} parts",lines.length)}</span>
-                  {setCur&&<span>{tr("Set cost / unit: {0}",(CURR[setCur]||setCur+' ')+fmt(setUnit))}</span>}</div>}</td>;
+                  {setCur&&<span>{tr("Set cost / unit: {0}",(CURR[setCur]||setCur+' ')+fmt(setUnit))}</span>}</div>}
+                {(gaps||[]).map(g=><div key={g.c.lead.id} className="mt-set"><span className="mt-tag">{tr("On the quote, not on {0}",g.label)}</span></div>)}</td>;
               const qp=[<td key="q" rowSpan={n} className="tar">{it.qty} {it.unit||''}</td>,<td key="p" rowSpan={n} className="tar">{sym}{fmt(+(it.price||0))}</td>];
               if(!lines.length)return[<tr key={key}>{num}<td><span className="mt-none">{tr("Not matched")}</span></td>{item}<td>{dash}</td><td>{dash}</td>{qp}<td className="tar">{dash}</td><td>{dash}</td><td><div className="aw">{matchBtn}</div></td></tr>];
               return lines.map(({c,it:s},j)=><tr key={key+c.lead.id+s.id} className={j>0?'mt-sub':''}>
