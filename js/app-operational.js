@@ -2644,7 +2644,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const rows=projects.map(p=>{
       const inv=salesInvoices.filter(d=>d.project===p.name);
       return{p,inv:inv.length,revenue:curTotals(inv.map(d=>[d.currency,dt(d.items)])),
-        pos:purchaseOrders.filter(d=>d.project===p.name).length,exps:[...expenses,...invoiceCharges].filter(d=>d.project===p.name).length};
+        pos:purchaseOrders.filter(d=>d.project===p.name).length,exps:[...expenses,...invoiceCharges,...srcCharges.filter(e=>!e.expected)].filter(d=>d.project===p.name).length};
     });
     const ql=fs.q.toLowerCase();
     const f=rows.filter(({p})=>(!ql||[p.number,p.name,p.client].some(x=>(x||'').toLowerCase().includes(ql)))&&(!fs.s||(p.status||'active')===fs.s));
