@@ -891,8 +891,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <BulkBtn icon="trash" danger badge={pickedDrafts.length} disabled={!pickedDrafts.length} onClick={bulkDelete}>{tr("Delete drafts")}</BulkBtn>
       </BulkBar>
       {sortedGroups.length===0?<div className="tcard"><div className="empty"><Ico n="quote" size={38}/><div className="empty-t">{tr("No quotations yet")}</div></div></div>:(
-        <div className="tcard"><table className="dt">
-          <Cg w={[0.32,0.8,1,1,2,0.9,1.3,0.9]}/>
+        <div className="tcard"><table className="dt dt-fit" data-grow="4 5">
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
@@ -1501,8 +1500,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDF')}</BulkBtn>
       </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="invoice" size={38}/><div className="empty-t">{tr("No sales invoices yet")}</div><div className="empty-s">{tr("Approve a quotation and convert it to invoice")}</div></div></div>:(
-        <div className="tcard"><table className="dt">
-          <Cg w={[0.32,0.8,1,1,2,0.9,1.3,0.9]}/>
+        <div className="tcard"><table className="dt dt-fit" data-grow="5">
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
@@ -1584,8 +1582,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
       </BulkBar>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isRI?'received':'po'} size={38}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div></div></div>:(
-        <div className="tcard"><table className="dt">
-          <Cg w={isRI?[0.32,0.8,1,1,2,0.9,0.9,1.1,0.9]:[0.32,0.8,1,1,2,0.9,0.9,1.3]}/>
+        <div className="tcard"><table className="dt dt-fit" data-grow="4 5">
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
@@ -2116,8 +2113,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={isQ?'rq':'ri'} size={38}/>
         <div className="empty-t">{docs.length?tr("No items match the filter"):isQ?tr("No sub-supplier quotes yet"):tr("No sub-supplier invoices yet")}</div>
         {!docs.length&&<div className="empty-s">{isQ?tr("Enter each quote the group company collects from its suppliers, linked to the project and the customer's items."):tr("Create a sub-supplier invoice from a sub-supplier quote, or add one with + New.")}</div>}</div></div>:(
-        <div className="tcard"><table className="dt">
-          <Cg w={isQ?[0.32,0.8,1,1.28,1.2,1,0.9,1]:[0.32,0.8,1,1.28,1,1.2,0.9]}/>
+        <div className="tcard"><table className="dt dt-fit" data-grow={isQ?"4 5":"4 6"}>
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
@@ -2268,8 +2264,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n="calc" size={38}/>
         <div className="empty-t">{costEsts.length?tr("No items match the filter"):tr("No approximate costs yet")}</div>
         {!costEsts.length&&<div className="empty-s">{tr("Collect the purchase price of each item, add freight, customs and margin, then transfer the result to a sales quotation.")}</div>}</div></div>:(
-        <div className="tcard"><table className="dt">
-          <Cg w={[0.32,0.8,0.9,1.3,1.18,0.6,1,1,0.9,1.1]}/>
+        <div className="tcard"><table className="dt dt-fit" data-grow="4 5">
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
@@ -2621,8 +2616,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="mt-dialog-b">
             <div style={{fontSize:13,color:'var(--g700)'}}>{tr("{0} item(s) read",imp.rows.length)}{imp.skipped.length>0&&<> · <span style={{color:'var(--amber)',fontWeight:600}}>{tr("{0} row(s) skipped",imp.skipped.length)}</span></>}</div>
             {imp.skipped.length>0&&<div className="ce-skip">{imp.skipped.map(s=><div key={s.row}>{tr("Row {0}",s.row)}: {s.reason}{s.desc?' — '+s.desc:''}</div>)}</div>}
-            {imp.rows.length>0&&<div className="iw" style={{marginTop:6}}><table className="dt">
-              <Cg w={[0.4,4,0.8,0.8,1.2]}/>
+            {imp.rows.length>0&&<div className="iw" style={{marginTop:6}}><table className="dt dt-fit" data-grow="2">
               <thead><tr><th>#</th><th>{tr("Product Name")}</th><th className="tar">{tr("Qty")}</th><th>{tr("Unit")}</th><th className="tar">{tr("Unit Cost")}</th></tr></thead>
               <tbody>{imp.rows.map((r,i)=><tr key={r.id}><td style={{color:'var(--g400)'}}>{i+1}</td><td>{r.desc}</td><td className="tar">{r.qty}</td><td>{r.unit||'—'}</td><td className="tar">{r.cost?fmt(+r.cost):'—'}</td></tr>)}</tbody>
             </table></div>}
@@ -3001,7 +2995,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       if(Number.isNaN(x))return <span className="mt-none" title={r&&r.err}>{tr("No rate")}</span>;
       return<>{expected?<span className="pd-exp" title={typeof expected==='string'?expected:tr("Expected cost — counted once the invoice arrives")}>({P(x)})</span>:P(x)}
         {!own&&r&&<div className="mt-pct">1 {cur||'GBP'} = {+r.rate.toFixed(r.rate<1?6:4)} {pc} · {fmtD(r.date)}</div>}</>;};
-    const pcCol=amt=>({k:'pc',l:tr("Amount ({0})",pc),get:d=>pcVal(d.currency,d.date,amt(d)),show:d=>pcCell(d.currency,d.date,amt(d))});
+    const pcCol=amt=>({k:'pc',align:'r',l:tr("Amount ({0})",pc),get:d=>pcVal(d.currency,d.date,amt(d)),show:d=>pcCell(d.currency,d.date,amt(d))});
     // Purchases: one row per order with the received invoice made from it, then the invoices entered without an order.
     // The project-currency amount (and the costs) come from the invoice; an order still awaiting one shows its own
     // amount in brackets, as the cost to expect
@@ -3033,28 +3027,28 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {/* Sections */}
       {(()=>{
         const dateCol={k:'date',l:tr('Date'),get:d=>d.date,show:d=>fmtD(d.date)};
-        const noCol=l=>({k:'no',l,get:d=>d.number,show:d=>d.number,strong:true});
-        const totalCol={k:'total',l:tr('Total'),get:d=>docTotals(d).total,show:d=>`${CURR[d.currency]||'£'}${fmt(docTotals(d).total)}`};
-        const statusCol={k:'status',l:tr('Status'),get:d=>d.status,show:d=><Badge s={d.status}/>};
-        const supCol={k:'supplier',l:tr('Supplier'),get:d=>d.supplierCompany||d.supplier,show:d=>d.supplierCompany||d.supplier||'—'};
+        const noCol=l=>({k:'no',grow:true,l,get:d=>d.number,show:d=>d.number,strong:true});
+        const totalCol={k:'total',align:'r',l:tr('Total'),get:d=>docTotals(d).total,show:d=>`${CURR[d.currency]||'£'}${fmt(docTotals(d).total)}`};
+        const statusCol={k:'status',align:'c',l:tr('Status'),get:d=>d.status,show:d=><Badge s={d.status}/>};
+        const supCol={k:'supplier',grow:true,l:tr('Supplier'),get:d=>d.supplierCompany||d.supplier,show:d=>d.supplierCompany||d.supplier||'—'};
         const docTotal=d=>docTotals(d).total;
         return[
           {title:tr('Sales Quotations'),items:pQ,w:[0.8,1,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Quote No')),totalCol,pcCol(docTotal),statusCol]},
           {title:tr('Sales Invoices'),items:pI,w:[0.8,1,0.9,1.1,0.9],cols:[dateCol,noCol(tr('Invoice No')),totalCol,pcCol(docTotal),statusCol]},
           {title:tr('Purchases'),items:buys,w:[0.75,0.85,1.5,0.9,0.95,0.95,1.1,0.9],cols:[dateCol,
             {k:'po',l:tr('Order'),get:r=>r.po?r.po.number:'',show:r=>r.po?docBtn(r.po,'po'):'—',strong:true},
-            {k:'supplier',l:tr('Supplier'),get:r=>(r.po||r.ri).supplierCompany||(r.po||r.ri).supplier,show:r=>(r.po||r.ri).supplierCompany||(r.po||r.ri).supplier||'—'},
-            {k:'poAmt',l:tr('Order Total'),get:r=>r.po?docTotals(r.po).total:-1,show:r=>r.po?amtOf(r.po):'—'},
+            {k:'supplier',grow:true,l:tr('Supplier'),get:r=>(r.po||r.ri).supplierCompany||(r.po||r.ri).supplier,show:r=>(r.po||r.ri).supplierCompany||(r.po||r.ri).supplier||'—'},
+            {k:'poAmt',align:'r',l:tr('Order Total'),get:r=>r.po?docTotals(r.po).total:-1,show:r=>r.po?amtOf(r.po):'—'},
             {k:'ri',l:tr('Invoice'),get:r=>r.ri?r.ri.number||'':'',show:r=>r.ri?docBtn(r.ri,'ri'):'—'},
-            {k:'riAmt',l:tr('Invoice Total'),get:r=>r.ri?docTotals(r.ri).total:-1,show:r=>r.ri?<>{amtOf(r.ri)} {diffMark(r)}</>:'—'},
-            {k:'pc',l:tr("Amount ({0})",pc),get:r=>{const d=r.ri||r.po;return pcVal(d.currency,d.date,docTotals(d).total);},show:r=>{const d=r.ri||r.po;return pcCell(d.currency,d.date,docTotals(d).total,!r.ri);}},
-            {k:'status',l:tr('Status'),get:r=>r.ri?r.ri.status||'unpaid':'~',show:r=>r.ri?<Badge s={r.ri.status||'unpaid'}/>:<span className="mt-state">{tr('Awaiting invoice')}</span>}]},
-          {title:tr('Expenses'),items:expList,w:[0.8,1,1.7,1.1,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},
-            {k:'src',l:tr('Source'),get:e=>e.src,show:e=>e.src||'—'},{k:'amount',l:tr('Amount'),get:e=>e.amount,show:e=>`${CURR[e.currency]||'£'}${fmt(e.amount)}`},pcCol(e=>e.amount)]},
+            {k:'riAmt',align:'r',l:tr('Invoice Total'),get:r=>r.ri?docTotals(r.ri).total:-1,show:r=>r.ri?<>{amtOf(r.ri)} {diffMark(r)}</>:'—'},
+            {k:'pc',align:'r',l:tr("Amount ({0})",pc),get:r=>{const d=r.ri||r.po;return pcVal(d.currency,d.date,docTotals(d).total);},show:r=>{const d=r.ri||r.po;return pcCell(d.currency,d.date,docTotals(d).total,!r.ri);}},
+            {k:'status',align:'c',l:tr('Status'),get:r=>r.ri?r.ri.status||'unpaid':'~',show:r=>r.ri?<Badge s={r.ri.status||'unpaid'}/>:<span className="mt-state">{tr('Awaiting invoice')}</span>}]},
+          {title:tr('Expenses'),items:expList,w:[0.8,1,1.7,1.1,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},{k:'desc',grow:true,l:tr('Description'),get:e=>e.description,show:e=>e.description},
+            {k:'src',grow:true,l:tr('Source'),get:e=>e.src,show:e=>e.src||'—'},{k:'amount',align:'r',l:tr('Amount'),get:e=>e.amount,show:e=>`${CURR[e.currency]||'£'}${fmt(e.amount)}`},pcCol(e=>e.amount)]},
           ...(indirect.length?[{title:tr('Sub-supplier Indirect Costs'),items:indirect,w:[0.8,1,1.7,1.4,0.9,1.1],cols:[dateCol,{k:'category',l:tr('Category'),get:e=>expCatText(expCats,e),show:e=>expCatText(expCats,e)},
-            {k:'desc',l:tr('Description'),get:e=>e.description,show:e=>e.description},{k:'src',l:tr('Source'),get:e=>e.src,show:e=><>{e.src}{e.expected&&<div className="mt-pct">{tr("To be quoted — expected")}</div>}</>},
-            {k:'amount',l:tr('Amount'),get:e=>e.amount,show:e=>`${CURR[e.currency]||'₺'}${fmt(e.amount)}`},
-            {k:'pc',l:tr("Amount ({0})",pc),get:e=>pcVal(e.currency,e.date,e.amount),show:e=>pcCell(e.currency,e.date,e.amount,e.expected&&tr("Expected — counted once its quote is quoted"))}]}]:[]),
+            {k:'desc',grow:true,l:tr('Description'),get:e=>e.description,show:e=>e.description},{k:'src',grow:true,l:tr('Source'),get:e=>e.src,show:e=><>{e.src}{e.expected&&<div className="mt-pct">{tr("To be quoted — expected")}</div>}</>},
+            {k:'amount',align:'r',l:tr('Amount'),get:e=>e.amount,show:e=>`${CURR[e.currency]||'₺'}${fmt(e.amount)}`},
+            {k:'pc',align:'r',l:tr("Amount ({0})",pc),get:e=>pcVal(e.currency,e.date,e.amount),show:e=>pcCell(e.currency,e.date,e.amount,e.expected&&tr("Expected — counted once its quote is quoted"))}]}]:[]),
         ].map(s=><ProjDocTable key={s.title} {...s}/>);
       })()}
       {quick&&<DocQuickModal doc={quick.doc} co={co} docType={quick.type==='po'?'po':'invoice'} pdfOpts={SALES_PDF} itemNote={sqItemNote(quick.doc)} onClose={()=>setQuick(null)}/>}
@@ -3218,8 +3212,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </BulkBar>
       <div style={{fontSize:11,color:'var(--g400)',fontStyle:'italic',padding:'2px 2px 8px'}}>{trash?tr("Items removed from the pool. Select them to restore them or to delete them for good."):<>{tr("Every product from sent quotations appears once.")} {tr("Click a row to see all its sale and purchase prices.")}</>}</div>
       {filtered.length===0?<div className="tcard"><div className="empty"><Ico n={trash?'trash':'pool'} size={38}/><div className="empty-t">{trash?tr("No deleted items"):tr("Pool is empty")}</div><div className="empty-s">{trash?tr("Items deleted from the pool appear here"):tr("Mark quotations as Sent to populate the pool")}</div></div></div>:(
-        <div className="tcard"><table className="dt">
-          <Cg w={[0.32,1,3,0.9,1.3,1.3,1.05,0.7]}/>
+        <div className="tcard"><table className="dt dt-fit" data-grow="3">
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="code" sort={sort} onSort={onSort}>{tr("Code")}</SortTh>
@@ -3711,8 +3704,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <Btn v="bp bsm" onClick={()=>setDlg({code:'',name:'',parentId:null})}><Ico n="plus"/>{tr("New Main Category")}</Btn>
       </FormHeader>
       {tree.length===0?<div className="tcard"><div className="empty"><Ico n="tag" size={38}/><div className="empty-t">{tr("No categories yet")}</div></div></div>:
-      <div className="tcard"><table className="dt">
-        <Cg w={[1,3,1,1.6]}/>
+      <div className="tcard"><table className="dt dt-fit" data-grow="2">
         <thead><tr><th>{tr("Code")}</th><th>{tr("Category")}</th><th className="tar">{tr("Expenses")}</th><th className="tar">{tr("Actions")}</th></tr></thead>
         <tbody>{tree.map(({c,depth})=><tr key={c.id}>
           <td>{c.code?<span className="dn">{c.code}</span>:<span className="mt-none">{tr("No code")}</span>}</td>
@@ -3893,8 +3885,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       )}
 
       {documents.length>0&&(
-        <div className="tcard"><table className="dt">
-          <Cg w={[0.3,0.9,2.2,1,0.8,0.6]}/>
+        <div className="tcard"><table className="dt dt-fit" data-grow="3">
           <thead><tr>
             <SelTh bulk={bulk}/>
             <SortTh k="date" sort={sort} onSort={onSort}>{tr("Upload Date")}</SortTh>
@@ -4363,15 +4354,19 @@ function BankSelect({doc,banks,onChange,disabled}){
   </Fld>);
 }
 // One linked-documents table on the project detail page; cols: {k,l,get,show,strong}
-function ProjDocTable({title,items,cols,w}){
+// Content-fit: a column may say align ('r' amounts, 'c' status) and grow (takes the free width and wraps)
+function ProjDocTable({title,items,cols}){
+  const cls=c=>[c.align==='r'?'tar':c.align==='c'?'tac':'',c.grow?'fit-grow':''].filter(Boolean).join(' ')||undefined;
+  // Several growing columns share the free width evenly
+  const grows=cols.filter(c=>c.grow).length,gw=c=>c.grow&&grows>1?{width:(100/grows)+'%'}:null;
   const{sort,onSort}=useSort();
   const rows=sortRows(items,sort,Object.fromEntries(cols.map(c=>[c.k,c.get])));
   return(<div style={{marginBottom:16}}>
     <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}><div className="tcard-hdr-t">{title} ({items.length})</div></div>
     <div className="tcard">
       {items.length===0?<div style={{padding:'16px 18px',color:'var(--g400)',fontSize:13}}>{tr("None")}</div>:
-      <table className="dt"><Cg w={w}/><thead><tr>{cols.map(c=><SortTh key={c.k} k={c.k} sort={sort} onSort={onSort}>{c.l}</SortTh>)}</tr></thead>
-      <tbody>{rows.map((d,i)=><tr key={d.id||i}>{cols.map(c=><td key={c.k} style={{fontWeight:c.strong?600:400,color:c.strong?'var(--g900)':'var(--g600)'}}>{c.show(d)}</td>)}</tr>)}</tbody></table>}
+      <table className="dt dt-fit"><thead><tr>{cols.map(c=><SortTh key={c.k} k={c.k} sort={sort} onSort={onSort} className={cls(c)} style={gw(c)||undefined}>{c.l}</SortTh>)}</tr></thead>
+      <tbody>{rows.map((d,i)=><tr key={d.id||i}>{cols.map(c=><td key={c.k} className={cls(c)} style={{...gw(c),fontWeight:c.strong?600:400,color:c.strong?'var(--g900)':'var(--g600)'}}>{c.show(d)}</td>)}</tr>)}</tbody></table>}
     </div>
   </div>);
 }

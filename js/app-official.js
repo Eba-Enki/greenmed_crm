@@ -434,8 +434,7 @@ function AppOfficial({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenProf
           <div className="tcard"><div className="empty"><Ico n={type==='invoice'?'invoice':isRec?'received':type==='po'?'po':'quote'} size={40}/><div className="empty-t">{tr("No {0}s yet", lbl.toLowerCase())}</div></div></div>
         ):(
           <div className="tcard">
-            <table className="dt">
-              <Cg w={type==='po'?[0.32,0.8,1,1.68,1,0.9,0.9]:[0.32,0.8,1,1.68,0.9,0.9]}/>
+            <table className="dt dt-fit" data-grow={type==='po'?"4 5":"4"}>
               <thead><tr>
                 <SelTh bulk={bulk}/>
                 <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
@@ -663,7 +662,7 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
       </div>
       {openRows.length>0&&<div className="tcard" style={{marginBottom:16}}>
         <div className="tcard-hdr"><span className="tcard-hdr-t">{tr("Open Documents")}</span></div>
-        <table className="dt"><Cg w={[0.9,1.2,1.3,0.9,1,1,1]}/>
+        <table className="dt dt-fit" data-grow="3">
           <thead><tr>
             <SortTh k="date" sort={oSort} onSort={onOSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={oSort} onSort={onOSort}>{tr("Number")}</SortTh>
@@ -686,7 +685,7 @@ function OffContactStatement({contact:c,inv,rec,bankTx,banks,onBack,onEdit}){
       </div>}
       <div className="tcard">
         <div className="tcard-hdr"><span className="tcard-hdr-t">{tr("Statement ({0})", cur)}</span><span style={{fontSize:11.5,color:'var(--g400)'}}>{tr("Debit = owed to us · Credit = owed by us or paid to us")}</span></div>
-        <table className="dt"><Cg w={[0.8,1.3,1.1,1.8,0.9,0.9,1]}/>
+        <table className="dt dt-fit" data-grow="4">
           <thead><tr>
             <SortTh k="date" sort={stSort} onSort={onStSort}>{tr("Date")}</SortTh>
             <SortTh k="no" sort={stSort} onSort={onStSort}>{tr("Reference")}</SortTh>
@@ -747,8 +746,7 @@ function OffCustomers({customers,inv,rec,bankTx,banks,onOpen,onEdit,onDelete,onD
       <BulkBtn icon="trash" danger badge={pickedFree.length} disabled={!pickedFree.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
     </BulkBar>
     {f.length===0?<div className="tcard"><div className="empty"><Ico n="customers" size={36}/><div className="empty-t">{customers.length?tr('No contacts match'):tr('No contacts yet')}</div></div></div>:(
-    <div className="tcard"><table className="dt">
-      <Cg w={[0.32,1.68,1.3,1.7,1,0.9,1.2,1.2,0.8]}/>
+    <div className="tcard"><table className="dt dt-fit" data-grow="2 3">
       <thead><tr>
         <SelTh bulk={bulk}/>
         <SortTh k="company" sort={sort} onSort={onSort}>{tr("Company")}</SortTh>
@@ -821,8 +819,7 @@ function OffProjects({projects,onNew,onEdit,onDelete,onDeleteMany}){
       <BulkBtn onClick={()=>exportRows(picked)}>{tr("Export selected")}</BulkBtn>
       <BulkBtn icon="trash" danger badge={picked.length} onClick={bulkDelete}>{tr("Delete")}</BulkBtn>
     </BulkBar>
-    <div className="tcard"><table className="dt">
-      <Cg w={[0.32,0.8,1.64,1.64,0.9,0.6]}/>
+    <div className="tcard"><table className="dt dt-fit" data-grow="3 4" data-center="5">
       <thead><tr>
         <SelTh bulk={bulk}/>
         <SortTh k="date" sort={sort} onSort={onSort}>{tr("Start")}</SortTh>
@@ -880,8 +877,7 @@ function CategoryList({cats,direction,bankTx,banks,onOpen,onEdit,onDelete}){
     {groups.length===0?(
       <div className="tcard"><div className="empty"><Ico n={direction==='out'?'expense':'income'} size={36}/><div className="empty-t">{tr("No {0} categories yet", label.toLowerCase())}</div></div></div>
     ):(
-    <div className="tcard"><table className="dt">
-      <Cg w={[0.8,2.2,0.9,0.6]}/>
+    <div className="tcard"><table className="dt dt-fit" data-grow="2">
       <thead><tr><th>{tr("Code")}</th><th>{tr("Name")}</th><th className="tar">{tr("Total")}</th><th>{tr("Actions")}</th></tr></thead>
       <tbody>{groups.map(({main,children})=>(<React.Fragment key={main.id}>
         <tr>
@@ -968,8 +964,7 @@ function CategoryTransactions({categoryBrowse,bankTx,banks,onBack,onEdit,onDelet
   return(<div className="content">
     <FormHeader parent={direction==='out'?'off_expenses':'off_incomes'} onBack={onBack} title={<>{mainName}</>} meta={<>{filtered.length>0&&<span style={{fontSize:13,fontWeight:700,color:'var(--g600)'}}>{Object.entries(totalsByCurrency).map(([c,amt])=>`${CURR[c]||c}${fmt(amt)}`).join(' · ')}</span>}</>}/>
     <ListTools q={q} onQ={setQ} placeholder={tr("Search description, reference, account...")} onExport={()=>exportExcel([['Date','Account','Description','Linked','Amount'],...filtered.map(t=>[t.date||'',(t.account&&t.account.accountName)||'',t.description||'',linkLabel(t)||'',+t.amount])],`${mainName.toLowerCase().replace(/[^a-z0-9]+/g,'-')}-transactions`)}/>
-    <div className="tcard"><table className="dt">
-      <Cg w={[0.8,1.6,2.2,1,0.9,0.6]}/>
+    <div className="tcard"><table className="dt dt-fit" data-grow="3">
       <thead><tr>
         <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
         <SortTh k="account" sort={sort} onSort={onSort}>{tr("Account")}</SortTh>
@@ -1287,8 +1282,7 @@ function OffBankLedger({account,banks,transactions,onBack,onNew,onExchange,onEdi
       <FilterField label={tr("From")}><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></FilterField>
       <FilterField label={tr("To")}><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></FilterField>
     </ListTools>
-    <div className="tcard"><table className="dt">
-      <Cg w={[0.8,1.2,2,1,1,0.9,0.9,0.9,0.6]}/>
+    <div className="tcard"><table className="dt dt-fit" data-grow="3">
       <thead><tr>
         <SortTh k="date" sort={sort} onSort={onSort}>{tr("Date")}</SortTh>
         <SortTh k="contact" sort={sort} onSort={onSort}>{tr("Contact")}</SortTh>
