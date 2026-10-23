@@ -182,6 +182,13 @@ button.sb-item{border-top:0;border-right:0;border-bottom:0;background:transparen
 .stat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--g500)}
 .stat-sub{font-size:11px;color:var(--g400);margin-top:2px}
 .stat-sub.pd-cur{color:var(--g500);margin-top:4px}
+.stats.pd-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1000px){.stats.pd-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.stats.pd-stats{grid-template-columns:minmax(0,1fr)}}
+.pd-brk{margin-top:8px;padding-top:6px;border-top:1px solid var(--g100);font-size:11.5px;line-height:1.5;color:var(--g500)}
+.pd-brk>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:1px 0}
+.pd-brk span{min-width:0}
+.pd-brk b{flex:none;font-weight:600;color:var(--g700);font-variant-numeric:tabular-nums}
 .ie-charge{display:flex;align-items:center;gap:6px}
 .ie-charge select{flex:1;min-width:0}
 .ie-charge-tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:5px;background:#fef3c7;color:#92400e;white-space:nowrap}

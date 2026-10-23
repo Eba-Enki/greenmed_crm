@@ -2981,13 +2981,15 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const awaiting=pPO.filter(o=>!receivedInvoices.some(r=>r.poId===o.id)).length;
     // Expenses per category, in the project currency
     const byCat=(()=>{const m={};[...expList,...indirect.filter(e=>!e.expected)].forEach(e=>{const x=toPc(e.currency,e.date,e.amount);if(x>0||x<0){const k=expCatText(expCats,e)||tr('Uncategorised');m[k]=(m[k]||0)+x;}});
-      const l=Object.entries(m).sort((a,b)=>b[1]-a[1]);return l.length>1||charges.length||indRows.length?l.map(([k,v])=>k+' '+P(v)).join(' · '):null;})();
+      const l=Object.entries(m).sort((a,b)=>b[1]-a[1]);return l.length>1||charges.length||indRows.length?l.map(([k,v])=>[k,P(v)]):null;})();
     const cards=[
       {lbl:tr('Revenue'),s:rev,rows:revRows,sub:tr("{0} invoices",pI.length),cls:'sc-green'},
       {lbl:tr('Costs'),s:cost,rows:costRows,sub:tr("{0} received invoices",pRI.length)+(awaiting?' · '+tr("{0} order(s) awaiting invoice",awaiting):''),
         extra:markRows.length&&!mark.wait?tr("incl. group company markup {0}",P(mark.v)):null,cls:'sc-blue'},
       {lbl:tr('Expenses'),s:exp,rows:[...expRows,...indRows],sub:charges.length?tr("{0} expenses · {1} invoice charges",pExp.length,charges.length):tr("{0} items",pExp.length),
-        extra:[indirect.length&&!ind.wait&&!own.wait?tr("Green Med {0} · sub-supplier indirect {1}",P(own.v),P(ind.v))+(indExp.v&&!indExp.wait?' · '+tr("expected {0}",P(indExp.v)):''):null,byCat],cls:'sc-purple'},
+        // Breakdowns listed one per line: who paid (Green Med or the group company's sub-suppliers), then by category
+        lists:[indirect.length&&!ind.wait&&!own.wait?[['Green Med',P(own.v)],[tr('Sub-supplier indirect'),P(ind.v)],
+          ...(indExp.v&&!indExp.wait?[[tr('Expected'),'('+P(indExp.v)+')']]:[])]:null,byCat],cls:'sc-purple'},
       {lbl:tr('Net'),s:{v:net,wait,miss:0},rows:[],sub:rev.v>0&&!wait?tr("{0}% margin",(net/rev.v*100).toFixed(1)):tr('revenue - costs'),cls:net>=0?'sc-teal':'sc-red'},
     ];
     // "Amount (USD)" next to a document's own total, with the rate used when it was converted
@@ -3016,13 +3018,14 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         <Btn v="bgh bsm" onClick={()=>{setCur(project);go('proj_form');}}><Ico n="edit"/>{tr("Edit Project")}</Btn>
       </FormHeader>
       {/* Stats, in the project currency */}
-      <div className="stats" style={{gridTemplateColumns:'repeat(4,1fr)'}}>
+      <div className="stats pd-stats">
         {cards.map(c=><div key={c.lbl} className={`stat-card ${c.cls}`}>
           <div className="stat-val">{c.s.wait?'…':P(c.s.v)}</div>
           <div className="stat-lbl">{c.lbl}</div>
           <div className="stat-sub">{c.sub}</div>
           {byCur(c.rows)&&<div className="stat-sub pd-cur">{byCur(c.rows)}</div>}
           {[].concat(c.extra||[]).filter(Boolean).map((x,i)=><div key={i} className="stat-sub pd-cur">{x}</div>)}
+          {(c.lists||[]).filter(Boolean).map((l,i)=><div key={i} className="pd-brk">{l.map(([k,v])=><div key={k}><span>{k}</span><b>{v}</b></div>)}</div>)}
           {c.s.miss>0&&<div className="stat-sub mt-none">{tr("{0} document(s) could not be converted",c.s.miss)}</div>}
         </div>)}
       </div>
