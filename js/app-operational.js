@@ -3011,7 +3011,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const diffMark=r=>{if(!r.po||!r.ri||(r.po.currency||'GBP')!==(r.ri.currency||'GBP'))return null;const dlt=docTotals(r.ri).total-docTotals(r.po).total;if(Math.abs(dlt)<0.005)return null;
       const t=(CURR[r.ri.currency]||'')+fmt(Math.abs(dlt));return <span className={'pd-diff'+(dlt>0?' up':'')} title={dlt>0?tr("Invoice is {0} more than the order",t):tr("Invoice is {0} less than the order",t)}>{dlt>0?'▲':'▼'}</span>;};
     return(<div className="content">
-      <FormHeader parent={'projects'} onBack={()=>go('projects')} title={<>{project.number?`${project.number} — `:''}  {project.name}</>} meta={<><Badge s={project.status||'active'}/>
+      <FormHeader parent={'projects'} onBack={()=>go('projects')} title={<>{project.number?`${project.number} — `:''}  {project.name}</>} meta={<><Badge s={project.status||'active'}/>{project.country&&<span className="pd-country"><Ico n="globe"/>{project.country}</span>}
         {(()=>{const m=projMatching(project.name);return <button className="mt-open" onClick={()=>{setCur(project);go('proj_matching');}}><Ico n="link"/>{tr("Item Matching")}{m.total>0&&<span className={m.done===m.total?'mt-count ok':'mt-count'}>{m.done}/{m.total}</span>}</button>;})()}</>}>
         <Btn v="bgh bsm" onClick={()=>{setCur(project);go('proj_form');}}><Ico n="edit"/>{tr("Edit Project")}</Btn>
       </FormHeader>
@@ -3066,7 +3066,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const _handleCancel=()=>{if(_isDirty())askUnsaved().then(ok=>{if(ok)onCancel();});else onCancel();};
     dirtyCheckRef.current=_isDirty;
     const handleSave=async()=>{
-      const norm={...p,name:toTitleCase(p.name),client:toTitleCase(p.client),desc:toSentenceCase(p.desc)};
+      const norm={...p,name:toTitleCase(p.name),client:toTitleCase(p.client),country:toTitleCase((p.country||'').trim()),desc:toSentenceCase(p.desc)};
       const dup=findCaseInsensitiveDup(projects,'name',norm.name,norm.id);
       if(dup&&!(await askDuplicateOk('project',norm.name)))return;
       onSave(norm);
@@ -3078,8 +3078,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </FormHeader>
       <div className="fc"><div className="fct">{tr("Project Details")}</div>
         <div className="fg g-no-name"><Fld label={tr("Project No")}><input value={p.number||''} onChange={e=>s('number',e.target.value)} className="fi" readOnly={!!p.id&&!!p.number} style={p.id?{fontFamily:'monospace',fontWeight:700}:{}}/></Fld><Fld label={tr("Project Name")}><input value={p.name||''} onChange={e=>s('name',e.target.value)} className="fi"/></Fld></div>
-        <div className="fg g-2-1-1" style={{marginTop:12}}>
+        <div className="fg g-2-1-1-1" style={{marginTop:12}}>
           <Fld label={tr("Client")}><select value={p.clientId||''} onChange={e=>{s('clientId',e.target.value);const c=custPick.find(x=>x.id===e.target.value);if(c)s('client',c.company||c.contact||'');}} className="fi"><option value="">{tr("— Select customer —")}</option>{custPick.map(c=><option key={c.id} value={c.id}>{c.company||c.contact||''}</option>)}</select></Fld>
+          <Fld label={tr("Country")}><input value={p.country||''} onChange={e=>s('country',e.target.value)} className="fi"/></Fld>
           <Fld label={tr("Start Date")}><input type="date" value={p.startDate||''} onChange={e=>s('startDate',e.target.value)} className="fi"/></Fld>
           <Fld label={tr("Status")}><select value={p.status||'active'} onChange={e=>s('status',e.target.value)} className="fi"><option value="active">{tr("Active")}</option><option value="completed">{tr("Completed")}</option><option value="on-hold">{tr("On Hold")}</option><option value="cancelled">{tr("Cancelled")}</option></select></Fld>
         </div>
