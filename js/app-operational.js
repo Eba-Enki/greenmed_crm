@@ -2033,7 +2033,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           </table></div>
         </div>);
       })()}
-      {isPO&&isGroupDoc(doc)&&(()=>{
+      {isPO&&(()=>{
         const sh=doc.shipment||{};
         const setSh=(k,v)=>setDoc(d=>({...d,shipment:{...(d.shipment||{}),[k]:v}}));
         const q=latestSQ(doc.sqBase);
