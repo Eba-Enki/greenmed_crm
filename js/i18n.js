@@ -319,7 +319,7 @@ const I18N_TR={
   '{0} line(s) left out: not matched, missing sub-supplier price/rate or invoiced in another currency':'{0} kalem hesaba katılmadı: eşleşmemiş, alt tedarikçi fiyatı/kuru eksik ya da başka para biriminde faturalanmış',
   'of {0} in total':'toplam {0} içinden',
   'direct purchase':'doğrudan alım','Sub-supplier missing':'Alt tedarikçi eksik','rate missing':'kur eksik','Invoiced in another currency':'Başka para biriminde faturalanmış',
-  'Direct':'Doğrudan','not shipped yet':'henüz sevk edilmedi',
+  'Direct':'Doğrudan','not shipped yet':'henüz sevk edilmedi','no price on {0} items':'{0} kalemde fiyat yok',
   // Source quotes / invoices and the transfer into a group company quote
   'Export to Excel':"Excel'e Aktar",'Sub-supplier Quotes':'Alt Tedarikçi Teklifleri','Sub-supplier Invoices':'Alt Tedarikçi Faturaları','Sub-supplier Quote':'Alt Tedarikçi Teklifi','TCMB rate':'TCMB kuru','Fetching…':'Alınıyor…','TCMB banknote buying rate of {0}':'{0} tarihli TCMB efektif alış kuru','TCMB · {0} · banknote buying':'TCMB · {0} · efektif alış','Could not get the TCMB rate: {0}':'TCMB kuru alınamadı: {0}','TCMB has no banknote buying rate for {0}':'TCMB’de {0} için efektif alış kuru yok','Commercial Invoice':'Ticari Fatura','From {0}':'Kaynak: {0}','Valid until':'Geçerlilik:','Sub-supplier Invoice':'Alt Tedarikçi Faturası',
   'New Sub-supplier Quote':'Yeni Alt Tedarikçi Teklifi','New Sub-supplier Invoice':'Yeni Alt Tedarikçi Faturası','Create Sub-supplier Invoice':'Alt Tedarikçi Faturası Oluştur',
