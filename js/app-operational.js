@@ -64,25 +64,54 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
 
   useEffect(()=>{
     const load=k=>LS.get(ns+k);
-    const c=load('co');const logo=getLogo();const signature=getSignature();if(c)setCo({...DEF_CO,...c,logo:logo||'',signature:signature||''});else setCo({...DEF_CO,logo:logo||'',signature:signature||''});
+    // Projects joined Settings → Numbering; at first they take the sales quotation's year digits and start number
+    const c0=load('co');
+    const c=c0&&!('prjPfx'in c0)?{...c0,prjPfx:'PRJ'+((/\d+$/.exec((c0.sqPfx||'').trim())||[''])[0]),prjStart:c0.sqStart||'1'}:c0;
+    if(c!==c0)LS.set(ns+'co',c);
+    const logo=getLogo();const signature=getSignature();if(c)setCo({...DEF_CO,...c,logo:logo||'',signature:signature||''});else setCo({...DEF_CO,logo:logo||'',signature:signature||''});
     const cu=load('cust');if(cu){const migrated=cu.map(c=>{if('name'in c&&!('contact'in c)){const{name,...rest}=c;return{...rest,contact:name};}return c;});setCustomers(migrated);if(migrated.some((c,i)=>c!==cu[i]))LS.set(ns+'cust',migrated);}
-    const pr=load('proj');if(pr)setProjects(pr);
-    const sq=load('sq');if(sq)setSalesQuotes(sq);
-    const si=load('si');if(si)setSalesInvoices(si);
+    // Once: projects numbered by the old counter (PRJ-0006) are renumbered from Settings → Numbering, each in the
+    // series of its start year (the year digits of the prefix or start number swapped for it), oldest first, and the
+    // copies of the number on documents follow. The flag sits in the counters like chargeCats below
+    let cn=load('cnt');let pr=load('proj');const prjMap={};
+    if(pr&&!(cn&&cn.prjNums)){
+      const legacy=n=>/^PRJ-\d+$/.test(n||'');
+      const pfx=((c&&c.prjPfx)||'').trim()||DEF_CO.prjPfx,start=String((c&&c.prjStart)||'1');
+      const used=pr.map(p=>p.number).filter(n=>!legacy(n));
+      const series=p=>{
+        const yy=/^\d{4}-/.test(p.startDate||'')?p.startDate.slice(2,4):'';
+        if(yy&&/\d\d$/.test(pfx))return[pfx.slice(0,-2)+yy,start];
+        if(yy&&/^\d{6}$/.test(start))return[pfx,yy+start.slice(2)];
+        return[pfx,start];
+      };
+      pr.filter(p=>legacy(p.number)).sort((a,b)=>(a.startDate||'').localeCompare(b.startDate||'')||a.number.localeCompare(b.number))
+        .forEach(p=>{const[sp,ss]=series(p);const n=nextDocNum(sp,ss,used);used.push(n);prjMap[p.number]=n;});
+      if(Object.keys(prjMap).length){pr=pr.map(p=>prjMap[p.number]?{...p,number:prjMap[p.number]}:p);LS.set(ns+'proj',pr);}
+      cn={...(cn||{sq:0,si:0,po:0,prj:0}),prjNums:1};LS.set(ns+'cnt',cn);
+    }
+    const reNum=(key,list)=>{
+      if(!list||!Object.keys(prjMap).length)return list;
+      const next=list.map(d=>prjMap[d.projectNumber]?{...d,projectNumber:prjMap[d.projectNumber]}:d);
+      if(next.some((d,i)=>d!==list[i]))LS.set(ns+key,next);
+      return next;
+    };
+    if(pr)setProjects(pr);
+    const sq=reNum('sq',load('sq'));if(sq)setSalesQuotes(sq);
+    const si=reNum('si',load('si'));if(si)setSalesInvoices(si);
     const pq=load('pq');const po=load('po');const ri=load('ri');
     const migratedPO=(po||[]).map(p=>{const out={...p};delete out.status;if(!out.linkedRI){const linked=(ri||[]).find(r=>r.poId===p.id);if(linked)out.linkedRI={id:linked.id,number:linked.number};}return out;});
     const migratedPQ=(pq||[]).map(q=>{const out={...q};delete out.status;if(!out.linkedPO){const linked=migratedPO.find(p=>p.pqId===q.id);if(linked)out.linkedPO={id:linked.id,number:linked.number};}return out;});
     const migratedRI=(ri||[]).map(r=>r.status==='pending'?{...r,status:'unpaid'}:r);
-    if(pq)setPurchaseQuotes(migratedPQ);
-    if(po)setPurchaseOrders(migratedPO);
-    if(ri)setReceivedInvoices(migratedRI);
-    const srq=load('srcq');if(srq)setSrcQuotes(srq);
-    const sri=load('srci');if(sri)setSrcInvoices(sri);
-    const pex=load('pexp');if(pex)setProjExpenses(pex);
-    const ce=load('ce');if(ce)setCostEsts(ce);
     if(pq&&migratedPQ.some((q,i)=>q!==pq[i]))LS.set(ns+'pq',migratedPQ);
     if(po&&migratedPO.some((p,i)=>p!==po[i]))LS.set(ns+'po',migratedPO);
     if(ri&&migratedRI.some((r,i)=>r!==ri[i]))LS.set(ns+'ri',migratedRI);
+    if(pq)setPurchaseQuotes(reNum('pq',migratedPQ));
+    if(po)setPurchaseOrders(reNum('po',migratedPO));
+    if(ri)setReceivedInvoices(reNum('ri',migratedRI));
+    const srq=reNum('srcq',load('srcq'));if(srq)setSrcQuotes(srq);
+    const sri=reNum('srci',load('srci'));if(sri)setSrcInvoices(sri);
+    const pex=reNum('pexp',load('pexp'));if(pex)setProjExpenses(pex);
+    const ce=reNum('ce',load('ce'));if(ce)setCostEsts(ce);
     // Pool purchase prices were keyed by quotation id + line id (lost on every revision); they move to
     // quote group + line key, the latest revision's price winning, and keep the £ they were shown in
     const ph=load('poolhide');if(ph&&typeof ph==='object'&&!Array.isArray(ph))setPoolHidden(ph);
@@ -122,10 +151,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         const c=cats.find(x=>x.name.toLowerCase()===nm);
         return c?{...e,categoryId:c.id,category:c.name}:e;
       });
-      setExpenses(next);if(next.some((e,i)=>e!==ex[i]))LS.set(ns+'exp',next);
+      if(next.some((e,i)=>e!==ex[i]))LS.set(ns+'exp',next);
+      setExpenses(reNum('exp',next));
     }
-    const docs=load('docs');if(docs)setDocuments(docs);
-    const cn=load('cnt');if(cn)setCnt(cn);
+    const docs=reNum('docs',load('docs'));if(docs)setDocuments(docs);
+    if(cn)setCnt(cn);
     // Once: starter categories for charges on supplier documents. The flag sits in the counters (merged, never lost),
     // so categories deleted afterwards do not come back
     if(!(cn&&cn.chargeCats)){
@@ -163,7 +193,6 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   const sProj=d=>save('proj',setProjects,d);
   const sCust=d=>save('cust',setCustomers,d);
   const sDocs=d=>save('docs',setDocuments,d);
-  const sCnt=d=>{setCnt(d);LS.set(ns+'cnt',d)};
 
   // ── DOCUMENT NUMBERS ──
   // PREFIX + 4 digits (SQ0001), using the prefix and start number from Settings → Numbering.
@@ -176,6 +205,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     si:()=>salesInvoices.map(d=>d.number),
     po:()=>purchaseOrders.map(d=>d.number),
     ce:()=>costEsts.map(d=>d.number),
+    prj:()=>projects.map(p=>p.number),
   };
   const docNum=k=>nextDocNum(docPfx(k),co[k+'Start'],usedDocNums[k]());
   const isAutoNum=(k,num)=>!num||num.startsWith(docPfx(k));
@@ -737,21 +767,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
   };
 
   // ── PROJECT ──
-  const mkProject=()=>{
-    const n=cnt.prj;const num=genProjNum(n+1);
-    return{id:null,number:num,name:'',client:'',clientId:'',budget:'',currency:'GBP',startDate:td(),status:'active',desc:''};
-  };
-  const assignProjectNumber=(p)=>{
-    if(!p.number||p.number.startsWith('PRJ')){
-      const n=cnt.prj;const num=genProjNum(n+1);
-      sCnt({...cnt,prj:n+1});
-      return{...p,number:num};
-    }
-    return p;
-  };
+  const mkProject=()=>({id:null,number:docNum('prj'),name:'',client:'',clientId:'',budget:'',currency:'GBP',startDate:td(),status:'active',desc:''});
   const handleSaveProj=p=>{
     const fresh=!p.id;
-    const numbered=fresh?assignProjectNumber(p):p;
+    // A new project takes the next free number when saved, unless one was typed by hand
+    const numbered=fresh&&isAutoNum('prj',p.number)?{...p,number:docNum('prj')}:p;
     const saved={...numbered,id:numbered.id||uid()};
     sProj(fresh?[...projects,saved]:projects.map(x=>x.id===saved.id?saved:x));
     // Documents are filed under their project's name, so a rename carries over to everything filed under the old one
@@ -4031,7 +4051,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       {id:'numbering',icon:'hash',label:tr('Numbering')},
       {id:'bank',icon:'card',label:tr('Bank Details')}
     ];
-    const numRows=[['ce','Approximate Cost','YM'],['sq','Sales Quotation','SQ'],['si','Sales Invoice','SI'],['po','Purchase Order','PO']];
+    const numRows=[['ce','Approximate Cost','YM'],['sq','Sales Quotation','SQ'],['si','Sales Invoice','SI'],['po','Purchase Order','PO'],['prj','Project','PRJ']];
 
     const assetCard=(label,hint,src,accept,inputRef,onPick,onRemove)=>(
       <div className="st-asset">

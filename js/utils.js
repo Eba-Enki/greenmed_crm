@@ -101,7 +101,6 @@ const nextDocNum=(pfx,start,existing)=>{
 };
 const genQuoteNum=(base,rev)=>rev===0?base:`${base}.R${String(rev).padStart(2,'0')}`;
 const genPQNum=()=>''; // manual
-const genProjNum=n=>`PRJ-${padN(n)}`;
 
 // ── Server sync (PHP API in /api) ──
 // localStorage is the working copy. For every synced key we remember what the server last confirmed
@@ -516,7 +515,7 @@ function useSignature(){
 }
 
 const ITRM=['Due on Receipt','Net 7','Net 14','Net 30'];
-const DEF_CO={name:'Green Med Ltd',address:'60 Millmead Business Centre\nMill Mead Road\nLondon N17 9QU\nUnited Kingdom',email:'',phone:'',logo:'',invPfx:'INV',invStart:'1',quoPfx:'QUO',quoStart:'1',poPfx:'PO',poStart:'1',sqPfx:'SQ',sqStart:'1',cePfx:'YM',ceStart:'1',siPfx:'SI',siStart:'1',selectedTemplate:'standard',website:'www.greenmed.uk',banks:[]};
+const DEF_CO={name:'Green Med Ltd',address:'60 Millmead Business Centre\nMill Mead Road\nLondon N17 9QU\nUnited Kingdom',email:'',phone:'',logo:'',invPfx:'INV',invStart:'1',quoPfx:'QUO',quoStart:'1',poPfx:'PO',poStart:'1',sqPfx:'SQ',sqStart:'1',cePfx:'YM',ceStart:'1',prjPfx:'PRJ',prjStart:'1',siPfx:'SI',siStart:'1',selectedTemplate:'standard',website:'www.greenmed.uk',banks:[]};
 const TEMPLATES={
   standard:{id:'standard',name:'Standard',description:'Pixel-perfect professional template'}
 };
