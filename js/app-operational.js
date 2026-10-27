@@ -2893,16 +2893,16 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="tcard-hdr" style={{background:'var(--white)',borderRadius:'var(--r) var(--r) 0 0',border:'1px solid var(--g200)',borderBottom:'none'}}>
             <div className="tcard-hdr-t">{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
           </div>
-          <div className="tcard mt-chain"><table className="dt mt-tbl mt-wrap">
-            <Cg w={[0.35,2.1,1,1.7,1,2,1.15,1.05]}/>
-            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Sale")}</th><th>{tr("Supplier")}</th><th className="tar">{tr("Purchase Price")}</th><th>{tr("Sub-supplier")}</th><th className="tar">{tr("Sub-supplier Price")}</th><th>{tr("Ship Date")}</th></tr></thead>
+          {/* Content-fit: number, amounts and date hug their content; the supplier keeps its name on one line; the item and the sub-supplier share the rest */}
+          <div className="tcard mt-chain"><table className="dt dt-fit mt-tbl">
+            <thead><tr><th>#</th><th className="fit-grow">{tr("Customer Item")}</th><th className="tar">{tr("Sale")}</th><th>{tr("Supplier")}</th><th className="tar">{tr("Purchase Price")}</th><th className="fit-grow">{tr("Sub-supplier")}</th><th className="tar">{tr("Sub-supplier Price")}</th><th className="tac">{tr("Ship Date")}</th></tr></thead>
             <tbody>{shown.length===0?<tr><td colSpan={8}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
             shown.flatMap(r=>{const e=lineEconomics(q,r);
               const dash=<span style={{color:'var(--g300)'}}>—</span>;
               const lead=[<td key="n" style={{color:'var(--g500)'}}>{r.i+1}</td>,
-                <td key="d" style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(r.it)}<div className="mt-pct">{r.it.qty} {r.it.unit||''} × {CURR[qc]||''}{fmt(+(r.it.price||0))}</div></td>,
+                <td key="d" className="fit-grow" style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(r.it)}<div className="mt-pct">{r.it.qty} {r.it.unit||''} × {CURR[qc]||''}{fmt(+(r.it.price||0))}</div></td>,
                 <td key="s" className="tar">{money(qc,e.sale)}</td>];
-              if(!r.lines.length)return[<tr key={r.key}>{lead}<td><span className="mt-none">{tr("Not matched")}</span></td><td/><td/><td/><td>{dash}</td></tr>];
+              if(!r.lines.length)return[<tr key={r.key}>{lead}<td><span className="mt-none">{tr("Not matched")}</span></td><td/><td className="fit-grow"/><td/><td className="tac">{dash}</td></tr>];
               const blocks=chainBlocks(r);
               // One row per block, plus one per line of an opened block; the customer line's columns span them all
               const subs=blocks.flatMap(b=>[{b},...(b.lines.length>1&&openBlocks.has(b.k)?b.lines.map(l=>({b,l})):[])]);
@@ -2910,8 +2910,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               const span=el=>React.cloneElement(el,{rowSpan:subs.length});
               return subs.map(({b,l},j)=>{const x=l?chainLineCells(b,l):chainCells(b,e,qc);return<tr key={b.k+(l?'|'+l.it.id:'')} className={j?(l?'mt-sub mt-line':'mt-sub'):''}>
                 {j===0&&lead.map(span)}
-                <td>{x.sup}</td><td className="tar">{x.buy}</td><td>{x.src}</td><td className="tar">{x.src$}</td>
-                {shipSpan[j]&&<td rowSpan={shipSpan[j]}>{chainShip(b.c)}</td>}
+                <td>{x.sup}</td><td className="tar">{x.buy}</td><td className="fit-grow">{x.src}</td><td className="tar">{x.src$}</td>
+                {shipSpan[j]&&<td className="tac" rowSpan={shipSpan[j]}>{chainShip(b.c)}</td>}
               </tr>;});})}</tbody>
           </table></div>
         </div>);})}

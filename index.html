@@ -786,7 +786,11 @@ table.mt-tbl td{vertical-align:middle}
 table.mt-tbl tr.mt-sub td{border-top:1px dashed var(--g200)}
 /* Supply chain table: the card lets the column titles stick under the page header while scrolling */
 .tcard.mt-chain{overflow:visible;border-radius:0 0 var(--r) var(--r)}
+/* (it keeps the content-fit card from becoming a scroll box, which would unstick the titles; narrow screens scroll it sideways) */
+.tcard.mt-chain:has(> .dt-fit){overflow:visible}
+@media(max-width:900px){.tcard.mt-chain:has(> .dt-fit){overflow-x:auto}}
 .mt-chain table.dt th{position:sticky;top:var(--topbar-h,54px);z-index:5}
+.mt-chain table.dt.dt-fit .fit-grow{width:50%}
 .mt-more{display:inline-flex;align-items:center;gap:3px;padding:1px 6px 1px 8px;border:1px solid var(--g200);border-radius:10px;background:var(--white);color:var(--g600);font:inherit;font-size:10.5px;font-weight:600;cursor:pointer;transition:background .12s,border-color .12s,color .12s,transform .12s}
 .mt-more:hover{background:var(--g50);border-color:var(--gm-300);color:var(--g800)}
 .mt-more:focus-visible{outline:2px solid var(--gm-400);outline-offset:1px}
@@ -794,7 +798,7 @@ table.mt-tbl tr.mt-sub td{border-top:1px dashed var(--g200)}
 .mt-more svg{transition:transform .22s cubic-bezier(.34,1.56,.64,1)}
 .mt-more.on svg{transform:rotate(180deg)}
 table.mt-tbl tr.mt-line td{padding-top:4px;padding-bottom:4px;background:var(--g50)}
-.mt-line-d{display:flex;flex-direction:column;font-size:11.5px;color:var(--g700)}
+.mt-line-d{display:flex;flex-direction:column;white-space:normal;max-width:260px;font-size:11.5px;color:var(--g700)}
 .mt-line-a{font-size:11px;color:var(--g500)}
 .mt-ship{display:flex;flex-wrap:wrap;column-gap:8px;font-size:11px;color:var(--g500)}
 .mt-ship span{white-space:nowrap}
