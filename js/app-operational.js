@@ -2817,7 +2817,9 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       exportExcel([head,...rows],`item-matching-${slug}`);
     };
     const money=(cur,v)=>v==null?<span style={{color:'var(--g300)'}}>—</span>:<span style={{color:v<0?'var(--red)':undefined}}>{v<0?'-':''}{CURR[cur]||''}{fmt(Math.abs(v))}</span>;
-    const marginCell=(cur,v,sale)=>v==null?money(cur,null):<div>{money(cur,v)}{sale>0&&<div className="mt-pct">{(v/sale*100).toFixed(1)}%</div>}</div>;
+    // A price in red with the loss on hover, when the link of the chain it closes loses money
+    const lossAmt=(cur,v)=>'-'+(CURR[cur]||'')+fmt(Math.abs(v));
+    const lossProps=(loss,label)=>loss?{className:'mt-loss',title:label}:{};
     // Supply chain blocks: a customer line's supplier lines grouped by document and, for a group company, by sub-supplier
     // source, so the same supplier, sub-supplier and shipment show once with the amounts summed. Blocks of one order
     // sit together, its shipment cell spanning them
@@ -2828,36 +2830,46 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       const bs=[...m.values()],order=[...new Set(bs.map(b=>b.ship))];
       return bs.sort((a,b)=>order.indexOf(a.ship)-order.indexOf(b.ship));
     };
-    const chainBuy=b=>{const{c,lines}=b;const on=openBlocks.has(b.k);
+    // Purchase price of a block, with its share per customer unit; red when the customer line as a whole sells below
+    // what Green Med paid (e: the line's economics)
+    const chainBuy=(b,r,e,qc)=>{const{c,lines}=b;const on=openBlocks.has(b.k),dc=c.lead.currency||'GBP';
       const tot=lines.reduce((t,{it:s})=>t+(+(s.qty||0))*(+(s.price||0)),0);
       return<><b>{c.lead.supplierCompany||'—'}</b>{isGroupDoc(c.lead)&&<span className="mt-tag ok" style={{marginLeft:5}}>{tr("Group")}</span>}
-        <div className="mt-amt">{CURR[c.lead.currency]||''}{fmt(tot)}
-          {lines.length>1&&<button type="button" className={'mt-more'+(on?' on':'')} aria-expanded={on} onClick={()=>toggleBlock(b.k)}>{tr("{0} items",lines.length)}<Ico n="chevDown" size={12}/></button>}</div></>;
+        <div className="mt-amt"><span {...lossProps(e.gm!=null&&e.gm<0,tr('Green Med loss: {0}',lossAmt(qc,e.gm)))}>{CURR[dc]||''}{fmt(tot)}</span>
+          {lines.length>1&&<button type="button" className={'mt-more'+(on?' on':'')} aria-expanded={on} onClick={()=>toggleBlock(b.k)}>{tr("{0} items",lines.length)}<Ico n="chevDown" size={12}/></button>}</div>
+        {+r.it.qty>0&&<div className="mt-line-a">{tr('unit {0}',(CURR[dc]||'')+fmt(tot/+r.it.qty))}</div>}</>;
     };
-    const chainSrc=b=>{const{c,lines}=b;
+    // Sub-supplier price of a group company block, converted to the document currency; red when it is above what the
+    // group company sold the block for
+    const chainSrc=(b,r)=>{const{c,lines}=b;
       if(!isGroupDoc(c.lead))return<span style={{color:'var(--g400)'}}>{tr("direct purchase")}</span>;
       const s0=lines[0].it,sc=lineCur(c.lead,s0),dc=c.lead.currency||'GBP';
       const priced=lines.filter(({it:s})=>+s.srcPrice);
       const tot=priced.reduce((t,{it:s})=>t+(+(s.qty||0))*(+s.srcPrice),0);
       const conv=priced.map(({it:s})=>{const u=srcInDocCur(c.lead,s);return u==null?null:(+(s.qty||0))*u;});
-      const noRate=conv.some(v=>v==null);
+      const noRate=conv.some(v=>v==null),convTot=conv.reduce((a,v)=>a+(v||0),0);
+      const buy=lines.reduce((t,{it:s})=>t+(+(s.qty||0))*(+(s.price||0)),0);
+      const loss=priced.length===lines.length&&!noRate&&convTot>buy+0.005;
       const invs=[...new Set(lines.map(({it:s})=>{const inv=s.srcq&&srcInvoiceOf(s.srcq.lineId);return inv&&inv.number;}).filter(Boolean))];
       const refs=[s0.srcDocNo,...invs.map(n=>tr('Invoice {0}',n))].filter(Boolean);
       return<>{s0.srcSupplier?<b>{s0.srcSupplier}</b>:<span className="mt-none">{tr("Sub-supplier missing")}</span>}
         {refs.length>0&&<div className="mt-ship">{refs.map(x=><span key={x}>{x}</span>)}</div>}
-        <div>{priced.length?<>{CURR[sc]||''}{fmt(tot)}{!noRate&&sc!==dc&&<span style={{color:'var(--g500)'}}> ≈ {CURR[dc]||''}{fmt(conv.reduce((a,v)=>a+v,0))}</span>}{noRate&&<span className="mt-none"> · {tr("rate missing")}</span>}
-          {priced.length<lines.length&&<span className="mt-none"> · {tr("no price on {0} items",lines.length-priced.length)}</span>}</>:<span style={{color:'var(--g300)'}}>—</span>}</div></>;
+        <div>{priced.length?<span {...lossProps(loss,tr('Group company loss: {0}',lossAmt(dc,buy-convTot)))}>{CURR[sc]||''}{fmt(tot)}{!noRate&&sc!==dc&&<> ≈ {CURR[dc]||''}{fmt(convTot)}</>}</span>:<span style={{color:'var(--g300)'}}>—</span>}
+          {priced.length>0&&noRate&&<span className="mt-none"> · {tr("rate missing")}</span>}
+          {priced.length>0&&priced.length<lines.length&&<span className="mt-none"> · {tr("no price on {0} items",lines.length-priced.length)}</span>}</div>
+        {priced.length===lines.length&&!noRate&&+r.it.qty>0&&<div className="mt-line-a">{tr('unit {0}',(CURR[dc]||'')+fmt(convTot/+r.it.qty))}</div>}</>;
     };
     // One line of an opened block
     const chainLine=(b,{c,it:s})=>{const g=isGroupDoc(c.lead),sc=lineCur(c.lead,s),dc=c.lead.currency||'GBP',u=g?srcInDocCur(c.lead,s):null;
-      return{buy:<div className="mt-line-d"><span>{s.desc||s.item||'—'}</span><span className="mt-line-a">{+(s.qty||0)} × {CURR[dc]||''}{fmt(+(s.price||0))} = {CURR[dc]||''}{fmt(+(s.qty||0)*+(s.price||0))}</span></div>,
-        src:g&&<div className="mt-line-a">{+s.srcPrice?<>{CURR[sc]||''}{fmt(+(s.qty||0)*+s.srcPrice)}{u!=null&&sc!==dc&&<> ≈ {CURR[dc]||''}{fmt(+(s.qty||0)*u)}</>}</>:'—'}</div>};
+      const buy=+(s.qty||0)*+(s.price||0),loss=u!=null&&+(s.qty||0)*u>buy+0.005;
+      return{buy:<div className="mt-line-d"><span>{s.desc||s.item||'—'}</span><span className="mt-line-a">{+(s.qty||0)} × {CURR[dc]||''}{fmt(+(s.price||0))} = {CURR[dc]||''}{fmt(buy)}</span></div>,
+        src:g&&<div className="mt-line-a">{+s.srcPrice?<span {...lossProps(loss,tr('Group company loss: {0}',lossAmt(dc,buy-+(s.qty||0)*u)))}>{CURR[sc]||''}{fmt(+(s.qty||0)*+s.srcPrice)}{u!=null&&sc!==dc&&<> ≈ {CURR[dc]||''}{fmt(+(s.qty||0)*u)}</>}</span>:'—'}</div>};
     };
+    // Ship date only; the rest of the order's shipment shows on hover
     const chainShip=c=>{const sh=(c.po&&c.po.shipment)||{};
       if(!(sh.date||sh.gcb||sh.awb||sh.carrier||sh.incoterm))return<span style={{color:'var(--g300)'}}>{c.po?tr('not shipped yet'):'—'}</span>;
-      const via=[sh.incoterm,sh.carrier].filter(Boolean),refs=[sh.awb&&'AWB/BL '+sh.awb,sh.gcb&&'GÇB '+sh.gcb].filter(Boolean);
-      return<>{sh.date&&<b>{fmtD(sh.date)}</b>}{c.po.dropShip&&<span className="mt-tag ok" style={{marginLeft:5}}>{tr("Direct")}</span>}
-        {[via,refs].filter(a=>a.length).map((a,i)=><div key={i} className="mt-ship">{a.map(x=><span key={x}>{x}</span>)}</div>)}</>;
+      const info=[sh.incoterm,sh.carrier,sh.awb&&'AWB/BL '+sh.awb,sh.gcb&&'GÇB '+sh.gcb,c.po.dropShip&&tr('Shipped directly to the customer')].filter(Boolean).join('\n');
+      return<span title={info||undefined} className={info?'mt-has-tip':undefined}>{sh.date?<b>{fmtD(sh.date)}</b>:<span className="mt-none">{tr('No date entered')}</span>}</span>;
     };
     // Supply chain tab: what each customer line sells for, what it cost Green Med and the group, and how it shipped
     const renderChain=()=>{
@@ -2882,18 +2894,15 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             <div className="tcard-hdr-t">{q.number} · {(q.client&&(q.client.company||q.client.contact))||'—'}</div>
           </div>
           <div className="tcard mt-chain"><table className="dt mt-tbl mt-wrap">
-            <Cg w={[0.35,1.9,1.05,1.55,2.2,1.05,1.05,1.05,2]}/>
-            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Sale")}</th><th>{tr("Bought From")}</th><th>{tr("Sub-supplier")}</th><th className="tar">{tr("Green Med Margin")}</th><th className="tar">{tr("Group Co. Margin")}</th><th className="tar">{tr("Group Margin")}</th><th>{tr("Shipment")}</th></tr></thead>
-            <tbody>{shown.length===0?<tr><td colSpan={9}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
+            <Cg w={[0.35,2.3,1.05,2,2.6,1.2]}/>
+            <thead><tr><th>#</th><th>{tr("Customer Item")}</th><th className="tar">{tr("Sale")}</th><th>{tr("Purchase Price")}</th><th>{tr("Sub-supplier Price")}</th><th>{tr("Ship Date")}</th></tr></thead>
+            <tbody>{shown.length===0?<tr><td colSpan={6}><div className="empty" style={{padding:'24px 12px'}}><div className="empty-t">{tr("No items match the filter")}</div></div></td></tr>:
             shown.flatMap(r=>{const e=lineEconomics(q,r);
               const dash=<span style={{color:'var(--g300)'}}>—</span>;
               const lead=[<td key="n" style={{color:'var(--g500)'}}>{r.i+1}</td>,
                 <td key="d" style={{color:'var(--g900)',fontWeight:500}}>{sqLineText(r.it)}<div className="mt-pct">{r.it.qty} {r.it.unit||''} × {CURR[qc]||''}{fmt(+(r.it.price||0))}</div></td>,
                 <td key="s" className="tar">{money(qc,e.sale)}</td>];
-              const margins=[<td key="gm" className="tar" title={e.otherCur?tr('Invoiced in another currency'):''}>{marginCell(qc,e.gm,e.sale)}</td>,
-                <td key="co" className="tar">{e.hasGroup?marginCell(qc,e.co,e.sale):money(qc,null)}</td>,
-                <td key="gr" className="tar">{marginCell(qc,e.group,e.sale)}</td>];
-              if(!r.lines.length)return[<tr key={r.key}>{lead}<td><span className="mt-none">{tr("Not matched")}</span></td><td/>{margins}<td>{dash}</td></tr>];
+              if(!r.lines.length)return[<tr key={r.key}>{lead}<td><span className="mt-none">{tr("Not matched")}</span></td><td/><td>{dash}</td></tr>];
               const blocks=chainBlocks(r);
               // One row per block, plus one per line of an opened block; the customer line's columns span them all
               const subs=blocks.flatMap(b=>[{b},...(b.lines.length>1&&openBlocks.has(b.k)?b.lines.map(l=>({b,l})):[])]);
@@ -2901,9 +2910,8 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
               const span=el=>React.cloneElement(el,{rowSpan:subs.length});
               return subs.map(({b,l},j)=><tr key={b.k+(l?'|'+l.it.id:'')} className={j?(l?'mt-sub mt-line':'mt-sub'):''}>
                 {j===0&&lead.map(span)}
-                <td>{l?chainLine(b,l).buy:chainBuy(b)}</td>
-                <td>{l?chainLine(b,l).src:chainSrc(b)}</td>
-                {j===0&&margins.map(span)}
+                <td>{l?chainLine(b,l).buy:chainBuy(b,r,e,qc)}</td>
+                <td>{l?chainLine(b,l).src:chainSrc(b,r)}</td>
                 {shipSpan[j]&&<td rowSpan={shipSpan[j]}>{chainShip(b.c)}</td>}
               </tr>);})}</tbody>
           </table></div>
