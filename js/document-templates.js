@@ -483,7 +483,9 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
       P.setFont('Arial','bold');
       P.setFontSize(9);
       P.text('TERMS AND CONDITIONS',13.025,notesY+6);
-      P.setFontSize(8.5);
+      // Terms lines and notes at 8 pt, like the item table and the bank details
+      const TL=4.2;
+      P.setFontSize(8);
       // Payment terms and delivery time (sales quotations) as bold-label lines, then the notes
       let ty=notesY+12.5;
       [['Payment Terms',doc.paymentTerms],['Delivery Time',doc.deliveryTime]].filter(([,v])=>String(v||'').trim()).forEach(([label,val])=>{
@@ -491,13 +493,13 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
         const lw=pdf.getTextWidth(label+': ');
         P.text(label+':',13.025,ty);
         P.setFont('Arial','normal');
-        P.splitTextToSize(fixText(val),86-lw).forEach((t,k)=>{P.text(t,13.025+lw,ty);ty+=4.4;});
+        P.splitTextToSize(fixText(val),86-lw).forEach((t,k)=>{P.text(t,13.025+lw,ty);ty+=TL;});
       });
       P.setFont('Arial','normal');
       const noteLines=String(doc.notes||'').trim()?P.splitTextToSize(fixText(doc.notes),86):[];
-      noteLines.forEach((t,k)=>P.text(t,13.025,ty+k*4.4));
-      ty+=noteLines.length*4.4;
-      notesEndY=ty>notesY+12.5?ty-4.4:notesY+6;
+      noteLines.forEach((t,k)=>P.text(t,13.025,ty+k*TL));
+      ty+=noteLines.length*TL;
+      notesEndY=ty>notesY+12.5?ty-TL:notesY+6;
     }else{
       P.setFont('Arial','bold');
       P.setFontSize(8);
