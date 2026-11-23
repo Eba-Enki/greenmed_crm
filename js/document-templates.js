@@ -599,30 +599,55 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     }catch(e){console.error('Signature error:',e);}
   }
 
-  // Footer (FIXED position at bottom of every page) with the page number bottom-right
+  // Footer (FIXED position at bottom of every page) with the page number bottom-right: website, e-mail and phone,
+  // each after a small line icon in the light brand green of the Bill To / Ship To rules, the row centred on the page
+  const FOOT_GREEN=[150,194,112];
+  const ICON=2.6,ICON_GAP=1.3,SEP=3.2;
+  const icons={
+    web:(cx,cy)=>{const r=ICON/2;pdf.circle(cx,cy,r,'S');pdf.ellipse(cx,cy,r*0.42,r,'S');pdf.line(cx-r,cy,cx+r,cy);},
+    mail:(cx,cy)=>{const w=ICON,h=ICON*0.7,x=cx-w/2,y=cy-h/2;pdf.rect(x,y,w,h,'S');pdf.line(x,y,cx,cy+h*0.08);pdf.line(cx,cy+h*0.08,x+w,y);},
+    tel:(cx,cy)=>{const w=ICON*0.62,h=ICON,x=cx-w/2,y=cy-h/2;pdf.roundedRect(x,y,w,h,0.35,0.35,'S');pdf.line(cx-w*0.18,y+h-0.45,cx+w*0.18,y+h-0.45);},
+  };
+  const footItems=[['web',co.website||'www.greenmed.uk'],['mail',co.email||'info@greenmed.uk'],['tel',co.phone||'+44 750 751 6818']]
+    .map(([k,v])=>[k,fixText(v)]).filter(([,v])=>v.trim());
   const pageCount=pdf.internal.getNumberOfPages();
   for(let p=1;p<=pageCount;p++){
     pdf.setPage(p);
     pdf.setFont('Arial','normal');
     pdf.setFontSize(8);
     pdf.setTextColor(17,17,17);
-    pdf.text('web: '+(co.website||'www.greenmed.uk'),50.694,footerY+2.5);
-    pdf.text('|',84.126,footerY+0.401+2.5);
-    pdf.text('e-mail: '+(co.email||'info@greenmed.uk'),87.473,footerY+2.5);
-    pdf.text('|',123.908,footerY+0.401+2.5);
-    pdf.text('Tel: '+(co.phone||'+44 750 751 6818'),127.255,footerY+2.5);
-    pdf.text(p+'/'+pageCount,198.025,footerY+2.5,{align:'right'});
+    const ty=footerY+2.5,iy=ty-1.0;
+    const widths=footItems.map(([,v])=>ICON+ICON_GAP+pdf.getTextWidth(v));
+    let x=105-(widths.reduce((s,w)=>s+w,0)+SEP*2*(footItems.length-1))/2;
+    footItems.forEach(([k,v],i)=>{
+      if(i){pdf.setTextColor(170,170,170);pdf.text('|',x-SEP,ty,{align:'center'});pdf.setTextColor(17,17,17);}
+      pdf.setDrawColor(...FOOT_GREEN);pdf.setLineWidth(0.25);
+      icons[k](x+ICON/2,iy);
+      pdf.text(v,x+ICON+ICON_GAP,ty);
+      x+=widths[i]+SEP*2;
+    });
+    pdf.text(p+'/'+pageCount,198.025,ty,{align:'right'});
   }
+  pdf.setDrawColor(158,158,158);
   pdf.setPage(pageCount);
 
   return pdf;
 };
 
+// PDF file name, e.g. "Sales Quote (SQ0001)". Supplier-side documents (they carry supplierCompany) are the received
+// ones; an invoice printed with the full bank block is a Sales & Procurement sales invoice.
+const pdfFileBase=(doc,type,opts)=>{
+  const supplier=doc&&doc.supplierCompany!=null;
+  const label=type==='sales_quote'?'Sales Quote':type==='po'?'Purchase Order':type==='received'?'Received Invoice'
+    :type==='quote'?(supplier?'Received Quote':'Quote')
+    :type==='invoice'?(supplier?'Received Invoice':opts&&opts.fullBank?'Sales Invoice':'Invoice'):'Document';
+  const no=String((doc&&doc.number)||'').replace(/[\\/:*?"<>|]+/g,'-').trim()||'Draft';
+  return`${label} (${no})`;
+};
 const savePDF=async(doc,co,type='invoice',opts)=>{
   try{
     const pdf=await buildStandardPDF(doc,co,type,opts);
-    const filename=`${type}_${doc.number||'draft'}_${td()}.pdf`;
-    pdf.save(filename);
+    pdf.save(pdfFileBase(doc,type,opts)+'.pdf');
   }catch(e){
     uiAlert('PDF could not be generated: '+e.message);
     console.error('PDF generation failed:',e);
@@ -637,9 +662,9 @@ const downloadPDFZip=async(docs,co,type,opts,zipName,onProgress)=>{
     for(let i=0;i<docs.length;i++){
       if(onProgress)onProgress(i+1,docs.length);
       const pdf=await buildStandardPDF(docs[i],co,type,opts);
-      const base=`${type}_${docs[i].number||'draft'}`;
+      const base=pdfFileBase(docs[i],type,opts);
       used[base]=(used[base]||0)+1;
-      zip.file(base+(used[base]>1?'_'+used[base]:'')+'.pdf',pdf.output('arraybuffer'));
+      zip.file(base+(used[base]>1?' '+used[base]:'')+'.pdf',pdf.output('arraybuffer'));
     }
     const blob=await zip.generateAsync({type:'blob'});
     const a=document.createElement('a');
