@@ -349,7 +349,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     {key:'category',label:'Category',align:'left',wrap:true,max:22,get:it=>fixText(it.category)},
     {key:'qty',label:'Qty',align:'right',max:null,get:it=>fmtQty(it.qty,co)},
     {key:'unit',label:'Units',align:'center',wrap:true,max:12,get:it=>fixText(it.unit)},
-    {key:'price',label:`Price (${doc.currency||'GBP'})`,align:'right',max:null,get:it=>fmt(+(it.price||0))},
+    {key:'price',label:'Price',align:'right',max:null,get:it=>fmt(+(it.price||0))},
     {key:'amount',label:`Amount (${doc.currency||'GBP'})`,align:'right',max:null,get:it=>fmt(lt(it))},
   ].filter(c=>!['item','brand','model','category'].includes(c.key)||items.some(it=>String(it[c.key]||'').trim()));
   colDefs.forEach(c=>{
@@ -426,8 +426,10 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
       if(i<cols.length-1){
         pdf.line(tableX+col.x+col.w,top,tableX+col.x+col.w,top+headerH);
       }
-      const textX=tableX+col.x+(col.align==='center'?col.w/2:col.align==='right'?col.w-3:2);
-      pdf.text(col.label,textX,top+headerH/2+1,{align:col.align});
+      // Headers of the number columns (Qty, Units, Price, Amount) are centred over their values
+      const ha=['qty','unit','price','amount'].includes(col.key)?'center':col.align;
+      const textX=tableX+col.x+(ha==='center'?col.w/2:ha==='right'?col.w-3:2);
+      pdf.text(col.label,textX,top+headerH/2+1,{align:ha});
     });
     pdf.setFont('Arial','normal');
     return top+headerH;
@@ -452,10 +454,13 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
       }
     });
 
-    // Cell text, top-aligned; wrapped lines continue below the first
+    // Cell text centred vertically in the row: a cell with fewer lines than the tallest one (usually a wrapped
+    // description) moves down by half the difference; wrapped lines continue below the first
+    const n=Math.max(...cells.map(c=>c.length));
     cols.forEach((col,j)=>{
       const textX=tableX+col.x+(col.align==='center'?col.w/2:col.align==='right'?col.w-3:2);
-      cells[j].forEach((t,k)=>pdf.text(t,textX,y+rowH/2+1+k*lineH,{align:col.align}));
+      const dy=(n-cells[j].length)*lineH/2;
+      cells[j].forEach((t,k)=>pdf.text(t,textX,y+dy+rowH/2+1+k*lineH,{align:col.align}));
     });
     y+=h;
   });
