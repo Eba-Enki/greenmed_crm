@@ -137,6 +137,7 @@ const I18N_TR={
   'Company Logo':'Firma Logosu','Signature':'İmza','Please select a PNG or JPG file':'Lütfen PNG veya JPG dosyası seçin',
   'Select a template for your invoices and quotations':'Fatura ve teklifleriniz için bir şablon seçin',
   'Select a template for your invoices and quotations.':'Fatura ve teklifleriniz için bir şablon seçin.',
+  'Quantity decimal places':'Miktar ondalık basamağı','How many digits the Qty column shows after the decimal point on PDFs.':'PDF\'lerde Miktar sütununda virgülden sonra kaç basamak gösterileceği.',
   'on':'açık','off':'kapalı','Automatic numbering {0}':'Otomatik numaralandırma {0}',
   'New quotations, invoices and purchase orders get the next number from the prefixes below.':'Yeni teklif, fatura ve satın alma siparişleri aşağıdaki öneklerle sıradaki numarayı alır.',
   'Numbers are typed by hand on each quotation, invoice and purchase order — use this to enter old documents. The counters stay where they are; turn this back on to continue automatically.':'Her teklif, fatura ve satın alma siparişinde numara elle yazılır — eski belgeleri girmek için kullanın. Sayaçlar olduğu yerde kalır; otomatik devam etmek için tekrar açın.',

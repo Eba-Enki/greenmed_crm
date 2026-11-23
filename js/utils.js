@@ -42,6 +42,10 @@ const docTotals=(doc,items=doc&&doc.items)=>{
   return{sub,disc,discRate,vat,total:sub-disc+vat,groups,rate:oneRate(groups.map(g=>g.rate))};
 };
 const fmt=n=>n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});
+// Quantity on the PDF with the decimal places chosen in Settings → PDF Templates (co.qtyDecimals, 0–4; 2 when unset)
+const QTY_DECIMALS=[0,1,2,3,4];
+const qtyDec=co=>{const d=parseInt(co&&co.qtyDecimals,10);return QTY_DECIMALS.includes(d)?d:2;};
+const fmtQty=(n,co)=>{const d=qtyDec(co);return(+n||0).toLocaleString('en-GB',{minimumFractionDigits:d,maximumFractionDigits:d});};
 // Amounts in different currencies are never added together: totals are kept per currency ({GBP:…, USD:…})
 // and shown side by side ("£1,200.00 · $350.00"); a record without a currency counts as GBP, as it is shown.
 const curTotals=pairs=>pairs.reduce((a,[c,v])=>{const k=c||'GBP';a[k]=(a[k]||0)+(+v||0);return a;},{});

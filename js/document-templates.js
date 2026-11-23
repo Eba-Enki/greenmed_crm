@@ -346,7 +346,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     {key:'brand',label:'Brand',align:'left',wrap:true,max:22,get:it=>fixText(it.brand)},
     {key:'model',label:'Model',align:'left',wrap:true,max:22,get:it=>fixText(it.model)},
     {key:'category',label:'Category',align:'left',wrap:true,max:22,get:it=>fixText(it.category)},
-    {key:'qty',label:'Qty',align:'right',max:null,get:it=>fmt(+(it.qty||0))},
+    {key:'qty',label:'Qty',align:'right',max:null,get:it=>fmtQty(it.qty,co)},
     {key:'unit',label:'Units',align:'center',wrap:true,max:12,get:it=>fixText(it.unit)},
     {key:'price',label:'Price',align:'right',max:null,get:it=>fmt(+(it.price||0))},
     {key:'amount',label:'Amount',align:'right',max:null,get:it=>fmt(lt(it))},
@@ -564,13 +564,13 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
           });
           return y;
         };
-        const endL=col([['Account Name',b.accountName||co.name||''],['Account No',b.accountNumber||''],['IBAN',b.iban||''],['SWIFT/BIC',b.bic||'']],13.651,35,65);
+        // No IBAN row when the account has none (US banks don't use IBANs), so it doesn't look like a missing detail
+        const endL=col([['Account Name',b.accountName||co.name||''],['Account No',b.accountNumber||''],...(String(b.iban||'').trim()?[['IBAN',b.iban]]:[]),['SWIFT/BIC',b.bic||'']],13.651,35,65);
         const endR=col([['Currency',b.currency||doc.currency||'GBP'],['Bank Name',b.bankName||''],['Bank Address',b.bankAddress||'']],108,128.5,64);
         line6Y=Math.max(endL,endR)-lh+(opts.modern?4.5:3);
       }else{
-        P.text('Account Number: '+(defaultBank.accountNumber||''),13.651,bankY+2.5);
-        P.text('IBAN: '+(defaultBank.iban||''),13.651,bankY+3.267+2.5);
-        P.text('BIC: '+(defaultBank.bic||''),13.651,bankY+6.533+2.5);
+        const rows=['Account Number: '+(defaultBank.accountNumber||''),...(String(defaultBank.iban||'').trim()?['IBAN: '+defaultBank.iban]:[]),'BIC: '+(defaultBank.bic||'')];
+        rows.forEach((t,k)=>P.text(t,13.651,bankY+k*3.267+2.5));
       }
 
       // Horizontal Line 6 (dynamically positioned after bank details)
@@ -880,7 +880,7 @@ function DocPage({doc,co,docType}){
                 if(hasBrand)rowData.push(it.brand||'');
                 if(hasModel)rowData.push(it.model||'');
                 if(hasCategory)rowData.push(it.category||'');
-                rowData.push(fmt(+(it.qty||0)),it.unit||'',fmt(+(it.price||0)),fmt(lt(it)));
+                rowData.push(fmtQty(it.qty,co),it.unit||'',fmt(+(it.price||0)),fmt(lt(it)));
                 
                 return(<tr key={it.id||i}>
                   {rowData.map((v,j)=>(
@@ -929,8 +929,8 @@ function DocPage({doc,co,docType}){
 
         {/* Bank Details */}
         <div style={{position:'absolute',left:mm(13.651),top:mm(bankY),fontSize:8,color:'#111',lineHeight:'11px'}}>Account Number: {defaultBank.accountNumber||''}</div>
-        <div style={{position:'absolute',left:mm(13.651),top:mm(bankY+3.267),fontSize:8,color:'#111',lineHeight:'11px'}}>IBAN: {defaultBank.iban||''}</div>
-        <div style={{position:'absolute',left:mm(13.651),top:mm(bankY+6.533),fontSize:8,color:'#111',lineHeight:'11px'}}>BIC: {defaultBank.bic||''}</div>
+        {String(defaultBank.iban||'').trim()&&<div style={{position:'absolute',left:mm(13.651),top:mm(bankY+3.267),fontSize:8,color:'#111',lineHeight:'11px'}}>IBAN: {defaultBank.iban}</div>}
+        <div style={{position:'absolute',left:mm(13.651),top:mm(bankY+(String(defaultBank.iban||'').trim()?6.533:3.267)),fontSize:8,color:'#111',lineHeight:'11px'}}>BIC: {defaultBank.bic||''}</div>
 
         {/* HR6 */}
         <HR top={line6Y}/>
@@ -1113,6 +1113,17 @@ function DocQuickModal({doc,co,docType,onClose,onEdit,onDelete,extraActions,pdfO
 // in item.sqKey. Several lines may pick the same customer item (the parts of a set); each option says how many
 // other lines already point at it.
 // "Discount (10%)" for one rate across the lines, plain "Discount" when they differ
+// Settings → PDF Templates: decimal places of the Qty column on the PDFs (c: the settings draft, s: its setter)
+function QtyDecimalsField({c,s}){
+  return(<div className="st-qty">
+    <Fld label={tr("Quantity decimal places")}>
+      <select className="fi" value={qtyDec(c)} onChange={e=>s('qtyDecimals',+e.target.value)}>
+        {QTY_DECIMALS.map(d=><option key={d} value={d}>{d} — {fmtQty(600,{qtyDecimals:d})}</option>)}
+      </select>
+    </Fld>
+    <p className="st-note st-qty-note">{tr("How many digits the Qty column shows after the decimal point on PDFs.")}</p>
+  </div>);
+}
 const discLabel=t=>typeof t.discRate==='number'&&t.discRate>0?tr("Discount ({0}%)",t.discRate):tr("Discount");
 // totals: docTotals(...) of the document, to show Sub Total / Discount / VAT per rate / Total when they apply
 // vat: {def} adds a VAT % column (empty = the document's default rate, shown as the placeholder)

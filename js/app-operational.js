@@ -4189,6 +4189,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
             </button>
           ))}
         </div>
+        <QtyDecimalsField c={c} s={s}/>
       </div>)}
 
       {/* Document Numbering */}

@@ -1080,6 +1080,7 @@ function OffSettings({ns,co:init,go,setCur,cur,showToast,onSave,onClose,onAutoNu
           </button>
         ))}
       </div>
+      <QtyDecimalsField c={c} s={s}/>
     </div>)}
 
     {/* Document Numbering */}
