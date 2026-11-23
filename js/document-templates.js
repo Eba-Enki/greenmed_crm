@@ -507,7 +507,7 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     // Discount and VAT rows under the Sub Total, labels ending where "Sub Total" ends
     const labelEnd=146.775+pdf.getTextWidth('Sub Total');
     const extra=[
-      ...(totals.disc>0?[[typeof totals.discRate==='number'?`Discount (${totals.discRate}%)`:'Discount','-'+fmt(totals.disc)]]:[]),
+      ...(totals.disc>0?[[typeof totals.discRate==='number'&&totals.discRate>0?`Discount (${totals.discRate}%)`:'Discount','-'+fmt(totals.disc)]]:[]),
       ...totals.groups.map(g=>[`VAT (${g.rate}%)`,fmt(g.vat)])
     ];
     const step=opts.modern?5:4;

@@ -861,7 +861,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
     const filteredGroups=Object.entries(allGroups)
       .filter(([,revs])=>!hasFilter||revs.some(matchesFilter))
       .map(([base,revs])=>{const sorted=[...revs].sort((a,b)=>b.rev-a.rev);return{base,revs:sorted,latest:sorted[0]};});
-    const qCols={date:q=>q.date,no:q=>q.number,project:q=>q.project,customer:q=>q.client&&q.client.company,total:q=>dt(q.items||[]),status:q=>q.status};
+    const qCols={date:q=>q.date,no:q=>q.number,project:q=>q.project,customer:q=>q.client&&q.client.company,total:q=>docTotals(q).total,status:q=>q.status};
     const flatFiltered=sortRows(salesQuotes.filter(matchesFilter),sort,qCols);
     // Each revision group sorts by its latest revision
     const sortedGroups=sortRows(filteredGroups,sort,Object.fromEntries(Object.entries(qCols).map(([k,f])=>[k,g=>f(g.latest)])));
@@ -906,7 +906,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       </ListTools>
       <BulkBar bulk={bulk}>
         <BulkBtn badge={pickedDrafts.length} disabled={!pickedDrafts.length} onClick={bulkMarkSent}>{tr("Mark as Sent")}</BulkBtn>
-        <BulkBtn onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(dt(q.items)),q.status,q.project||''])],'sales-quotations')}>{tr("Export selected")}</BulkBtn>
+        <BulkBtn onClick={()=>exportExcel([['Date','Number','Company','Contact','Total','Status','Project'],...picked.map(q=>[q.date,q.number,(q.client&&q.client.company)||'',(q.client&&q.client.contact)||'',fmt(docTotals(q).total),q.status,q.project||''])],'sales-quotations')}>{tr("Export selected")}</BulkBtn>
         <BulkBtn icon="dl" disabled={zipBusy} onClick={bulkPDF}>{zipBusy?tr('Preparing…'):tr('Download PDF')}</BulkBtn>
         <BulkBtn icon="trash" danger badge={pickedDrafts.length} disabled={!pickedDrafts.length} onClick={bulkDelete}>{tr("Delete drafts")}</BulkBtn>
       </BulkBar>
@@ -959,7 +959,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                         >i</span>
                       }
                     </span>
-                    <span style={{flex:1,textAlign:'right'}}>{CURR[latest.currency]||'£'}{fmt(dt(latest.items))}</span>
+                    <span style={{flex:1,textAlign:'right'}}>{CURR[latest.currency]||'£'}{fmt(docTotals(latest).total)}</span>
                   </div>
                 </td>
                 <td className="tac">
@@ -981,7 +981,7 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
                   </td>
                   <td style={{fontSize:12}}>{q.project||'—'}</td>
                   <td style={{fontSize:12}}>{(q.client&&q.client.company)||'—'}</td>
-                  <td className="tar" style={{fontSize:12}}>{CURR[q.currency]||'£'}{fmt(dt(q.items))}</td>
+                  <td className="tar" style={{fontSize:12}}>{CURR[q.currency]||'£'}{fmt(docTotals(q).total)}</td>
                   <td></td>
                   <td className="tac"><Badge s={q.status}/></td>
                 </tr>
@@ -1327,8 +1327,25 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
         </div>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           {!isLocked?<Btn v="bgh bsm" onClick={()=>setItems([...items,{id:uid(),item:'',desc:'',qty:'1',unit:'',price:'',invoicedQty:0}])}><Ico n="plus"/>{tr("Add Line")}</Btn>:<div/>}
-          <div className="totbox"><span className="totlbl">{tr("Total")}</span><span className="totamt">{CURR[q.currency]||'£'}{fmt(dt(items))}</span></div>
+          {(()=>{const sym=CURR[q.currency]||'£',t=docTotals(savedQ);return t.disc>0
+            ?<div className="totbox totbox-vat">
+              <span className="totlbl">{tr("Sub Total")}</span><span className="totsub">{sym}{fmt(t.sub)}</span>
+              <span className="totlbl">{discLabel(t)}</span><span className="totsub">−{sym}{fmt(t.disc)}</span>
+              <span className="totlbl">{tr("Total")}</span><span className="totamt">{sym}{fmt(t.total)}</span>
+            </div>
+            :<div className="totbox"><span className="totlbl">{tr("Total")}</span><span className="totamt">{sym}{fmt(t.total)}</span></div>;})()}
         </div>
+        {(!isLocked||q.discOn)&&<div className="vat-row">
+          <label className="st-check"><input type="checkbox" checked={!!q.discOn} disabled={isLocked} onChange={e=>{const on=e.target.checked;setQ(d=>({...d,discOn:on,discType:d.discType||'pct'}));}}/><span>{tr("Apply discount")}</span></label>
+          {q.discOn&&<div className="vat-rate">
+            <span>{tr("Discount")}</span>
+            <input value={(q.discType==='amt'?q.discAmt:q.discRate)||''} onChange={e=>set(q.discType==='amt'?'discAmt':'discRate',e.target.value.replace(/[^\d.,]/g,''))} className="fi" inputMode="decimal" placeholder="0" readOnly={isLocked} aria-label={tr("Discount")}/>
+            <select value={q.discType||'pct'} onChange={e=>set('discType',e.target.value)} className="fi disc-type" disabled={isLocked} aria-label={tr("Discount type")}>
+              <option value="pct">%</option>
+              <option value="amt">{(CURR[q.currency]||'£')+' '+(q.currency||'GBP')}</option>
+            </select>
+          </div>}
+        </div>}
         </div>
       </div>
       <div className={`fc fc-collapsible ${collapsed.notes?'fc-collapsed':''}`}>

@@ -17,6 +17,9 @@ const fmtD=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||'').trim());re
 // The discount comes off each line first (rounded to the cent on the document); VAT is then added on the discounted
 // amounts, worked out and rounded to the cent per rate (groups: [{rate, base, vat}]).
 // rate / discRate is that single rate, 'mixed' for several, 0 for none.
+// Sales quotations set discType: 'pct' takes the document's discRate off every line (line rates ignored); 'amt'
+// takes a fixed discAmt off the whole subtotal (never more than it), shared over the lines in proportion to their
+// amounts for VAT; its discRate is then 0, so the label shows no %.
 // Documents with neither total the same as dt(items).
 const pct=v=>+String(v==null?'':v).replace(',','.')||0;
 const lineRate=(i,f,def)=>String(i[f]==null?'':i[f]).trim()!==''?pct(i[f]):pct(def);
@@ -24,10 +27,13 @@ const oneRate=rs=>{const u=[...new Set(rs.filter(r=>r>0))];return u.length===1?u
 const docTotals=(doc,items=doc&&doc.items)=>{
   const list=items||[];
   const sub=dt(list);
-  const dr=i=>doc&&doc.discOn?lineRate(i,'discRate',doc.discRate):0;
+  const fixed=!!(doc&&doc.discOn&&doc.discType==='amt');
+  const fixedDisc=fixed&&sub>0?Math.min(Math.round(Math.max(pct(doc.discAmt),0)*100)/100,sub):0;
+  const whole=!!(doc&&doc.discOn&&doc.discType==='pct'); // one rate for the whole document, line rates ignored
+  const dr=i=>fixed?(sub>0?fixedDisc/sub*100:0):whole?Math.min(Math.max(pct(doc.discRate),0),100):doc&&doc.discOn?lineRate(i,'discRate',doc.discRate):0;
   const net=i=>lt(i)*(1-dr(i)/100);
-  const disc=Math.round(list.reduce((s,i)=>s+lt(i)*dr(i)/100,0)*100)/100;
-  const discRate=oneRate(list.map(dr));
+  const disc=fixed?fixedDisc:Math.round(list.reduce((s,i)=>s+lt(i)*dr(i)/100,0)*100)/100;
+  const discRate=fixed?0:oneRate(list.map(dr));
   if(!doc||!doc.vatOn)return{sub,disc,discRate,vat:0,total:sub-disc,groups:[],rate:0};
   const by={};
   list.forEach(i=>{const r=lineRate(i,'vatRate',doc.vatRate);by[r]=(by[r]||0)+net(i);});
