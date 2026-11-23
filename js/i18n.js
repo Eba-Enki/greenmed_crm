@@ -81,7 +81,7 @@ const I18N_TR={
   'Valid Until':'Geçerlilik Tarihi','Currency':'Para Birimi','Terms':'Ödeme Koşulları','Status':'Durum','Project':'Proje',
   'Vendor / Supplier':'Satıcı / Tedarikçi','Bill To':'Fatura Adresi','— Quick fill from {0} —':'— {0} listesinden hızlı doldur —','— Quick fill —':'— Hızlı doldur —',
   'Supplier Name':'Tedarikçi Adı','Supplier':'Tedarikçi','Customer Name':'Müşteri Adı','Customer':'Müşteri','Address':'Adres','Address...':'Adres...',
-  'Reference':'Referans','Ref/PO No':'Ref/Sipariş No','Line Items':'Kalemler','Notes':'Notlar','Notes...':'Notlar...',
+  'Reference':'Referans','Ref/PO No':'Ref/Sipariş No','Line Items':'Kalemler','Notes':'Notlar','Payment Terms':'Ödeme Şekli','Delivery Time':'Teslim Süresi','Notes...':'Notlar...',
   'supplier':'tedarikçi','customer':'müşteri','Search {0} or ref...':'Ara: {0} veya referans...','All Statuses':'Tüm Durumlar',
   'From':'Başlangıç','To':'Bitiş','Amount':'Tutar','Number':'Numara','Type':'Tür','Due':'Vade','Total':'Toplam','Outstanding':'Kalan',
   'Item':'Ürün Kodu','Qty':'Miktar','Unit':'Birim','Unit Price':'Birim Fiyat','Brand':'Marka','Model':'Model','Description':'Açıklama',

@@ -98,6 +98,7 @@ const drawModernHeader=async(pdf,ctx)=>{
   const numLabel=isInv?'INVOICE NUMBER':isSalesQuote?'QUOTE NUMBER':isPO?'PO NUMBER':isPQ?'QUOTE NUMBER':'NUMBER';
   const meta=[['DATE',fmtD(doc.date||td())],[numLabel,doc.number||'']];
   if(isInv&&doc.quoteNum)meta.push(['PI NUMBER',doc.quoteNum]);
+  if(isSalesQuote&&doc.validUntil)meta.push(['VALID UNTIL',fmtD(doc.validUntil)]);
   pdf.setFont('Arial','normal');
   pdf.setFontSize(9);
   const valW=Math.max(...meta.map(([,v])=>pdf.getTextWidth(fixText(v))));
@@ -348,8 +349,8 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
     {key:'category',label:'Category',align:'left',wrap:true,max:22,get:it=>fixText(it.category)},
     {key:'qty',label:'Qty',align:'right',max:null,get:it=>fmtQty(it.qty,co)},
     {key:'unit',label:'Units',align:'center',wrap:true,max:12,get:it=>fixText(it.unit)},
-    {key:'price',label:'Price',align:'right',max:null,get:it=>fmt(+(it.price||0))},
-    {key:'amount',label:'Amount',align:'right',max:null,get:it=>fmt(lt(it))},
+    {key:'price',label:`Price (${doc.currency||'GBP'})`,align:'right',max:null,get:it=>fmt(+(it.price||0))},
+    {key:'amount',label:`Amount (${doc.currency||'GBP'})`,align:'right',max:null,get:it=>fmt(lt(it))},
   ].filter(c=>!['item','brand','model','category'].includes(c.key)||items.some(it=>String(it[c.key]||'').trim()));
   colDefs.forEach(c=>{
     if(c.key==='desc')return;
@@ -482,11 +483,21 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
       P.setFont('Arial','bold');
       P.setFontSize(9);
       P.text('TERMS AND CONDITIONS',13.025,notesY+6);
-      P.setFont('Arial','normal');
       P.setFontSize(8.5);
+      // Payment terms and delivery time (sales quotations) as bold-label lines, then the notes
+      let ty=notesY+12.5;
+      [['Payment Terms',doc.paymentTerms],['Delivery Time',doc.deliveryTime]].filter(([,v])=>String(v||'').trim()).forEach(([label,val])=>{
+        P.setFont('Arial','bold');
+        const lw=pdf.getTextWidth(label+': ');
+        P.text(label+':',13.025,ty);
+        P.setFont('Arial','normal');
+        P.splitTextToSize(fixText(val),86-lw).forEach((t,k)=>{P.text(t,13.025+lw,ty);ty+=4.4;});
+      });
+      P.setFont('Arial','normal');
       const noteLines=String(doc.notes||'').trim()?P.splitTextToSize(fixText(doc.notes),86):[];
-      noteLines.forEach((t,k)=>P.text(t,13.025,notesY+12.5+k*4.4));
-      notesEndY=noteLines.length?notesY+12.5+(noteLines.length-1)*4.4:notesY+6;
+      noteLines.forEach((t,k)=>P.text(t,13.025,ty+k*4.4));
+      ty+=noteLines.length*4.4;
+      notesEndY=ty>notesY+12.5?ty-4.4:notesY+6;
     }else{
       P.setFont('Arial','bold');
       P.setFontSize(8);
@@ -564,12 +575,13 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
           });
           return y;
         };
-        // No IBAN row when the account has none (US banks don't use IBANs), so it doesn't look like a missing detail
-        const endL=col([['Account Name',b.accountName||co.name||''],['Account No',b.accountNumber||''],...(String(b.iban||'').trim()?[['IBAN',b.iban]]:[]),['SWIFT/BIC',b.bic||'']],13.651,35,65);
-        const endR=col([['Currency',b.currency||doc.currency||'GBP'],['Bank Name',b.bankName||''],['Bank Address',b.bankAddress||'']],108,128.5,64);
+        // Empty rows are left out (e.g. no IBAN: US banks don't use them), so nothing looks like a missing detail
+        const filled=rows=>rows.filter(([,v])=>String(v||'').trim());
+        const endL=col(filled([['Account Name',b.accountName||co.name||''],['Account No',b.accountNumber],['IBAN',b.iban],['SWIFT/BIC',b.bic]]),13.651,35,65);
+        const endR=col(filled([['Currency',b.currency||doc.currency||'GBP'],['Bank Name',b.bankName],['Bank Address',b.bankAddress]]),108,128.5,64);
         line6Y=Math.max(endL,endR)-lh+(opts.modern?4.5:3);
       }else{
-        const rows=['Account Number: '+(defaultBank.accountNumber||''),...(String(defaultBank.iban||'').trim()?['IBAN: '+defaultBank.iban]:[]),'BIC: '+(defaultBank.bic||'')];
+        const rows=[['Account Number',defaultBank.accountNumber],['IBAN',defaultBank.iban],['BIC',defaultBank.bic]].filter(([,v])=>String(v||'').trim()).map(([l,v])=>l+': '+v);
         rows.forEach((t,k)=>P.text(t,13.651,bankY+k*3.267+2.5));
       }
 
@@ -586,13 +598,34 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   // Signature (if enabled) sits above the footer on the last page, so the summary must end above it there
   const pdfSignature=getSignature()||co.signature||'';
   const withSignature=!!(doc.signatureEnabled&&pdfSignature);
+  // Sales quotations always get a "Company Stamp" and an "Authorised Signature" space on the last page, the signature
+  // image (when added) standing on its line
+  const signBlock=isSalesQuote;
+  const SIGN_TOP=footerY-42,SIGN_LINE=footerY-14,SIGN_W=46,STAMP_X=98,SIGN_X=150;
   const sigY=footerY-35;
-  const summaryLimit=withSignature?sigY-1:FRAME_BOT-1;
+  const summaryLimit=signBlock?SIGN_TOP-1:withSignature?sigY-1:FRAME_BOT-1;
   let summaryTop=y;
   if(summary(summaryTop,false)>summaryLimit)summaryTop=newPage();
   summary(summaryTop,true);
 
-  if(withSignature){
+  if(signBlock){
+    if(withSignature){
+      try{
+        const imgFormat=pdfSignature.startsWith('data:image/png')?'PNG':pdfSignature.startsWith('data:image/jpeg')||pdfSignature.startsWith('data:image/jpg')?'JPEG':'PNG';
+        const h=SIGN_LINE-SIGN_TOP-1,w=h*45.93/29.59;
+        pdf.addImage(pdfSignature,imgFormat,SIGN_X+(SIGN_W-w)/2,SIGN_TOP,w,h);
+      }catch(e){console.error('Signature error:',e);}
+    }
+    pdf.setDrawColor(158,158,158);
+    pdf.setLineWidth(borderWidth);
+    pdf.setFont('Arial','normal');
+    pdf.setFontSize(8);
+    pdf.setTextColor(17,17,17);
+    [[STAMP_X,'Company Stamp'],[SIGN_X,'Authorised Signature']].forEach(([x,label])=>{
+      pdf.line(x,SIGN_LINE,x+SIGN_W,SIGN_LINE);
+      pdf.text(label,x+SIGN_W/2,SIGN_LINE+4,{align:'center'});
+    });
+  }else if(withSignature){
     try{
       const imgFormat=pdfSignature.startsWith('data:image/png')?'PNG':pdfSignature.startsWith('data:image/jpeg')||pdfSignature.startsWith('data:image/jpg')?'JPEG':'PNG';
       pdf.addImage(pdfSignature,imgFormat,150,sigY,45.93,29.59);
@@ -1024,7 +1057,7 @@ function DocSummaryBody({doc,co,docType,itemNote}){
                 <span><b>{fmtD(doc.date||td())}</b></span>
                 <span className="pv2-hdr-sep">·</span>
                 <span>{doc.currency||'GBP'} ({sym})</span>
-                {doc.validity&&<><span className="pv2-hdr-sep">·</span><span>{tr('Valid until')} <b>{doc.validity}</b></span></>}
+                {(doc.validity||(docType==='sales_quote'&&doc.validUntil))&&<><span className="pv2-hdr-sep">·</span><span>{tr('Valid until')} <b>{doc.validity||fmtD(doc.validUntil)}</b></span></>}
                 {doc.project&&<><span className="pv2-hdr-sep">·</span><span>{doc.project}</span></>}
               </div>
             </div>
@@ -1082,6 +1115,15 @@ function DocSummaryBody({doc,co,docType,itemNote}){
             </div>
           </div>
 
+          {(doc.paymentTerms||doc.deliveryTime)&&(
+            <div className="pv2-section">
+              <div className="pv2-sec-title">{tr('Terms')}</div>
+              <div className="pv2-notes">
+                {doc.paymentTerms&&<div><b>{tr('Payment Terms')}:</b> {doc.paymentTerms}</div>}
+                {doc.deliveryTime&&<div><b>{tr('Delivery Time')}:</b> {doc.deliveryTime}</div>}
+              </div>
+            </div>
+          )}
           {doc.notes&&(
             <div className="pv2-section">
               <div className="pv2-sec-title">{tr('Notes')}</div>

@@ -64,28 +64,33 @@ const parseCurrency=v=>{
 };
 const W1=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
 const W2=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+// Amount in words, British style: "Four Hundred and Twenty-Four Pounds Sterling and Fifty Pence",
+// "One Thousand and Five US Dollars", "One Pound Sterling and One Penny".
+const CURRENCY_WORDS_EN={
+  GBP:{one:'Pound Sterling',many:'Pounds Sterling',subOne:'Penny',subMany:'Pence'},
+  USD:{one:'US Dollar',many:'US Dollars',subOne:'Cent',subMany:'Cents'},
+  EUR:{one:'Euro',many:'Euros',subOne:'Cent',subMany:'Cents'},
+  TRY:{one:'Turkish Lira',many:'Turkish Lira',subOne:'Kuruş',subMany:'Kuruş'}
+};
 const toW=(n,currency='GBP')=>{
-  if(!n||n<0.01)return'Zero';
+  const curr=CURRENCY_WORDS_EN[currency]||CURRENCY_WORDS_EN.GBP;
+  const cents=Math.round(Math.abs(+n||0)*100);
+  const p=Math.floor(cents/100),c=cents%100;
+  const below100=x=>x<20?W1[x]:W2[Math.floor(x/10)]+(x%10?'-'+W1[x%10]:'');
+  const below1000=x=>x<100?below100(x):W1[Math.floor(x/100)]+' Hundred'+(x%100?' and '+below100(x%100):'');
   const w=x=>{
-    if(x<20)return W1[x];
-    if(x<100)return W2[Math.floor(x/10)]+(x%10?' '+W1[x%10]:'');
-    if(x<1000)return W1[Math.floor(x/100)]+' Hundred'+(x%100?' '+w(x%100):'');
-    return w(Math.floor(x/1000))+' Thousand'+(x%1000?' '+w(x%1000):'');
+    if(x===0)return'Zero';
+    const groups=[[1e9,'Billion'],[1e6,'Million'],[1e3,'Thousand']];
+    const parts=[];let rest=x;
+    groups.forEach(([size,name])=>{if(rest>=size){parts.push(below1000(Math.floor(rest/size))+' '+name);rest%=size;}});
+    // "and" before a last group under a hundred: One Thousand and Five
+    if(rest)parts.push((parts.length&&rest<100?'and ':'')+below1000(rest));
+    return parts.join(' ');
   };
-  const p=Math.floor(n),c=Math.round((n-p)*100);
-  
-  // Currency names and subunits
-  const currencyNames={
-    GBP:{main:'Pound Sterling',sub:'Pence'},
-    USD:{main:'US Dollar',sub:'Cent'},
-    EUR:{main:'Euro',sub:'Cent'},
-    TRY:{main:'Turkish Lira',sub:'Kuruş'}
-  };
-  
-  const curr=currencyNames[currency]||currencyNames.GBP;
-  const mainUnit=p===1?curr.main:curr.main+(currency==='GBP'?'':'s');
-  
-  return w(p)+' '+mainUnit+(c>0?' and '+w(c)+' '+curr.sub+(c>1&&currency!=='GBP'?'s':''):'');
+  if(!p&&!c)return'Zero '+curr.many;
+  const main=p?w(p)+' '+(p===1?curr.one:curr.many):'';
+  const sub=c?w(c)+' '+(c===1?curr.subOne:curr.subMany):'';
+  return[main,sub].filter(Boolean).join(' and ');
 };
 
 const SM={

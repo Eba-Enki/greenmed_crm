@@ -234,7 +234,10 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
       shipTo:(fromQuote&&fromQuote.shipTo)?{...fromQuote.shipTo}:{company:'',contact:'',email:'',phone:'',address:'',ref:''},
       // Lines keep their key across revisions so procurement matches still point at them
       items:((fromQuote&&fromQuote.items)||[{id:uid(),item:'',desc:'',qty:'1',unit:'',price:'',invoicedQty:0}]).map(i=>({...i,id:uid(),key:fromQuote?sqItemKey(i):undefined,invoicedQty:0})),
-      notes:(fromQuote&&fromQuote.notes)||''};
+      notes:(fromQuote&&fromQuote.notes)||'',
+      // Terms and discount carry over to the next revision
+      paymentTerms:(fromQuote&&fromQuote.paymentTerms)||'',deliveryTime:(fromQuote&&fromQuote.deliveryTime)||'',
+      ...(fromQuote&&fromQuote.discOn?{discOn:true,discType:fromQuote.discType||'pct',discRate:fromQuote.discRate||'',discAmt:fromQuote.discAmt||''}:{})};
   };
 
   // Any quotation can be edited; anything past draft asks first (its status and lock stay as they are).
@@ -1354,6 +1357,11 @@ function AppOperational({session,onPortalSwitch,onLogout,onSessionUpdate,onOpenP
           <div className="fc-toggle"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></div>
         </div>
         <div className="fc-body">
+        {/* Printed in English under TERMS AND CONDITIONS on the PDF, so the examples are English too */}
+        <div className="fg g2" style={{marginBottom:12}}>
+          <Fld label={tr("Payment Terms")}><input value={q.paymentTerms||''} onChange={e=>set('paymentTerms',e.target.value)} className="fi" placeholder="30% advance, 70% before shipment" disabled={isLocked}/></Fld>
+          <Fld label={tr("Delivery Time")}><input value={q.deliveryTime||''} onChange={e=>set('deliveryTime',e.target.value)} className="fi" placeholder="4-6 weeks after order confirmation" disabled={isLocked}/></Fld>
+        </div>
         <Fld label={tr("Notes")}><textarea value={q.notes||''} onChange={e=>set('notes',e.target.value)} rows={2} className="fi" disabled={isLocked}/></Fld>
         <div style={{marginTop:12}}>
           <label style={{display:'flex',alignItems:'center',gap:8,fontSize:13,cursor:'pointer',userSelect:'none'}}>
