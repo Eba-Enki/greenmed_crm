@@ -605,8 +605,9 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
   // Signature (if enabled) sits above the footer on the last page, so the summary must end above it there
   const pdfSignature=getSignature()||co.signature||'';
   const withSignature=!!(doc.signatureEnabled&&pdfSignature);
-  // Sales quotations always get a "Company Stamp" and an "Authorised Signature" space on the last page, the signature
-  // image (when added) standing on its line
+  // Sales quotations always get an "Accepted by Buyer" block (name, date, signature) on the left and the seller's
+  // "Company Stamp" and "Authorised Signature" spaces on the right of the last page, the signature image (when added)
+  // standing on its line
   const signBlock=isSalesQuote;
   const SIGN_TOP=footerY-42,SIGN_LINE=footerY-14,SIGN_W=46,STAMP_X=98,SIGN_X=150;
   const sigY=footerY-35;
@@ -632,6 +633,19 @@ const buildStandardPDF=async(doc,co,type,opts={})=>{
       pdf.line(x,SIGN_LINE,x+SIGN_W,SIGN_LINE);
       pdf.text(label,x+SIGN_W/2,SIGN_LINE+4,{align:'center'});
     });
+    // Buyer's acceptance on the left: heading, name and date lines, then the signature line level with the seller's
+    const BUYER_X=14,BUYER_R=90;
+    pdf.setFont('Arial','bold');
+    pdf.text('ACCEPTED BY BUYER',BUYER_X,SIGN_TOP+3);
+    pdf.setFont('Arial','normal');
+    const buyerRows=[['Name',SIGN_TOP+10.5],['Date',SIGN_TOP+17.5]];
+    const lineX=BUYER_X+Math.max(...buyerRows.map(([l])=>pdf.getTextWidth(l+': ')))+1; // both lines start together
+    buyerRows.forEach(([label,ly])=>{
+      pdf.text(label+':',BUYER_X,ly);
+      pdf.line(lineX,ly+0.8,BUYER_R,ly+0.8);
+    });
+    pdf.line(BUYER_X,SIGN_LINE,BUYER_R,SIGN_LINE);
+    pdf.text('Signature',(BUYER_X+BUYER_R)/2,SIGN_LINE+4,{align:'center'});
   }else if(withSignature){
     try{
       const imgFormat=pdfSignature.startsWith('data:image/png')?'PNG':pdfSignature.startsWith('data:image/jpeg')||pdfSignature.startsWith('data:image/jpg')?'JPEG':'PNG';
