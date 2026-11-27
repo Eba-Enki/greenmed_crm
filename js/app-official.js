@@ -1202,7 +1202,14 @@ function OffBankAccounts({banks,accountBalance,onOpen,onEdit,onDelete,onSetDefau
               {bank.isDefault&&<span style={{marginLeft:8,fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:10,background:'var(--greenl)',color:'var(--green)'}}>{tr("DEFAULT")}</span>}
             </div>
             <div style={{fontSize:22,fontWeight:800,color:bal<0?'var(--red)':'var(--g900)',marginBottom:4}}>{CURR[bank.currency]||'£'}{fmt(bal)}</div>
-            <div style={{fontSize:12,color:'var(--g500)',marginBottom:14}}>{bank.iban||bank.accountNumber||tr('No account number')}</div>
+            {(bank.accountNumber||bank.iban||bank.bic)?(
+              <dl style={{display:'grid',gridTemplateColumns:'auto 1fr',columnGap:10,rowGap:3,margin:'0 0 14px',fontSize:12}}>
+                {[['Account Number',bank.accountNumber],['IBAN',bank.iban],['BIC',bank.bic]].filter(([,v])=>v).map(([k,v])=>(<React.Fragment key={k}>
+                  <dt style={{color:'var(--g500)'}}>{tr(k)}</dt>
+                  <dd style={{margin:0,color:'var(--g700)',fontWeight:500,fontVariantNumeric:'tabular-nums',overflowWrap:'anywhere'}}>{v}</dd>
+                </React.Fragment>))}
+              </dl>
+            ):<div style={{fontSize:12,color:'var(--g500)',marginBottom:14}}>{tr('No account number')}</div>}
             <div style={{display:'flex',alignItems:'center',gap:6}} onClick={e=>e.stopPropagation()}>
               {!bank.isDefault&&<button onClick={()=>onSetDefault(bank.id)} style={{padding:'4px 10px',fontSize:11,fontWeight:600,background:'var(--g100)',border:'none',borderRadius:6,cursor:'pointer',color:'var(--g700)'}}>{tr("Set Default")}</button>}
               <div style={{flex:1}}/>
